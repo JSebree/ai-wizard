@@ -1347,34 +1347,31 @@ function StepFlags({ value, onChange, errors = {}, required = [] }) {
 // ---- HEADER PATCH END ----
 const StepReview = React.forwardRef(function StepReview({ fullState, errors = {} }, ref) {
   const ready = Object.values(errors).every((e) => !e || Object.keys(e).length === 0);
+
+  // API endpoints (served by your /api/* proxies on Cloudflare)
   const SUBMIT_WEBHOOK = "/api/submit";
   const STATUS_WEBHOOK = "/api/status";
 
-// Always use CORS (readable responses + auto-polling)
-const noCors = false;
-
+  // UI state
   const [sending, setSending] = React.useState(false);
   const [sendMsg, setSendMsg] = React.useState(null);
 
   // Job tracking + polling
   const [jobId, setJobId] = React.useState(null);
-  const [jobStatus, setJobStatus] = React.useState(null);           // e.g., QUEUED/PROCESSING/DONE/ERROR
-  const [jobResult, setJobResult] = React.useState(null);           // { url, meta }
+  const [jobStatus, setJobStatus] = React.useState(null);   // QUEUED/PROCESSING/DONE/ERROR
+  const [jobResult, setJobResult] = React.useState(null);   // { url, meta }
   const pollRef = React.useRef(null);
-  // Keep latest jobResult in a ref to avoid stale closure reads
+
+  // Keep latest jobResult in a ref to avoid stale closure reads during polling
   const jobResultRef = React.useRef(jobResult);
   React.useEffect(() => { jobResultRef.current = jobResult; }, [jobResult]);
 
-  // --- Persist job state so refreshes / navigation can resume polling ---
-  const JOB_LS_KEY = "n8nJobState";
+  // Persist job state so refreshes / navigation can resume polling
+  const JOB_LS_KEY = "n8nJobState"; // keeping key name for backward compatibility
 
-  // Make jobId portable across browsers via URL (?jobId=...)
+  // --- URL helpers for portability across devices ---
   function getJobIdFromUrl() {
-    try {
-      return new URLSearchParams(window.location.search).get("jobId");
-    } catch {
-      return null;
-    }
+    try { return new URLSearchParams(window.location.search).get("jobId"); } catch { return null; }
   }
   function setJobIdInUrl(id) {
     try {
@@ -1385,7 +1382,7 @@ const noCors = false;
     } catch {}
   }
 
-  // Small utility so we always write a consistent shape
+  // Save a consistent snapshot shape
   function saveJobSnapshot(next) {
     try {
       const snap = {
@@ -1398,19 +1395,17 @@ const noCors = false;
     } catch {}
   }
 
-  // Load any previously saved job and resume polling if needed.
+  // Resume polling (URL takes precedence, then localStorage)
   React.useEffect(() => {
     try {
-      // 1) Prefer URL (?jobId=...) so any browser/device can resume
       const urlJob = getJobIdFromUrl();
       if (urlJob) {
         setJobId(urlJob);
         setJobStatus("PROCESSING");
         startPolling(urlJob);
-        return; // don't use localStorage if URL specifies a job
+        return;
       }
 
-      // 2) Fallback to localStorage (same device/profile)
       const raw = localStorage.getItem(JOB_LS_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
@@ -1420,76 +1415,56 @@ const noCors = false;
       setJobStatus(saved.status || "PROCESSING");
       setJobResult(saved.result || null);
 
-      // Resume polling unless we already have a final URL
-      if (!saved?.result?.url) {
-        startPolling(saved.id);
-      }
+      if (!saved?.result?.url) startPolling(saved.id);
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ----- polling helpers -----
   function stopPoll() {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
   }
-  // Clean up on unmount
   React.useEffect(() => () => stopPoll(), []);
 
-  // Persist whenever any part of the job changes
-  React.useEffect(() => {
-    saveJobSnapshot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => { saveJobSnapshot(); /* keep snapshot fresh */  // eslint-disable-next-line
   }, [jobId, jobStatus, jobResult]);
 
-  // Read status from a few common shapes
   function extractStatus(data) {
-    const s =
-      data?.status ??
-      data?.state ??
-      data?.job?.status ??
-      data?.data?.status ??
-      null;
+    const s = data?.status ?? data?.state ?? data?.job?.status ?? data?.data?.status ?? null;
     return typeof s === "string" ? s.toUpperCase() : s;
   }
-
-  // Read a final URL from many possible shapes
   function extractFinalUrl(data) {
     return (
-      data?.finalVideoUrl ||                             // preferred
-      data?.url ||                                       // alt key
-      data?.videoUrl ||                                  // alt key
-      data?.data?.finalVideoUrl ||                       // nested
-      data?.data?.url ||                                 // nested alt
-      data?.meta?.finalVideoUrl ||                       // sometimes in meta
-      data?.meta?.urls?.music ||                         // Final Video Output node shape
-      data?.meta?.urls?.captions ||                      // fallback to captions
-      data?.meta?.urls?.original ||                      // worst-case: original
-      data?.response?.[0]?.file_url ||                   // exec render response shape
+      data?.finalVideoUrl ||
+      data?.url ||
+      data?.videoUrl ||
+      data?.data?.finalVideoUrl ||
+      data?.data?.url ||
+      data?.meta?.finalVideoUrl ||
+      data?.meta?.urls?.music ||
+      data?.meta?.urls?.captions ||
+      data?.meta?.urls?.original ||
+      data?.response?.[0]?.file_url ||
       null
     );
   }
-
-  // Normalize odd payload wrappers we sometimes see (axios-like {data:…} or {"object Object": {...}})
   function normalizePayload(raw) {
-    // axios shape
-    if (raw && typeof raw === 'object' && 'data' in raw && typeof raw.data === 'object') return raw.data;
-
-    // accidental wrapper like { "object Object": { ... } }
-    const keys = raw && typeof raw === 'object' ? Object.keys(raw) : [];
-    if (keys.length === 1 && keys[0].toLowerCase().includes('object')) {
+    if (raw && typeof raw === "object" && "data" in raw && typeof raw.data === "object") return raw.data;
+    const keys = raw && typeof raw === "object" ? Object.keys(raw) : [];
+    if (keys.length === 1 && keys[0].toLowerCase().includes("object")) {
       const only = raw[keys[0]];
-      if (only && typeof only === 'object') return only;
+      if (only && typeof only === "object") return only;
     }
-
     return raw;
   }
 
   async function pollStatusOnce(id) {
     if (!id) return;
     try {
-      const u = new URL(STATUS_WEBHOOK);
+      const u = new URL(STATUS_WEBHOOK, window.location.origin);
       u.searchParams.set("jobId", String(id));
       u.searchParams.set("_", Date.now().toString()); // cache-buster
 
@@ -1500,33 +1475,26 @@ const noCors = false;
         signal: ctrl.signal,
         mode: "cors",
         cache: "no-store",
-        headers: { "Accept": "application/json" },
+        headers: { Accept: "application/json" },
       });
       clearTimeout(t);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      // Robust parse: try json(), fall back to text -> JSON.parse()
       let data;
-      try {
-        data = await res.json();
-      } catch {
+      try { data = await res.json(); }
+      catch {
         const text = await res.text();
         data = JSON.parse(text);
       }
-
-      // Unwrap any wrappers
       data = normalizePayload(data);
 
-      const nextStatus = extractStatus(data);  // QUEUED / PROCESSING / DONE / ERROR
-      const finalUrl   = extractFinalUrl(data);
+      const nextStatus = extractStatus(data) || "PROCESSING";
+      const finalUrl = extractFinalUrl(data);
 
-      if (nextStatus) {
-        setJobStatus(nextStatus);
-        saveJobSnapshot({ id, status: nextStatus });
-      }
+      setJobStatus(nextStatus);
+      saveJobSnapshot({ id, status: nextStatus });
 
-      // If a final URL arrives in THIS response, finish now.
       if (finalUrl) {
         const result = { url: finalUrl, meta: data.meta || null };
         setJobResult(result);
@@ -1535,21 +1503,13 @@ const noCors = false;
         return;
       }
 
-      // Do NOT stop on DONE unless we already have a URL saved.
-      if (nextStatus === "DONE" && !jobResultRef.current?.url) {
-        // keep polling briefly until the URL shows up
-        return;
-      }
-
-      // Error terminal
-      if (nextStatus === "ERROR" || nextStatus === "FAILED") {
+      if ((nextStatus === "ERROR" || nextStatus === "FAILED")) {
         stopPoll();
         saveJobSnapshot({ id, status: "ERROR" });
-        return;
       }
-      // Otherwise keep polling
+      // otherwise continue polling
     } catch (e) {
-      console.warn("Status poll failed:", e?.message || e);
+      console.warn("[status] poll error:", e?.message || e);
     }
   }
 
@@ -1558,17 +1518,15 @@ const noCors = false;
     stopPoll();
     setJobStatus("PROCESSING");
     saveJobSnapshot({ id, status: "PROCESSING" });
-    // immediate hit, then interval
-    pollStatusOnce(id);
+    pollStatusOnce(id);                       // fire immediately
     pollRef.current = setInterval(() => pollStatusOnce(id), 4000);
   }
 
-  // ---- helpers: payload mapping from wizard state -> n8n schema ----
-  function buildN8nPayload(state) {
+  // ----- payload builder (state -> API) -----
+  function buildPayload(state) {
     const { minimalInput, character, setting } = state || {};
-    const eff = computeEffectiveState(state); // derive styleKey/profile + effective flags/packs/music
+    const eff = computeEffectiveState(state);
 
-    // map route
     const videoType =
       minimalInput?.route === "aroll" ? "A-Roll" :
       minimalInput?.route === "broll" ? "B-Roll" :
@@ -1576,19 +1534,16 @@ const noCors = false;
       minimalInput?.route === "podcast" ? "Podcast" :
       minimalInput?.route || "A-Roll";
 
-    // simple res mapping from preset + aspect
     const resPreset = state?.flags?.resPreset || "1080p";
     const aspect = state?.flags?.aspect || "16:9";
     const fps = state?.flags?.fps ?? 30;
 
-    // characters (single for now)
     const characters = [{
       id: "char1",
       name: character?.name || "Host",
       voiceSelectionName: character?.voicePreset || character?.voiceId || "",
     }];
 
-    // persona meta: prefer explicit personaPack/kind
     const personaMeta = {
       name: character?.name || "",
       alias: minimalInput?.title || "",
@@ -1596,30 +1551,28 @@ const noCors = false;
       kind: character?.personaKind || "human",
     };
 
-    // Use effective packs (user wins, else profile defaults)
     const packs = {
-      stylePack: eff.packs.stylePack,
-      lookPack: eff.packs.lookPack,
-      accentPack: eff.packs.accentPack,
-      motionPack: eff.packs.motionPack,
-      musicPack: eff.packs.musicPack,
+      stylePack:   eff.packs.stylePack,
+      lookPack:    eff.packs.lookPack,
+      accentPack:  eff.packs.accentPack,
+      motionPack:  eff.packs.motionPack,
+      musicPack:   eff.packs.musicPack,
       personaPack: eff.packs.personaPack,
-      propsPack: eff.packs.propsPack,
-      mouthPack: eff.packs.mouthPack,
-      basePack: eff.packs.basePack,
+      propsPack:   eff.packs.propsPack,
+      mouthPack:   eff.packs.mouthPack,
+      basePack:    eff.packs.basePack,
     };
 
     const resolution = (() => {
       const aspectMap = {
         "16:9": { width: 1024, height: 576 },
-        "9:16": { width: 576, height: 1024 },
+        "9:16": { width: 576,  height: 1024 },
         "1:1":  { width: 1024, height: 1024 },
-        "4:5":  { width: 819, height: 1024 },
+        "4:5":  { width: 819,  height: 1024 },
       };
       return aspectMap[aspect] || aspectMap["16:9"];
     })();
 
-    // Flags from effective view
     const includeCaptions = !!eff.flags.captions;
     const includeMusic = !!eff.flags.music;
 
@@ -1676,10 +1629,11 @@ const noCors = false;
         ducking: !!state?.music?.ducking,
         ambience: state?.music?.ambience,
       },
-      rawState: state, // include full raw for debugging/prototyping
+      rawState: state,
     };
   }
 
+  // Utilities
   const copyJson = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(fullState, null, 2));
@@ -1689,7 +1643,6 @@ const noCors = false;
       alert("Sorry, your browser blocked clipboard access.");
     }
   };
-
   const downloadJson = () => {
     try {
       const blob = new Blob([JSON.stringify(fullState, null, 2)], { type: "application/json" });
@@ -1707,13 +1660,8 @@ const noCors = false;
     }
   };
 
-
-  // Helper for safe headers (no custom headers in no-cors)
   function safeHeaders() {
-    // When using no-cors, the browser blocks most custom headers.
-    if (noCors) return {};
     const h = { "Content-Type": "application/json" };
-    // Send edge token if present (we'll configure this in Cloudflare later)
     const t = import.meta?.env?.VITE_APP_TOKEN;
     if (t) h["x-app-token"] = t;
     return h;
@@ -1721,7 +1669,7 @@ const noCors = false;
 
   async function sendToApi() {
     setSendMsg(null);
-    const payload = buildN8nPayload(fullState);
+    const payload = buildPayload(fullState);
     setSending(true);
     try {
       const res = await fetch(SUBMIT_WEBHOOK, {
@@ -1733,12 +1681,15 @@ const noCors = false;
       });
       const dataText = await res.text();
       if (!res.ok) throw new Error(dataText || `HTTP ${res.status}`);
+
       let data; try { data = JSON.parse(dataText); } catch { data = {}; }
       const returnedJobId = data?.jobId || data?.id || null;
+
       setSendMsg({
         kind: "ok",
-        text: "Submitting will auto-poll for status until the final video is ready. This could take up to an hour"
+        text: "Submitting will auto-poll for status until the final video is ready. This could take up to an hour",
       });
+
       if (returnedJobId) {
         setJobId(returnedJobId);
         setJobIdInUrl(returnedJobId);
@@ -1747,13 +1698,17 @@ const noCors = false;
         console.warn("No jobId returned from API.");
       }
     } catch (e) {
-      setSendMsg({ kind: "error", text: "Send failed.", detail: (e && (e.stack || e.message)) ? (e.stack || e.message) : String(e) });
+      setSendMsg({
+        kind: "error",
+        text: "Send failed.",
+        detail: (e && (e.stack || e.message)) ? (e.stack || e.message) : String(e)
+      });
     } finally {
       setSending(false);
     }
   }
 
-  // Pretty review renderer (two‑column with section headers)
+  // ---- pretty review helpers ----
   function PrettyValue({ value }) {
     if (value == null) return <span className="text-slate-500">—</span>;
     const t = typeof value;
@@ -1762,13 +1717,10 @@ const noCors = false;
       if (!value.length) return <span className="text-slate-500">—</span>;
       return (
         <ul className="list-disc pl-5 space-y-1">
-          {value.map((v, i) => (
-            <li key={i}><PrettyValue value={v} /></li>
-          ))}
+          {value.map((v, i) => (<li key={i}><PrettyValue value={v} /></li>))}
         </ul>
       );
     }
-    // object (fallback)
     return (
       <div className="space-y-1">
         {Object.entries(value).map(([k, v]) => (
@@ -1780,9 +1732,8 @@ const noCors = false;
       </div>
     );
   }
-
   function SectionBlock({ title, obj }) {
-    if (!obj || (typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length === 0)) return null;
+    if (!obj || (typeof obj === "object" && !Array.isArray(obj) && Object.keys(obj).length === 0)) return null;
     return (
       <div className="space-y-2">
         <h4 className="text-sm font-semibold text-slate-700">{title}</h4>
@@ -1793,7 +1744,10 @@ const noCors = false;
     );
   }
 
+  // expose sender for any parent imperatively calling it
   React.useImperativeHandle(ref, () => ({ send: sendToApi }));
+
+  // ---- render ----
   return (
     <div className="space-y-4">
       <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -1807,11 +1761,9 @@ const noCors = false;
         )}
       </div>
 
-      {/* Review Summary (concise, curated) */}
       <h3 className="text-base font-semibold">Review Summary</h3>
       <div className="rounded border border-slate-200 p-3 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          {/* Left column */}
           <div className="space-y-2">
             <div><span className="text-slate-500">Title:</span> <span className="font-medium">{fullState?.minimalInput?.title || "—"}</span></div>
             <div><span className="text-slate-500">Subject:</span> <span>{fullState?.minimalInput?.subject || "—"}</span></div>
@@ -1820,14 +1772,14 @@ const noCors = false;
             <div><span className="text-slate-500">Style:</span> <span>{fullState?.minimalInput?.style || "—"}</span></div>
             <div><span className="text-slate-500">Tone:</span> <span>{fullState?.minimalInput?.tone || "—"}</span></div>
           </div>
-          {/* Right column */}
           <div className="space-y-2">
             <div>
               <span className="text-slate-500">Character:</span> <span>{fullState?.character?.name || "—"}</span>
               {fullState?.character?.visualName ? <span className="text-slate-500"> ({fullState.character.visualName})</span> : null}
             </div>
             <div>
-              <span className="text-slate-500">Packs:</span> <span className="block">
+              <span className="text-slate-500">Packs:</span>{" "}
+              <span className="block">
                 {[
                   fullState?.setting?.base && `base: ${fullState.setting.base}`,
                   fullState?.setting?.stylePack && `style: ${fullState.setting.stylePack}`,
@@ -1837,19 +1789,27 @@ const noCors = false;
                   fullState?.setting?.mouthPack && `mouth: ${fullState.setting.mouthPack}`,
                   fullState?.character?.personaPack && `persona: ${fullState.character.personaPack}`,
                   fullState?.music?.musicPack && `music: ${fullState.music.musicPack}`,
-                ].filter(Boolean).join(" · ") || "—"}
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
               </span>
             </div>
             <div>
-              <span className="text-slate-500">Music:</span> <span>
-                {fullState?.flags?.music ? `on (${fullState?.music?.mood || "mood"}, ${fullState?.music?.tempoVal ?? "?"} bpm${fullState?.music?.vocals ? ", vocals" : ", no vocals"})` : "off"}
+              <span className="text-slate-500">Music:</span>{" "}
+              <span>
+                {fullState?.flags?.music
+                  ? `on (${fullState?.music?.mood || "mood"}, ${fullState?.music?.tempoVal ?? "?"} bpm${
+                      fullState?.music?.vocals ? ", vocals" : ", no vocals"
+                    })`
+                  : "off"}
               </span>
             </div>
             <div>
               <span className="text-slate-500">Captions:</span> <span>{fullState?.flags?.captions ? "on" : "off"}</span>
             </div>
             <div>
-              <span className="text-slate-500">Video Spec:</span> <span>
+              <span className="text-slate-500">Video Spec:</span>{" "}
+              <span>
                 {fullState?.flags?.aspect || "—"} · {fullState?.flags?.fps ?? "—"} fps · {fullState?.flags?.resPreset || "—"}
               </span>
             </div>
@@ -1857,7 +1817,7 @@ const noCors = false;
         </div>
       </div>
 
-      {/* Review details (all inputs, pretty formatted) */}
+      {/* Full details */}
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Review details</h3>
         <div className="text-sm space-y-4">
@@ -1867,19 +1827,15 @@ const noCors = false;
           <SectionBlock title="Video Prompts" obj={fullState?.broll} />
           <SectionBlock title="Music" obj={fullState?.music} />
           <SectionBlock title="Settings" obj={fullState?.flags} />
-          {/* Any unexpected top‑level fields */}
           {Object.entries(fullState || {})
-            .filter(([k]) => !['minimalInput','character','setting','broll','music','flags'].includes(k))
-            .map(([k,v]) => <SectionBlock key={k} title={k} obj={v} />)}
+            .filter(([k]) => !["minimalInput", "character", "setting", "broll", "music", "flags"].includes(k))
+            .map(([k, v]) => <SectionBlock key={k} title={k} obj={v} />)}
         </div>
       </div>
 
-
-      {/* n8n sender */}
+      {/* Submit + status */}
       <div className="rounded border border-slate-200 p-3 space-y-3">
         <p className="font-medium text-sm">Review and submit</p>
-
-        {/* Toolbar: Submit + utilities */}
         <div className="flex flex-wrap gap-2">
           <button
             onClick={sendToApi}
@@ -1888,13 +1844,10 @@ const noCors = false;
           >
             {sending ? "Sending…" : "Submit"}
           </button>
-          <button onClick={copyJson} className="rounded bg-slate-200 px-3 py-1 text-sm">
-            Copy JSON
-          </button>
-          <button onClick={downloadJson} className="rounded bg-slate-200 px-3 py-1 text-sm">
-            Download JSON
-          </button>
+          <button onClick={copyJson} className="rounded bg-slate-200 px-3 py-1 text-sm">Copy JSON</button>
+          <button onClick={downloadJson} className="rounded bg-slate-200 px-3 py-1 text-sm">Download JSON</button>
         </div>
+
         {/* Job state */}
         <div className="text-xs text-slate-600 flex flex-wrap items-center gap-3">
           <div><span className="font-semibold">Job:</span> {jobId || "—"}</div>
@@ -1905,9 +1858,7 @@ const noCors = false;
                 ? "PROCESSING"
                 : (pollRef.current ? "queued/processing" : "—"))}
           </div>
-          {jobResult?.url && (
-            <span className="text-green-700 font-medium">Ready</span>
-          )}
+          {jobResult?.url && <span className="text-green-700 font-medium">Ready</span>}
           {jobId && (
             <button
               type="button"
@@ -1916,8 +1867,8 @@ const noCors = false;
                 setJobId(null);
                 setJobStatus(null);
                 setJobResult(null);
-                try { localStorage.removeItem("n8nJobState"); } catch {}
-                setJobIdInUrl(null); // also clear from URL so refresh doesn't resume
+                try { localStorage.removeItem(JOB_LS_KEY); } catch {}
+                setJobIdInUrl(null);
               }}
               className="ml-2 rounded bg-rose-100 text-rose-700 px-2 py-0.5 text-[11px] hover:bg-rose-200"
               title="Clear current job and stop polling"
@@ -1926,6 +1877,7 @@ const noCors = false;
             </button>
           )}
         </div>
+
         {/* Final video preview */}
         {jobResult?.url && (
           <div className="mt-3">
@@ -1933,6 +1885,7 @@ const noCors = false;
             <div className="text-xs text-slate-600 mt-1 break-all">{jobResult.url}</div>
           </div>
         )}
+
         {sendMsg && (
           <div className={`text-sm ${sendMsg.kind === "ok" ? "text-green-700" : "text-red-700"}`}>
             {sendMsg.text}
@@ -1940,7 +1893,6 @@ const noCors = false;
           </div>
         )}
       </div>
-
     </div>
   );
 });
