@@ -1719,12 +1719,11 @@ const noCors = false;
     return h;
   }
 
-  async function sendToN8n() {
+  async function sendToApi() {
     setSendMsg(null);
     const payload = buildN8nPayload(fullState);
     setSending(true);
     try {
-      console.log("[n8n] POST", SUBMIT_WEBHOOK, { payload });
       const res = await fetch(SUBMIT_WEBHOOK, {
         method: "POST",
         headers: safeHeaders(),
@@ -1745,7 +1744,7 @@ const noCors = false;
         setJobIdInUrl(returnedJobId);
         startPolling(returnedJobId);
       } else {
-        console.warn("No jobId returned from intake webhook.");
+        console.warn("No jobId returned from API.");
       }
     } catch (e) {
       setSendMsg({ kind: "error", text: "Send failed.", detail: (e && (e.stack || e.message)) ? (e.stack || e.message) : String(e) });
@@ -1794,7 +1793,7 @@ const noCors = false;
     );
   }
 
-  React.useImperativeHandle(ref, () => ({ send: sendToN8n }));
+  React.useImperativeHandle(ref, () => ({ send: sendToApi }));
   return (
     <div className="space-y-4">
       <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -1883,7 +1882,7 @@ const noCors = false;
         {/* Toolbar: Submit + utilities */}
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={sendToN8n}
+            onClick={sendToApi}
             disabled={sending}
             className="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
           >

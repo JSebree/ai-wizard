@@ -138,7 +138,7 @@ function ReviewComponent({ state }) {
         body: JSON.stringify(payload),
       });
     } catch {
-      alert('Failed to reach n8n intake webhook.');
+      alert('Failed to processes submission.');
       setBusy(false);
       return;
     }
