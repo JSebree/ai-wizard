@@ -1348,28 +1348,32 @@ function StepFlags({ value, onChange, errors = {}, required = [] }) {
 const StepReview = React.forwardRef(function StepReview({ fullState, errors = {} }, ref) {
   const ready = Object.values(errors).every((e) => !e || Object.keys(e).length === 0);
 
-  // API endpoints (served by your /api/* proxies on Cloudflare)
-  const SUBMIT_WEBHOOK = "/api/submit";
-  const STATUS_WEBHOOK = "/api/status";
+  // API endpoints
+  const SUBMIT_WEBHOOK  = "/api/submit";
+  const STATUS_WEBHOOK  = new URL("/api/status", window.location.origin).toString(); // absolute
 
   // UI state
-  const [sending, setSending] = React.useState(false);
-  const [sendMsg, setSendMsg] = React.useState(null);
+  const [sending, setSending]   = React.useState(false);
+  const [sendMsg, setSendMsg]   = React.useState(null);
 
-  // Job tracking + polling
-  const [jobId, setJobId] = React.useState(null);
-  const [jobStatus, setJobStatus] = React.useState(null);   // QUEUED/PROCESSING/DONE/ERROR
-  const [jobResult, setJobResult] = React.useState(null);   // { url, meta }
-  const pollRef = React.useRef(null);
+  // Job tracking
+  const [jobId, setJobId]           = React.useState(null);
+  const [jobStatus, setJobStatus]   = React.useState(null);   // QUEUED/PROCESSING/DONE/ERROR
+  const [jobResult, setJobResult]   = React.useState(null);   // { url, meta }
 
-  // Keep latest jobResult in a ref to avoid stale closure reads during polling
+  // Polling controller
+  const pollRef = React.useRef({ running:false, timer:null, tries:0, grace:0 });
+  const POLL_MS = 4000;
+  const GRACE_TICKS_AFTER_DONE = 5; // keep polling briefly after DONE until URL shows
+
+  // Keep latest result to avoid stale closure reads
   const jobResultRef = React.useRef(jobResult);
   React.useEffect(() => { jobResultRef.current = jobResult; }, [jobResult]);
 
-  // Persist job state so refreshes / navigation can resume polling
-  const JOB_LS_KEY = "n8nJobState"; // keeping key name for backward compatibility
+  // Persist job so refresh resumes
+  const JOB_LS_KEY = "n8nJobState"; // keep the old key for compatibility
 
-  // --- URL helpers for portability across devices ---
+  // ---- URL helpers (allow resume across devices) ----
   function getJobIdFromUrl() {
     try { return new URLSearchParams(window.location.search).get("jobId"); } catch { return null; }
   }
@@ -1382,11 +1386,11 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     } catch {}
   }
 
-  // Save a consistent snapshot shape
+  // Save a consistent snapshot
   function saveJobSnapshot(next) {
     try {
       const snap = {
-        id: next?.id ?? jobId ?? null,
+        id:     next?.id     ?? jobId ?? null,
         status: next?.status ?? jobStatus ?? null,
         result: next?.result ?? jobResult ?? null,
         ts: Date.now(),
@@ -1395,7 +1399,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     } catch {}
   }
 
-  // Resume polling (URL takes precedence, then localStorage)
+  // Restore previous job (URL takes precedence)
   React.useEffect(() => {
     try {
       const urlJob = getJobIdFromUrl();
@@ -1405,37 +1409,40 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
         startPolling(urlJob);
         return;
       }
-
       const raw = localStorage.getItem(JOB_LS_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      if (!saved || !saved.id) return;
+      if (!saved?.id) return;
 
-      setJobId(saved.id || null);
+      setJobId(saved.id);
       setJobStatus(saved.status || "PROCESSING");
       setJobResult(saved.result || null);
 
       if (!saved?.result?.url) startPolling(saved.id);
     } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ----- polling helpers -----
-  function stopPoll() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }
+  // Keep snapshot fresh
+  React.useEffect(() => { saveJobSnapshot(); /* eslint-disable-next-line */ }, [jobId, jobStatus, jobResult]);
+
+  // Cleanup on unmount
   React.useEffect(() => () => stopPoll(), []);
 
-  React.useEffect(() => { saveJobSnapshot(); /* keep snapshot fresh */  // eslint-disable-next-line
-  }, [jobId, jobStatus, jobResult]);
+  // ---- Polling core --------------------------------------------------------
+
+  function stopPoll() {
+    if (pollRef.current.timer) {
+      clearTimeout(pollRef.current.timer);
+    }
+    pollRef.current = { running:false, timer:null, tries:0, grace:0 };
+  }
 
   function extractStatus(data) {
     const s = data?.status ?? data?.state ?? data?.job?.status ?? data?.data?.status ?? null;
     return typeof s === "string" ? s.toUpperCase() : s;
   }
+
   function extractFinalUrl(data) {
     return (
       data?.finalVideoUrl ||
@@ -1451,6 +1458,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       null
     );
   }
+
   function normalizePayload(raw) {
     if (raw && typeof raw === "object" && "data" in raw && typeof raw.data === "object") return raw.data;
     const keys = raw && typeof raw === "object" ? Object.keys(raw) : [];
@@ -1461,23 +1469,26 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     return raw;
   }
 
-  async function pollStatusOnce(id) {
+  async function pollOnce(id) {
     if (!id) return;
+
     try {
-      const u = new URL(STATUS_WEBHOOK, window.location.origin);
+      const u = new URL(STATUS_WEBHOOK);
       u.searchParams.set("jobId", String(id));
-      u.searchParams.set("_", Date.now().toString()); // cache-buster
+      u.searchParams.set("_", String(Date.now())); // cache buster
 
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 9000);
+      const kill = setTimeout(() => ctrl.abort(), 10000);
+
+      console.log("[poll] GET", u.toString());
       const res = await fetch(u.toString(), {
         method: "GET",
         signal: ctrl.signal,
         mode: "cors",
         cache: "no-store",
-        headers: { Accept: "application/json" },
+        headers: { "Accept": "application/json" },
       });
-      clearTimeout(t);
+      clearTimeout(kill);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -1490,7 +1501,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       data = normalizePayload(data);
 
       const nextStatus = extractStatus(data) || "PROCESSING";
-      const finalUrl = extractFinalUrl(data);
+      const finalUrl   = extractFinalUrl(data);
 
       setJobStatus(nextStatus);
       saveJobSnapshot({ id, status: nextStatus });
@@ -1498,31 +1509,74 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       if (finalUrl) {
         const result = { url: finalUrl, meta: data.meta || null };
         setJobResult(result);
-        saveJobSnapshot({ id, status: nextStatus || "DONE", result });
+        saveJobSnapshot({ id, status: "DONE", result });
+        console.log("[poll] final URL received, stopping");
         stopPoll();
         return;
       }
 
-      if ((nextStatus === "ERROR" || nextStatus === "FAILED")) {
+      if (nextStatus === "ERROR" || nextStatus === "FAILED") {
+        console.warn("[poll] terminal error status");
         stopPoll();
         saveJobSnapshot({ id, status: "ERROR" });
+        return;
       }
-      // otherwise continue polling
+
+      // If backend says DONE but URL not yet propagated, keep polling briefly.
+      if (nextStatus === "DONE" && !jobResultRef.current?.url) {
+        pollRef.current.grace = Math.min(
+          pollRef.current.grace + 1,
+          GRACE_TICKS_AFTER_DONE
+        );
+      } else {
+        pollRef.current.grace = 0;
+      }
     } catch (e) {
-      console.warn("[status] poll error:", e?.message || e);
+      // Network hiccup: keep trying, but don’t spam the console.
+      console.warn("[poll] error:", e?.message || e);
     }
+  }
+
+  function loop(id) {
+    if (!pollRef.current.running) return;
+    pollRef.current.timer = setTimeout(async () => {
+      await pollOnce(id);
+
+      // If we’ve exceeded grace window and still no URL with DONE, stop.
+      if (
+        pollRef.current.grace >= GRACE_TICKS_AFTER_DONE &&
+        jobStatus === "DONE" &&
+        !jobResultRef.current?.url
+      ) {
+        console.warn("[poll] DONE without URL after grace window, stopping");
+        stopPoll();
+        return;
+      }
+
+      loop(id); // schedule next tick
+    }, POLL_MS);
   }
 
   function startPolling(id) {
     if (!id) return;
-    stopPoll();
+    if (pollRef.current.running) {
+      // already polling this or another id; restart cleanly
+      stopPoll();
+    }
     setJobStatus("PROCESSING");
     saveJobSnapshot({ id, status: "PROCESSING" });
-    pollStatusOnce(id);                       // fire immediately
-    pollRef.current = setInterval(() => pollStatusOnce(id), 4000);
+
+    pollRef.current.running = true;
+    pollRef.current.tries = 0;
+    pollRef.current.grace = 0;
+
+    console.log("[poll] start", id);
+    // fire immediately, then schedule the loop
+    pollOnce(id).finally(() => loop(id));
   }
 
-  // ----- payload builder (state -> API) -----
+  // ---- Payload builder (state -> API) --------------------------------------
+
   function buildPayload(state) {
     const { minimalInput, character, setting } = state || {};
     const eff = computeEffectiveState(state);
@@ -1574,7 +1628,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     })();
 
     const includeCaptions = !!eff.flags.captions;
-    const includeMusic = !!eff.flags.music;
+    const includeMusic    = !!eff.flags.music;
 
     return {
       packsLibraryVersion: 1,
@@ -1633,7 +1687,8 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     };
   }
 
-  // Utilities
+  // ---- Utilities -----------------------------------------------------------
+
   const copyJson = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(fullState, null, 2));
@@ -1643,6 +1698,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       alert("Sorry, your browser blocked clipboard access.");
     }
   };
+
   const downloadJson = () => {
     try {
       const blob = new Blob([JSON.stringify(fullState, null, 2)], { type: "application/json" });
@@ -1666,6 +1722,8 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     if (t) h["x-app-token"] = t;
     return h;
   }
+
+  // ---- Submit --------------------------------------------------------------
 
   async function sendToApi() {
     setSendMsg(null);
@@ -1708,7 +1766,8 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     }
   }
 
-  // ---- pretty review helpers ----
+  // ---- pretty review helpers (unchanged) -----------------------------------
+
   function PrettyValue({ value }) {
     if (value == null) return <span className="text-slate-500">—</span>;
     const t = typeof value;
@@ -1732,6 +1791,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       </div>
     );
   }
+
   function SectionBlock({ title, obj }) {
     if (!obj || (typeof obj === "object" && !Array.isArray(obj) && Object.keys(obj).length === 0)) return null;
     return (
@@ -1744,10 +1804,11 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     );
   }
 
-  // expose sender for any parent imperatively calling it
+  // Expose sender to parent
   React.useImperativeHandle(ref, () => ({ send: sendToApi }));
 
-  // ---- render ----
+  // ---- render --------------------------------------------------------------
+
   return (
     <div className="space-y-4">
       <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -1764,6 +1825,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       <h3 className="text-base font-semibold">Review Summary</h3>
       <div className="rounded border border-slate-200 p-3 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          {/* left column */}
           <div className="space-y-2">
             <div><span className="text-slate-500">Title:</span> <span className="font-medium">{fullState?.minimalInput?.title || "—"}</span></div>
             <div><span className="text-slate-500">Subject:</span> <span>{fullState?.minimalInput?.subject || "—"}</span></div>
@@ -1772,6 +1834,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
             <div><span className="text-slate-500">Style:</span> <span>{fullState?.minimalInput?.style || "—"}</span></div>
             <div><span className="text-slate-500">Tone:</span> <span>{fullState?.minimalInput?.tone || "—"}</span></div>
           </div>
+          {/* right column */}
           <div className="space-y-2">
             <div>
               <span className="text-slate-500">Character:</span> <span>{fullState?.character?.name || "—"}</span>
@@ -1789,18 +1852,14 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
                   fullState?.setting?.mouthPack && `mouth: ${fullState.setting.mouthPack}`,
                   fullState?.character?.personaPack && `persona: ${fullState.character.personaPack}`,
                   fullState?.music?.musicPack && `music: ${fullState.music.musicPack}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || "—"}
+                ].filter(Boolean).join(" · ") || "—"}
               </span>
             </div>
             <div>
               <span className="text-slate-500">Music:</span>{" "}
               <span>
                 {fullState?.flags?.music
-                  ? `on (${fullState?.music?.mood || "mood"}, ${fullState?.music?.tempoVal ?? "?"} bpm${
-                      fullState?.music?.vocals ? ", vocals" : ", no vocals"
-                    })`
+                  ? `on (${fullState?.music?.mood || "mood"}, ${fullState?.music?.tempoVal ?? "?"} bpm${fullState?.music?.vocals ? ", vocals" : ", no vocals"})`
                   : "off"}
               </span>
             </div>
@@ -1809,27 +1868,9 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
             </div>
             <div>
               <span className="text-slate-500">Video Spec:</span>{" "}
-              <span>
-                {fullState?.flags?.aspect || "—"} · {fullState?.flags?.fps ?? "—"} fps · {fullState?.flags?.resPreset || "—"}
-              </span>
+              <span>{fullState?.flags?.aspect || "—"} · {fullState?.flags?.fps ?? "—"} fps · {fullState?.flags?.resPreset || "—"}</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Full details */}
-      <div className="space-y-4">
-        <h3 className="text-base font-semibold">Review details</h3>
-        <div className="text-sm space-y-4">
-          <SectionBlock title="Concept" obj={fullState?.minimalInput} />
-          <SectionBlock title="Character" obj={fullState?.character} />
-          <SectionBlock title="Setting &amp; Keyframes" obj={fullState?.setting} />
-          <SectionBlock title="Video Prompts" obj={fullState?.broll} />
-          <SectionBlock title="Music" obj={fullState?.music} />
-          <SectionBlock title="Settings" obj={fullState?.flags} />
-          {Object.entries(fullState || {})
-            .filter(([k]) => !["minimalInput", "character", "setting", "broll", "music", "flags"].includes(k))
-            .map(([k, v]) => <SectionBlock key={k} title={k} obj={v} />)}
         </div>
       </div>
 
@@ -1837,11 +1878,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       <div className="rounded border border-slate-200 p-3 space-y-3">
         <p className="font-medium text-sm">Review and submit</p>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={sendToApi}
-            disabled={sending}
-            className="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
+          <button onClick={sendToApi} disabled={sending} className="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
             {sending ? "Sending…" : "Submit"}
           </button>
           <button onClick={copyJson} className="rounded bg-slate-200 px-3 py-1 text-sm">Copy JSON</button>
@@ -1853,10 +1890,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
           <div><span className="font-semibold">Job:</span> {jobId || "—"}</div>
           <div>
             <span className="font-semibold">Status:</span>{" "}
-            {jobStatus ||
-              (jobId && !jobResult?.url
-                ? "PROCESSING"
-                : (pollRef.current ? "queued/processing" : "—"))}
+            {jobStatus || (jobId && !jobResult?.url ? "PROCESSING" : (pollRef.current.running ? "queued/processing" : "—"))}
           </div>
           {jobResult?.url && <span className="text-green-700 font-medium">Ready</span>}
           {jobId && (
