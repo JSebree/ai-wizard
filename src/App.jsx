@@ -1347,21 +1347,11 @@ function StepFlags({ value, onChange, errors = {}, required = [] }) {
 // ---- HEADER PATCH END ----
 const StepReview = React.forwardRef(function StepReview({ fullState, errors = {} }, ref) {
   const ready = Object.values(errors).every((e) => !e || Object.keys(e).length === 0);
-  const SUBMIT_WEBHOOK = "https://n8n.simplifies.click/webhook/sceneme";
-  const STATUS_WEBHOOK = "https://n8n.simplifies.click/webhook/status";
+  const SUBMIT_WEBHOOK = "/api/submit";
+  const STATUS_WEBHOOK = "/api/status";
 
-  // Add CORS mode toggle (persisted)
-  const [noCors, setNoCors] = React.useState(() => {
-    try {
-      const v = localStorage.getItem("n8nNoCors");
-      return v ? v === "1" : true;
-    } catch {
-      return true;
-    }
-  });
-  React.useEffect(() => {
-    try { localStorage.setItem("n8nNoCors", noCors ? "1" : "0"); } catch {}
-  }, [noCors]);
+// Always use CORS (readable responses + auto-polling)
+const noCors = false;
 
   const [sending, setSending] = React.useState(false);
   const [sendMsg, setSendMsg] = React.useState(null);
@@ -1722,7 +1712,11 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
   function safeHeaders() {
     // When using no-cors, the browser blocks most custom headers.
     if (noCors) return {};
-    return { "Content-Type": "application/json" };
+    const h = { "Content-Type": "application/json" };
+    // Send edge token if present (we'll configure this in Cloudflare later)
+    const t = import.meta?.env?.VITE_APP_TOKEN;
+    if (t) h["x-app-token"] = t;
+    return h;
   }
 
   async function sendToN8n() {
@@ -1730,28 +1724,26 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     const payload = buildN8nPayload(fullState);
     setSending(true);
     try {
-      console.log("[n8n] POST", SUBMIT_WEBHOOK, { noCors, payload });
+      console.log("[n8n] POST", SUBMIT_WEBHOOK, { payload });
       const res = await fetch(SUBMIT_WEBHOOK, {
         method: "POST",
         headers: safeHeaders(),
         body: JSON.stringify(payload),
-        mode: noCors ? "no-cors" : "cors",
+        mode: "cors",
         keepalive: true,
       });
-      if (noCors) {
-        setSendMsg({ kind: "ok", text: "Sent in no‑CORS (opaque) mode. To auto-poll, uncheck no‑CORS and resend." });
-        setNoCors(false); // auto-enable CORS next time so polling can start automatically
-        return;
-      }
       const dataText = await res.text();
       if (!res.ok) throw new Error(dataText || `HTTP ${res.status}`);
       let data; try { data = JSON.parse(dataText); } catch { data = {}; }
       const returnedJobId = data?.jobId || data?.id || null;
-      setSendMsg({ kind: "ok", text: returnedJobId ? `Submitted. Job ${returnedJobId}` : "Sent to n8n successfully.", detail: dataText.slice(0, 500) });
+      setSendMsg({
+        kind: "ok",
+        text: "Submitting will auto-poll for status until the final video is ready. This could take up to an hour"
+      });
       if (returnedJobId) {
         setJobId(returnedJobId);
         setJobIdInUrl(returnedJobId);
-        if (!noCors) startPolling(returnedJobId);
+        startPolling(returnedJobId);
       } else {
         console.warn("No jobId returned from intake webhook.");
       }
