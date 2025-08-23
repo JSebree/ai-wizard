@@ -590,6 +590,14 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
 
   React.useEffect(() => { loadSpeakers(); }, [loadSpeakers]);
 
+  // Backfill personaKind default on mount if missing/empty
+  React.useEffect(() => {
+    if (v && (v.personaKind == null || v.personaKind === "")) {
+      onChange({ ...v, personaKind: "human" });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="text-xs text-slate-600">Fields marked <span className="text-red-600">*</span> are required.</div>
@@ -610,7 +618,7 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div>
           <label className="text-sm font-medium text-slate-700">Persona Kind{mark("personaKind")}</label>
-          <select className={cls("personaKind")} value={v.personaKind ?? "human"} onChange={(e)=>set("personaKind", e.target.value)}>
+          <select className={cls("personaKind")} value={v.personaKind || "human"} onChange={(e)=>set("personaKind", e.target.value)}>
             <option value="">— Select —</option>
             {PERSONA_KINDS.map(k=> <option key={k} value={k}>{k}</option>)}
           </select>
@@ -796,6 +804,14 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
 
   const onList = (key) => (files) => set(key, [ ...(v[key]||[]), ...Array.from(files||[]).map(f=>({name:f.name,type:f.type,size:f.size})) ]);
 
+  // Backfill shotType default on mount if missing/empty
+  React.useEffect(() => {
+    if (v && (v.shotType == null || v.shotType === "")) {
+      onChange({ ...v, shotType: "medium close-up" });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="text-xs text-slate-600">Fields marked <span className="text-red-600">*</span> are required.</div>
@@ -874,7 +890,7 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Camera</p>
             <div>
               <label className="text-sm font-medium text-slate-700">Shot type</label>
-              <select className={cls("shotType")} value={v.shotType ?? "medium close-up"} onChange={(e)=>set("shotType", e.target.value)}>
+              <select className={cls("shotType")} value={v.shotType || "medium close-up"} onChange={(e)=>set("shotType", e.target.value)}>
                 <option value="">— Select —</option>
                 {SHOT_TYPES.map(s=> <option key={s} value={s}>{s}</option>)}
               </select>
@@ -1105,6 +1121,14 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
   const mark = (k) => (<span className="ml-1 text-red-600" aria-hidden>{req.has(k) ? "*" : ""}</span>);
   const cls = (k) => `mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 ${err(k) ? "border-red-400 ring-red-300" : "border-gray-300 ring-indigo-200"}`;
   const set = (k, val) => onChange({ ...v, [k]: val });
+
+  // Backfill musicVol default on mount if missing
+  React.useEffect(() => {
+    if (v && typeof v.musicVol !== "number") {
+      onChange({ ...v, musicVol: 0.15 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onFXFiles = (files) => {
     const list = Array.from(files || []).map(f => ({ name: f.name, type: f.type, size: f.size }));
@@ -1682,6 +1706,9 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
         vocals: !!state?.music?.vocals,
         ducking: !!state?.music?.ducking,
         ambience: state?.music?.ambience,
+        voVol: typeof state?.music?.voVol === "number" ? state.music.voVol : 0.9,
+        musicVol: typeof state?.music?.musicVol === "number" ? state.music.musicVol : 0.15,
+        fxVol: typeof state?.music?.fxVol === "number" ? state.music.fxVol : 0.5,
       },
       rawState: state,
     };
@@ -1873,7 +1900,6 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
           </div>
         </div>
       </div>
-
 
       {/* Review details (all inputs, pretty formatted) */}
       <div className="space-y-4">
