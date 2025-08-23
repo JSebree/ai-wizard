@@ -610,7 +610,7 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div>
           <label className="text-sm font-medium text-slate-700">Persona Kind{mark("personaKind")}</label>
-          <select className={cls("personaKind")} value={v.personaKind ?? ""} onChange={(e)=>set("personaKind", e.target.value)}>
+          <select className={cls("personaKind")} value={v.personaKind ?? "human"} onChange={(e)=>set("personaKind", e.target.value)}>
             <option value="">— Select —</option>
             {PERSONA_KINDS.map(k=> <option key={k} value={k}>{k}</option>)}
           </select>
@@ -874,7 +874,7 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Camera</p>
             <div>
               <label className="text-sm font-medium text-slate-700">Shot type</label>
-              <select className={cls("shotType")} value={v.shotType ?? "medium"} onChange={(e)=>set("shotType", e.target.value)}>
+              <select className={cls("shotType")} value={v.shotType ?? "medium close-up"} onChange={(e)=>set("shotType", e.target.value)}>
                 <option value="">— Select —</option>
                 {SHOT_TYPES.map(s=> <option key={s} value={s}>{s}</option>)}
               </select>
@@ -1871,6 +1871,24 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
               <span>{fullState?.flags?.aspect || "—"} · {fullState?.flags?.fps ?? "—"} fps · {fullState?.flags?.resPreset || "—"}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+
+      {/* Review details (all inputs, pretty formatted) */}
+      <div className="space-y-4">
+        <h3 className="text-base font-semibold">Review details</h3>
+        <div className="text-sm space-y-4">
+          <SectionBlock title="Concept" obj={fullState?.minimalInput} />
+          <SectionBlock title="Character" obj={fullState?.character} />
+          <SectionBlock title="Setting &amp; Keyframes" obj={fullState?.setting} />
+          <SectionBlock title="Video Prompts" obj={fullState?.broll} />
+          <SectionBlock title="Music" obj={fullState?.music} />
+          <SectionBlock title="Settings" obj={fullState?.flags} />
+          {/* Any unexpected top-level fields */}
+          {Object.entries(fullState || {})
+            .filter(([k]) => !['minimalInput','character','setting','broll','music','flags'].includes(k))
+            .map(([k,v]) => <SectionBlock key={k} title={k} obj={v} />)}
         </div>
       </div>
 
