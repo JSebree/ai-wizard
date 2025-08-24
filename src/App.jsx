@@ -443,11 +443,21 @@ function StepConcept({ value, onChange, errors = {}, required = [] }) {
         <div className="grid grid-cols-2 gap-5">
           <div>
             <label className="text-sm font-medium text-slate-700">Style{mark("style")}</label>
-            <input className={cls("style")} value={v.style || "default"} onChange={(e)=>set("style", e.target.value)} placeholder="e.g., default" />
+            <input
+              className={cls("style")}
+              value={v.style ?? ""}
+              onChange={(e)=>set("style", e.target.value)}
+              placeholder="default"
+            />
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Tone{mark("tone")}</label>
-            <input className={cls("tone")} value={v.tone || "neutral"} onChange={(e)=>set("tone", e.target.value)} placeholder="e.g., neutral" />
+            <input
+              className={cls("tone")}
+              value={v.tone ?? ""}
+              onChange={(e)=>set("tone", e.target.value)}
+              placeholder="neutral"
+            />
           </div>
         </div>
       </div>
@@ -824,7 +834,12 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Environment (freeform){mark("environment")}</label>
-            <input className={cls("environment")} value={v.environment || "env_auto"} onChange={(e)=>set("environment", e.target.value)} />
+            <input
+              className={cls("environment")}
+              value={v.environment ?? ""}
+              onChange={(e)=>set("environment", e.target.value)}
+              placeholder="env_auto"
+            />
             {err("environment") && <p className="text-xs text-red-600 mt-1">{err("environment")}</p>}
           </div>
           <div>
@@ -1131,7 +1146,12 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-medium text-slate-700">Mood{mark("mood")}</label>
-          <input className={cls("mood")} value={v.mood || "light underscore"} onChange={(e)=>set("mood", e.target.value)} />
+          <input
+            className={cls("mood")}
+            value={v.mood ?? ""}
+            onChange={(e)=>set("mood", e.target.value)}
+            placeholder="light underscore"
+          />
           {err("mood") && <p className="text-xs text-red-600 mt-1">{err("mood")}</p>}
         </div>
         <div>
