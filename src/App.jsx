@@ -500,7 +500,7 @@ function StepConcept({ value, onChange, errors = {}, required = [] }) {
                     } catch {}
                   }}
                 />
-                <span>{t}</span>
+                <span>{t.replace(/_/g, " ")}</span>
               </label>
             );
           })}
@@ -632,14 +632,22 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
           <label className="text-sm font-medium text-slate-700">Look Presets{mark("lookPack")}</label>
           <select className={cls("lookPack")} value={v.lookPack ?? ""} onChange={(e)=>set("lookPack", e.target.value)}>
             <option value="">— Select —</option>
-            {PACK_OPTIONS.look.map(id => <option key={id} value={id}>{id}</option>)}
+            {PACK_OPTIONS.look.map(id =>
+              <option key={id} value={id}>
+                {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+              </option>
+            )}
           </select>
         </div>
         <div>
           <label className="text-sm font-medium text-slate-700">Persona Presets{mark("personaPack")}</label>
           <select className={cls("personaPack")} value={v.personaPack ?? ""} onChange={(e)=>set("personaPack", e.target.value)}>
             <option value="">— Select —</option>
-            {PACK_OPTIONS.persona.map(id => <option key={id} value={id}>{id}</option>)}
+            {PACK_OPTIONS.persona.map(id =>
+              <option key={id} value={id}>
+                {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+              </option>
+            )}
           </select>
         </div>
       </div>
@@ -857,28 +865,44 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
             <label className="text-sm font-medium text-slate-700">Base</label>
             <select className={cls("base")} value={v.base ?? ""} onChange={(e)=>set("base", e.target.value)}>
               <option value="">— Select —</option>
-              {PACK_OPTIONS.base.map(id => <option key={id} value={id}>{id}</option>)}
+              {PACK_OPTIONS.base.map(id =>
+                <option key={id} value={id}>
+                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+                </option>
+              )}
             </select>
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Style Presets</label>
             <select className={cls("stylePack")} value={v.stylePack ?? ""} onChange={(e)=>set("stylePack", e.target.value)}>
               <option value="">— Select —</option>
-              {PACK_OPTIONS.style.map(id => <option key={id} value={id}>{id}</option>)}
+              {PACK_OPTIONS.style.map(id =>
+                <option key={id} value={id}>
+                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+                </option>
+              )}
             </select>
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Motion Presets</label>
             <select className={cls("motionPack")} value={v.motionPack ?? ""} onChange={(e)=>set("motionPack", e.target.value)}>
               <option value="">— Select —</option>
-              {PACK_OPTIONS.motion.map(id => <option key={id} value={id}>{id}</option>)}
+              {PACK_OPTIONS.motion.map(id =>
+                <option key={id} value={id}>
+                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+                </option>
+              )}
             </select>
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Props Presets</label>
             <select className={cls("propsPack")} value={v.propsPack ?? ""} onChange={(e)=>set("propsPack", e.target.value)}>
               <option value="">— Select —</option>
-              {PACK_OPTIONS.props.map(id => <option key={id} value={id}>{id}</option>)}
+              {PACK_OPTIONS.props.map(id =>
+                <option key={id} value={id}>
+                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+                </option>
+              )}
             </select>
           </div>
         </div>
@@ -1168,7 +1192,11 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
         <label className="text-sm font-medium text-slate-700">Music Presets</label>
         <select className={cls("musicPack")} value={v.musicPack ?? ""} onChange={(e)=>set("musicPack", e.target.value)}>
           <option value="">— Select —</option>
-          {PACK_OPTIONS.music.map(id => <option key={id} value={id}>{id}</option>)}
+          {PACK_OPTIONS.music.map(id =>
+            <option key={id} value={id}>
+              {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
+            </option>
+          )}
         </select>
       </div>
 
@@ -2057,7 +2085,7 @@ const DEFAULT_STATE = {
     speed: 1.0,
     emotion: "",
     gesture: 0.5,
-    eyeContact: true,
+    eyeContact: false,
     lipSyncStrict: false,
     lockCharacter: false,
     seedLock: false,
