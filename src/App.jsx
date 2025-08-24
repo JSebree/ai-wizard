@@ -94,7 +94,7 @@ function computeEffectiveState(state) {
     lookPack:    state?.character?.lookPack  || profile?.look    || null,
     motionPack:  state?.setting?.motionPack  || profile?.motion  || null,
     propsPack:   state?.setting?.propsPack   || profile?.props   || null,
-    mouthPack:   state?.setting?.mouthPack   || profile?.mouth   || null,
+    mouthPack:   "pack_mouth_subtle", // always default to subtle mouth
     basePack:    state?.setting?.base        || profile?.base    || null,
     personaPack: state?.character?.personaPack || null,
     musicPack:   state?.music?.musicPack     || null,
@@ -143,7 +143,6 @@ function hydrateDefaultsFromProfile(current, styleKey) {
   next.character.lookPack  = profile.look  || null;
   next.setting.motionPack  = profile.motion || null;
   next.setting.propsPack   = profile.props || null;
-  next.setting.mouthPack   = profile.mouth || null;
 
   // Persona
   if (profile.personaKind) next.character.personaKind = profile.personaKind;
@@ -280,10 +279,6 @@ const PACK_OPTIONS = {
     "pack_props_cozy_backdrop",
     "pack_props_jungle_backdrop",
     "pack_props_studio_backdrop"
-  ],
-  mouth: [
-    "pack_mouth_subtle",
-    "pack_mouth_exaggerated"
   ],
   music: [
     "pack_music_lofi_warm",
@@ -842,7 +837,7 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
       {/* Packs (from libraries) */}
       <div className="rounded border border-slate-200 p-3 space-y-4">
         <p className="font-medium text-sm">Presets</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
           <div>
             <label className="text-sm font-medium text-slate-700">Base</label>
             <select className={cls("base")} value={v.base ?? ""} onChange={(e)=>set("base", e.target.value)}>
@@ -869,13 +864,6 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
             <select className={cls("propsPack")} value={v.propsPack ?? ""} onChange={(e)=>set("propsPack", e.target.value)}>
               <option value="">— Select —</option>
               {PACK_OPTIONS.props.map(id => <option key={id} value={id}>{id}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Mouth Presets</label>
-            <select className={cls("mouthPack")} value={v.mouthPack ?? ""} onChange={(e)=>set("mouthPack", e.target.value)}>
-              <option value="">— Select —</option>
-              {PACK_OPTIONS.mouth.map(id => <option key={id} value={id}>{id}</option>)}
             </select>
           </div>
         </div>
@@ -1125,7 +1113,7 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
   // Backfill musicVol default on mount if missing
   React.useEffect(() => {
     if (v && typeof v.musicVol !== "number") {
-      onChange({ ...v, musicVol: 0.15 });
+      onChange({ ...v, musicVol: 0.10 });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1216,11 +1204,11 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
                 <label className="text-sm font-medium text-slate-700">VO volume</label>
-                <input type="range" min={0} max={1} step={0.01} value={v.voVol ?? 0.9} onChange={(e)=>set("voVol", Number(e.target.value))} className="w-full" />
+                <input type="range" min={0} max={1} step={0.01} value={v.voVol ?? 1.0} onChange={(e)=>set("voVol", Number(e.target.value))} className="w-full" />
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700">Music volume</label>
-                <input type="range" min={0} max={1} step={0.01} value={v.musicVol ?? 0.15} onChange={(e)=>set("musicVol", Number(e.target.value))} className="w-full" />
+                <input type="range" min={0} max={1} step={0.01} value={v.musicVol ?? 0.10} onChange={(e)=>set("musicVol", Number(e.target.value))} className="w-full" />
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700">FX volume</label>
@@ -1706,8 +1694,8 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
         vocals: !!state?.music?.vocals,
         ducking: !!state?.music?.ducking,
         ambience: state?.music?.ambience,
-        voVol: typeof state?.music?.voVol === "number" ? state.music.voVol : 0.9,
-        musicVol: typeof state?.music?.musicVol === "number" ? state.music.musicVol : 0.15,
+        voVol: typeof state?.music?.voVol === "number" ? state.music.voVol : 1.0,
+        musicVol: typeof state?.music?.musicVol === "number" ? state.music.musicVol : 0.10,
         fxVol: typeof state?.music?.fxVol === "number" ? state.music.fxVol : 0.5,
       },
       rawState: state,
@@ -2070,7 +2058,7 @@ const DEFAULT_STATE = {
     bgImages: [],
     bgVideos: [],
     shotType: "medium close-up",
-    cameraMovement: 0.1,
+    cameraMovement: 0,
     motionTemplate: "locked interview",
     lightingPreset: "day",
     brightness: 0,
@@ -2109,7 +2097,7 @@ const DEFAULT_STATE = {
     ambience: "studio",
     fxUploads: [],
     voVol: 1.0,
-    musicVol: 0.15,
+    musicVol: 0.10,
     fxVol: 0.5,
   },
   flags: {
