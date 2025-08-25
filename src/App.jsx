@@ -667,9 +667,9 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
       <div className="rounded border border-slate-200 p-3 space-y-3">
         <p className="font-medium text-sm">Voice</p>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-700">Preset voice / Custom ID</label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
             <div>
+              <label className="text-sm font-medium text-slate-700">Preset voice</label>
               <select
                 className={cls("voicePreset")}
                 value={v.voicePreset || ""}
@@ -693,15 +693,15 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
               </select>
             </div>
             <div>
+              <label className="text-sm font-medium text-slate-700">Custom Voice ID (optional)</label>
               <input
                 className={cls("voiceId")}
                 value={v.voiceId || ""}
                 onChange={(e) => set("voiceId", e.target.value)}
-                placeholder="Custom Voice ID (optional)"
+                placeholder="e.g., spk_1234"
               />
             </div>
           </div>
-
           {/* Inline preview if a library preset is selected */}
           {!!(v.voicePreset && voices && voices.length) && (() => {
             const pv = voices.find((s) => s.id === v.voicePreset);
@@ -745,7 +745,12 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-slate-700">Emotion</label>
-                  <input className={cls("emotion")} value={v.emotion || "neutral"} onChange={(e)=>set("emotion", e.target.value)} />
+                  <input
+                    className={cls("emotion")}
+                    value={v.emotion ?? ""}
+                    onChange={(e)=>set("emotion", e.target.value)}
+                    placeholder="neutral"
+                  />
                 </div>
               </div>
             </div>
@@ -1279,6 +1284,14 @@ function StepFlags({ value, onChange, errors = {}, required = [] }) {
   const mark = (k) => (<span className="ml-1 text-red-600" aria-hidden>{req.has(k) ? "*" : ""}</span>);
   const cls = (k) => `mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 ${err(k) ? "border-red-400 ring-red-300" : "border-gray-300 ring-indigo-200"}`;
   const set = (k, val) => onChange({ ...v, [k]: val });
+
+  // Backfill podcastStill default on mount if missing/empty
+  React.useEffect(() => {
+    if (v && typeof v.podcastStill !== "boolean") {
+      onChange({ ...v, podcastStill: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const LANGS = ["en","es","fr","de","pt","it","hi","zh","ja","ko","ar"]; // small, editable set
 
