@@ -94,16 +94,8 @@ function setUiPref(path, val) {
 
 // --- UI helpers & enums ---
 const ASPECTS = ["16:9", "9:16", "1:1", "4:5"];
-const RES_PRESETS = {
-  "720p": { width: 1024, height: 576 },    // 16:9 under 1024
-  "1080p": { width: 1024, height: 576 },   // same as 720p, capped
-  // "4K": { width: 3840, height: 2160 },   // removed, exceeds cap
-  "Square": { width: 1024, height: 1024 }, // max square
-};
 const FPS_PRESETS = [24, 30, 60];
 const PERSONA_KINDS = ["human", "baby", "robot", "cartoon", "animal"];
-const VOICE_PRESETS = ["neutral_narrator", "warm_host", "energetic_youth", "deep_radio", "soft_whisper"];
-const AMBIENCE_PRESETS = ["studio", "street", "crowd", "birds", "silence"];
 
 
 
@@ -439,17 +431,15 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
                 }}
               >
                 <option value="">— Select —</option>
-                {(voices && voices.length
-                  ? voices.map((sp) => (
-                      <option key={sp.id} value={sp.id}>
-                        {sp.name || sp.id}
-                      </option>
-                    ))
-                  : VOICE_PRESETS.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    )))}
+                {voices && voices.length ? (
+                  voices.map((sp) => (
+                    <option key={sp.id} value={sp.id}>
+                      {sp.name || sp.id}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>(connects to library…)</option>
+                )}
               </select>
             </div>
             <div>
@@ -914,11 +904,13 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
             {/* Ambience + FX */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
-                <label className="text-sm font-medium text-slate-700">Ambience</label>
-                <select className={cls("ambience")} value={v.ambience ?? ""} onChange={(e)=>set("ambience", e.target.value)}>
-                  <option value="">— Select —</option>
-                  {AMBIENCE_PRESETS.map(a=> <option key={a} value={a}>{a}</option>)}
-                </select>
+                <label className="text-sm font-medium text-slate-700">Ambience description</label>
+                <input
+                  className={cls("ambienceDesc")}
+                  value={v.ambienceDesc ?? ""}
+                  onChange={(e)=>set("ambienceDesc", e.target.value)}
+                  placeholder="e.g., soft room tone, distant city hum"
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700">Sound effects</label>
@@ -1001,13 +993,20 @@ function StepFlags({ value, onChange, errors = {}, required = [] }) {
       {/* Video specs */}
       <div className="rounded border border-slate-200 p-3 space-y-3">
         <p className="font-medium text-sm">Video Specs</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
           <div>
-            <label className="text-sm font-medium text-slate-700">Resolution preset</label>
-            <select className={cls("resPreset")} value={v.resPreset ?? ""} onChange={(e)=>set("resPreset", e.target.value)}>
-              <option value="">— Select —</option>
-              {Object.keys(RES_PRESETS).map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+            <label className="text-sm font-medium text-slate-700">Width</label>
+            <input type="number" min={256} max={4096} step={1}
+              className={cls("width")}
+              value={v.width ?? 1024}
+              onChange={(e)=>set("width", Number(e.target.value || 0))} />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700">Height</label>
+            <input type="number" min={256} max={4096} step={1}
+              className={cls("height")}
+              value={v.height ?? 576}
+              onChange={(e)=>set("height", Number(e.target.value || 0))} />
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700">Aspect ratio</label>
@@ -1338,19 +1337,19 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       minimalInput?.route === "podcast" ? "Podcast" :
       minimalInput?.route || "A-Roll";
 
-    const resPreset = state?.flags?.resPreset || "1080p";
     const aspect = state?.flags?.aspect || "16:9";
     const fps = state?.flags?.fps ?? 30;
+    const width  = Number(state?.flags?.width);
+    const height = Number(state?.flags?.height);
 
-    const resolution = (() => {
-      const aspectMap = {
-        "16:9": { width: 1024, height: 576 },
-        "9:16": { width: 576,  height: 1024 },
-        "1:1":  { width: 1024, height: 1024 },
-        "4:5":  { width: 819,  height: 1024 },
-      };
-      return aspectMap[aspect] || aspectMap["16:9"];
-    })();
+    const resolution = (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0)
+      ? { width, height }
+      : ({
+          "16:9": { width: 1024, height: 576 },
+          "9:16": { width: 576,  height: 1024 },
+          "1:1":  { width: 1024, height: 1024 },
+          "4:5":  { width: 819,  height: 1024 },
+        }[aspect] || { width: 1024, height: 576 });
 
     const includeCaptions = !!state?.flags?.captions;
     const includeMusic    = !!state?.flags?.music;
@@ -1389,7 +1388,8 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       },
       flags: {
         aspect,
-        resPreset,
+        width: resolution.width,
+        height: resolution.height,
         fps,
         wordsPerSecond: state?.flags?.wordsPerSecond ?? 2.5,
         podcastStill: !!state?.flags?.podcastStill,
@@ -1415,7 +1415,7 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
         tempoVal: typeof state?.music?.tempoVal === "number" ? state.music.tempoVal : 100,
         vocals: !!state?.music?.vocals,
         ducking: !!state?.music?.ducking,
-        ambience: state?.music?.ambience,
+        ambienceDesc: state?.music?.ambienceDesc,
         voVol: typeof state?.music?.voVol === "number" ? state.music.voVol : 1.0,
         musicVol: typeof state?.music?.musicVol === "number" ? state.music.musicVol : 0.10,
         fxVol: typeof state?.music?.fxVol === "number" ? state.music.fxVol : 0.5,
