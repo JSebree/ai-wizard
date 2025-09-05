@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
@@ -55,68 +53,14 @@ function extractGenderFromVoiceName(name) {
   return null; // allow UI to proceed; downstream can validate
 }
 
-function VoiceCard({ voice, selected, onSelect }) {
-  const audioRef = useRef(null);
-  const [loading, setLoading] = useState(false);
-
-  const handlePlay = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    setLoading(true);
-    el.currentTime = 0;
-    el.play().finally(() => setLoading(false));
-  };
-
-  return (
-    <button
-      type="button"
-      className={`voice-card ${selected ? 'is-selected' : ''}`}
-      onClick={() => onSelect(voice)}
-      aria-pressed={selected}
-    >
-      <div className="voice-card__body">
-        <div className="voice-card__name">{voice.name}</div>
-        <div className="voice-card__meta">
-          <span className="voice-card__gender">
-            {extractGenderFromVoiceName(voice.name) || '—'}
-          </span>
-        </div>
-      </div>
-      {voice.previewUrl && (
-        <div className="voice-card__actions" onClick={(e) => e.stopPropagation()}>
-          <audio ref={audioRef} src={voice.previewUrl} preload="none" />
-          <button type="button" className="btn btn-sm" onClick={handlePlay}>
-            {loading ? 'Loading…' : 'Preview'}
-          </button>
-        </div>
-      )}
-    </button>
-  );
-}
-
-VoiceCard.propTypes = {
-  voice: PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    name: PropTypes.string.isRequired,
-    previewUrl: PropTypes.string,
-  }).isRequired,
-  selected: PropTypes.bool,
-  onSelect: PropTypes.func.isRequired,
-};
-
 export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
-  const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState(value || null);
 
   useEffect(() => {
     setSelectedId(value || null);
   }, [value]);
 
-  const filtered = useMemo(() => {
-    const q = normalize(query);
-    if (!q) return voices || [];
-    return (voices || []).filter(v => normalize(v.name).includes(q));
-  }, [voices, query]);
+  const filtered = useMemo(() => voices || [], [voices]);
 
   const selectedVoice = useMemo(
     () => (voices || []).find(v => v.id === selectedId) || null,
@@ -124,12 +68,6 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
   );
 
   const canNext = Boolean(selectedVoice);
-
-  const handleSelect = (voice) => {
-    setSelectedId(voice.id);
-    const gender = extractGenderFromVoiceName(voice.name);
-    onChange?.({ voiceId: voice.id, characterGender: gender });
-  };
 
   const handleNext = () => {
     if (!selectedVoice) return;
@@ -140,30 +78,48 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     <div className="step">
       <h2 className="step-title">Pick your character or narrator’s voice</h2>
 
-      <div className="toolbar">
-        <input
-          type="search"
-          className="input"
-          placeholder="Search voices…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search voices"
-        />
-      </div>
-
-      <div className="voice-grid">
-        {filtered.map((v) => (
-          <VoiceCard
-            key={v.id}
-            voice={v}
-            selected={v.id === selectedId}
-            onSelect={handleSelect}
-          />
+      <label className="label" htmlFor="voiceSelect">Select a voice</label>
+      <select
+        id="voiceSelect"
+        className="input"
+        value={selectedId || ''}
+        onChange={(e) => {
+          const id = e.target.value || null;
+          setSelectedId(id);
+          const v = (voices || []).find(vv => vv.id === id) || null;
+          if (v) {
+            const gender = extractGenderFromVoiceName(v.name);
+            onChange?.({ voiceId: v.id, characterGender: gender });
+          }
+        }}
+        aria-label="Select a voice"
+      >
+        <option value="" disabled>{voices && voices.length ? 'Choose a voice…' : 'No voices available'}</option>
+        {(voices || []).map(v => (
+          <option key={v.id} value={v.id}>
+            {v.name}
+          </option>
         ))}
-        {filtered.length === 0 && (
-          <div className="empty">No voices match your search.</div>
-        )}
-      </div>
+      </select>
+
+      {selectedVoice?.previewUrl && (
+        <div className="voice-preview">
+          <audio id="voicePreviewAudio" src={selectedVoice.previewUrl} preload="none" />
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              const el = document.getElementById('voicePreviewAudio');
+              if (el) {
+                el.currentTime = 0;
+                el.play();
+              }
+            }}
+          >
+            Preview
+          </button>
+        </div>
+      )}
 
       <div className="nav-row">
         <button type="button" className="btn btn-secondary" onClick={onBack}>
