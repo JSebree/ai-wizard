@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 
 /**
@@ -16,17 +16,6 @@ import PropTypes from 'prop-types';
 
 // --- Gender parsing helper ----------------------------------------------------
 // The product guarantees gender is embedded in the voice *name* string.
-// We parse it robustly without relying on first-letter heuristics.
-// Example names we expect to work:
-//   "Sophia [Female] — Warm conversational"
-//   "Marcus [Male]"
-//   "Avery [Nonbinary]"
-//   "Jamie (female)"
-//   "Kai - male"
-//   "Noa · non-binary"
-//   "Maya | FEMALE"
-//   "Sam – masc" (maps to male)
-//   "Riley – fem" (maps to female)
 const normalize = (s) => (s || '').toLowerCase();
 const GENDER_TOKENS = [
   { re: /\bnon[-\s]?binary\b|\bnb\b|\benby\b/gi, out: 'nonbinary' },
@@ -36,42 +25,41 @@ const GENDER_TOKENS = [
 
 function extractGenderFromVoiceName(name) {
   if (!name) return null;
-  // Try bracket/paren/pipe notations first
   const bracketMatch = name.match(/[\[(|\-·–—]\s*(male|female|non\s*binary|nonbinary|masc(?:uline)?|fem(?:ale)?|femme)\s*[\])|\-·–—]?/i);
   if (bracketMatch && bracketMatch[1]) {
     const raw = normalize(bracketMatch[1]).replace(/\s+/g, '');
-    if (raw.startsWith('nonbinary') || raw === 'nonbinary' || raw === 'nonbinary') return 'nonbinary';
-    if (raw.startsWith('non') && raw.includes('binary')) return 'nonbinary';
-    if (raw.startsWith('fem')) return 'female';
-    if (raw === 'femme') return 'female';
+    if (raw.includes('non') && raw.includes('binary')) return 'nonbinary';
+    if (raw.startsWith('fem') || raw === 'femme') return 'female';
     if (raw.startsWith('masc') || raw === 'male') return 'male';
   }
-  // Token scan fallback
   for (const { re, out } of GENDER_TOKENS) {
     if (re.test(name)) return out;
   }
-  return null; // allow UI to proceed; downstream can validate
+  return null;
 }
 
 export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
-  const [selectedId, setSelectedId] = useState(value || null);
+  const [selectedId, setSelectedId] = useState(value || '');
+  const [manualId, setManualId] = useState('');
 
+  // keep state in sync if parent updates value (e.g., resume)
   useEffect(() => {
-    setSelectedId(value || null);
+    setSelectedId(value || '');
   }, [value]);
 
-  const filtered = useMemo(() => voices || [], [voices]);
-
+  const list = useMemo(() => Array.isArray(voices) ? voices : [], [voices]);
   const selectedVoice = useMemo(
-    () => (voices || []).find(v => v.id === selectedId) || null,
-    [voices, selectedId]
+    () => list.find(v => v.id === (manualId || selectedId)) || null,
+    [list, selectedId, manualId]
   );
 
-  const canNext = Boolean(selectedVoice);
+  const effectiveId = manualId || selectedId;
+  const canNext = Boolean(effectiveId);
 
-  const handleNext = () => {
-    if (!selectedVoice) return;
-    onNext?.();
+  const commitChange = (id) => {
+    const v = list.find(vv => vv.id === id) || null;
+    const gender = v ? extractGenderFromVoiceName(v.name) : null;
+    onChange?.({ voiceId: id || '', characterGender: gender });
   };
 
   return (
@@ -82,28 +70,37 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       <select
         id="voiceSelect"
         className="input"
-        value={selectedId || ''}
+        value={selectedId}
         onChange={(e) => {
-          const id = e.target.value || null;
+          const id = e.target.value;
           setSelectedId(id);
-          const v = (voices || []).find(vv => vv.id === id) || null;
-          if (v) {
-            const gender = extractGenderFromVoiceName(v.name);
-            onChange?.({ voiceId: v.id, characterGender: gender });
-          }
+          setManualId(''); // selecting from list clears manual override
+          commitChange(id);
         }}
         aria-label="Select a voice from list"
       >
-        <option value="" disabled>{voices && voices.length ? 'Choose a voice…' : 'No voices available'}</option>
-        {(voices || []).map(v => (
+        <option value="" disabled>{list.length ? 'Choose a voice…' : 'No voices available'}</option>
+        {list.map(v => (
           <option key={v.id} value={v.id}>
             {v.name}
           </option>
         ))}
       </select>
 
+      <div className="hint" style={{ marginTop: 8 }}>Or paste a specific voice ID (overrides the selection):</div>
+      <input
+        className="input"
+        placeholder="e.g., fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
+        value={manualId}
+        onChange={(e) => {
+          const id = e.target.value.trim();
+          setManualId(id);
+          commitChange(id);
+        }}
+      />
+
       {selectedVoice?.previewUrl && (
-        <div className="voice-preview">
+        <div className="voice-preview" style={{ marginTop: 10 }}>
           <audio id="voicePreviewAudio" src={selectedVoice.previewUrl} preload="none" />
           <button
             type="button"
@@ -125,7 +122,12 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         <button type="button" className="btn btn-secondary" onClick={onBack}>
           Back
         </button>
-        <button type="button" className="btn btn-primary" onClick={handleNext} disabled={!canNext}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onNext}
+          disabled={!canNext}
+        >
           Next
         </button>
       </div>

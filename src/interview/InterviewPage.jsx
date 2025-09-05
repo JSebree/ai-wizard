@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
 /**
  * InterviewPage.jsx
@@ -17,6 +17,26 @@ import React, { useMemo, useState } from "react";
  * - Minimal client-side validation is applied to keep the flow smooth.
  * - You can wire `onComplete` prop to submit the payload upstream. If not provided, we show a preview.
  */
+
+// Local storage keys for refresh-proof persistence
+const LS_KEY_ANS = "interview_answers_v1";
+const LS_KEY_STEP = "interview_step_v1";
+
+// Attempt to read JSON safely
+function readJSON(key, fallback) {
+  try {
+    const s = localStorage.getItem(key);
+    return s ? JSON.parse(s) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
 
 // ----------------------------- helpers ---------------------------------
 
@@ -129,38 +149,88 @@ function NavBar({ stepIndex, total, onPrev, onNext, canNext, isLast }) {
 
 export default function InterviewPage({ onComplete }) {
   // Core answer state
-  const [answers, setAnswers] = useState({
-    // 1
-    scene: "",
-    // 2
-    driver: "", // "character" | "narrator"
-    wantsCutaways: undefined, // boolean (only if character)
-    character: "", // description if character flow
-    // 3
-    voiceId: "", // store the selection id/string; display text can be same
-    voiceLabel: "", // optional: a human-friendly label including gender
-    // 4
-    characterName: "",
-    // 5
-    setting: "",
-    // 6
-    action: "",
-    // 7
-    directorsNotes: "",
-    // 8
-    wantsMusic: undefined, // boolean
-    musicDesc: "",
-    // 9
-    wantsCaptions: undefined, // boolean
-    // 10
-    durationSec: 45,
-    // 11
-    title: "",
-    // 12
-    referenceText: "",
+  const [answers, setAnswers] = useState(() => {
+    const defaults = {
+      // 1
+      scene: "",
+      // 2
+      driver: "", // "character" | "narrator"
+      wantsCutaways: undefined, // boolean (only if character)
+      character: "", // description if character flow
+      // 3
+      voiceId: "", // store the selection id/string; display text can be same
+      voiceLabel: "", // optional: a human-friendly label including gender
+      // 4
+      characterName: "",
+      // 5
+      setting: "",
+      // 6
+      action: "",
+      // 7
+      directorsNotes: "",
+      // 8
+      wantsMusic: undefined, // boolean
+      musicDesc: "",
+      // 9
+      wantsCaptions: undefined, // boolean
+      // 10
+      durationSec: 45,
+      // 11
+      title: "",
+      // 12
+      referenceText: "",
+    };
+    const saved = readJSON(LS_KEY_ANS, null);
+    return saved ? { ...defaults, ...saved } : defaults;
   });
 
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
+
+  // Voice options (dropdown). Populate from window/global or API if available.
+  const [voiceOptions, setVoiceOptions] = useState([]);
+
+  function normalizeVoices(list) {
+    // Accept shapes like [{id, label}] or [{id, name}] or [{voice_id, displayName}]
+    return (Array.isArray(list) ? list : []).map((v) => {
+      const id = v.id || v.voice_id || v.voiceId || v.value || "";
+      const label = v.label || v.name || v.displayName || v.title || String(id);
+      return { id: String(id), label: String(label) };
+    }).filter(v => v.id);
+  }
+
+  useEffect(() => {
+    const fromWindow = (typeof window !== "undefined" && (window.__VOICE_LIST__ || window.__VOICES__)) || null;
+    if (Array.isArray(fromWindow) && fromWindow.length) {
+      setVoiceOptions(normalizeVoices(fromWindow));
+      return;
+    }
+    // Try persisted list
+    const cached = readJSON("voice_list_cache_v1", null);
+    if (Array.isArray(cached) && cached.length) {
+      setVoiceOptions(cached);
+    }
+    // Try fetch from a conventional endpoint (optional)
+    fetch("/api/voices", { method: "GET" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const norm = normalizeVoices(data);
+        if (norm.length) {
+          setVoiceOptions(norm);
+          writeJSON("voice_list_cache_v1", norm);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Persist on change (refresh-proof)
+  useEffect(() => {
+    writeJSON(LS_KEY_ANS, answers);
+  }, [answers]);
+
+  useEffect(() => {
+    writeJSON(LS_KEY_STEP, stepIndex);
+  }, [stepIndex]);
 
   // Derived fields
   const characterGender = useMemo(
@@ -266,14 +336,36 @@ export default function InterviewPage({ onComplete }) {
       label: "Pick your character or narrator’s voice.",
       render: () => (
         <>
-          <FieldRow label="Voice (select or paste ID)">
+          {voiceOptions.length > 0 && (
+            <FieldRow label="Choose a voice (dropdown)">
+              <select
+                value={answers.voiceId || ""}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const found = voiceOptions.find(v => v.id === id);
+                  setAnswers((s) => ({ ...s, voiceId: id, voiceLabel: found ? found.label : s.voiceLabel }));
+                }}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
+              >
+                <option value="">— Select a voice —</option>
+                {voiceOptions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label} — {v.id}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+          )}
+
+          <FieldRow label={voiceOptions.length ? "…or paste a specific voice ID" : "Voice (select or paste ID)"}>
             <input
               type="text"
-              placeholder="e.g., Ava (female) — fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
+              placeholder="e.g., fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
               value={answers.voiceId}
               onChange={(e) => setAnswers((s) => ({ ...s, voiceId: e.target.value }))}
             />
           </FieldRow>
+
           <FieldRow label="Voice label (optional, used for gender inference)">
             <input
               type="text"
