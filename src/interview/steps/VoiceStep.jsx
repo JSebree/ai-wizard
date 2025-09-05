@@ -78,7 +78,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     <div className="step">
       <h2 className="step-title">Pick your character or narrator’s voice</h2>
 
-      <label className="label" htmlFor="voiceSelect">Select a voice</label>
+      <label className="label" htmlFor="voiceSelect">Voice (select from your voices)</label>
       <select
         id="voiceSelect"
         className="input"
@@ -92,7 +92,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
             onChange?.({ voiceId: v.id, characterGender: gender });
           }
         }}
-        aria-label="Select a voice"
+        aria-label="Select a voice from list"
       >
         <option value="" disabled>{voices && voices.length ? 'Choose a voice…' : 'No voices available'}</option>
         {(voices || []).map(v => (
