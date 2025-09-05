@@ -1,7 +1,7 @@
 // src/App.jsx
 import React from "react";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
-import InterviewPage from "./pages/InterviewPage.jsx";
+import InterviewPage from "./interview/InterviewPage.jsx";
 
 // If you created a global reset button component, import it; otherwise you can delete the usage below.
 // import HeaderResetButton from "./components/ui/HeaderResetButton.jsx";
