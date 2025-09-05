@@ -2,7 +2,6 @@
 
 import React from "react";
 import { createClient } from "@supabase/supabase-js";
-import { STYLE_LIBRARY, DEFAULT_STYLE_KEY, template_to_stylekey } from "./styleLibraryMap";
 
 // Runtime safety: catch render errors to avoid a blank screen
 class AppErrorBoundary extends React.Component {
@@ -60,115 +59,7 @@ export function resetWizardFormGlobal() {
 // Keep it pointing at the new global reset to avoid ReferenceErrors.
 const resetWizardForm = resetWizardFormGlobal;
 
-// Resolve a styleKey from the current wizard state
-function resolveStyleKeyFromState(state) {
-  try {
-    const t = state?.minimalInput?.templates?.[0] || "";
-    const key = template_to_stylekey(t) || "generic-video";
-    return key;
-  } catch {
-    return "generic-video";
-  }
-}
 
-// Merge top‑down defaults from STYLE_LIBRARY, but let lower‑level user fields win.
-// This returns a normalized "effective" view that buildN8nPayload can use.
-function computeEffectiveState(state) {
-  const styleKey = resolveStyleKeyFromState(state);
-  const profile = STYLE_LIBRARY[styleKey] || STYLE_LIBRARY["generic-video"];
-
-  // Flags: apply profile.flagDefaults only where user left it undefined
-  const flags = {
-    ...state?.flags,
-    captions:
-      state?.flags?.captions ?? !!profile?.flagDefaults?.captions ?? true,
-    music:
-      state?.flags?.music ?? !!profile?.flagDefaults?.music ?? true,
-    podcastStill:
-      state?.flags?.podcastStill ?? !!profile?.flagDefaults?.podcastStill ?? false,
-  };
-
-  // Packs: user selection wins; otherwise fall back to profile
-  const packs = {
-    stylePack:   state?.setting?.stylePack   || profile?.style   || null,
-    lookPack:    state?.character?.lookPack  || profile?.look    || null,
-    motionPack:  state?.setting?.motionPack  || profile?.motion  || null,
-    propsPack:   state?.setting?.propsPack   || profile?.props   || null,
-    mouthPack:   "pack_mouth_subtle", // always default to subtle mouth
-    basePack:    state?.setting?.base        || profile?.base    || null,
-    personaPack: state?.character?.personaPack || null,
-    musicPack:   state?.music?.musicPack     || null,
-    accentPack:  null, // freeform in UI for now
-  };
-
-  // Music defaults: use profile unless user specified
-  const music = {
-    ...state?.music,
-    mood: state?.music?.mood || profile?.music?.mood || "light underscore",
-    tempo: state?.music?.tempo || profile?.music?.tempo || "95-110bpm",
-    tempoVal:
-      typeof state?.music?.tempoVal === "number"
-        ? state.music.tempoVal
-        : (profile?.music?.tempoVal || 100),
-  };
-
-  return { styleKey, profile, flags, packs, music };
-}
-
-
-function resolveStyleKeyFromTemplateLabel(label) {
-  return template_to_stylekey(label) || "generic-video";
-}
-
-// Apply profile defaults into the live wizard state, OVERWRITING user fields (template-first).
-// `setWizard` is the App-level setter for your aggregated state object.
-function hydrateDefaultsFromProfile(current, styleKey) {
-  const profile = STYLE_LIBRARY[styleKey] || STYLE_LIBRARY["generic-video"];
-  if (!profile) return current;
-
-  // clone branches we touch
-  const next = { ...current };
-  next.setting   = { ...(current.setting   || {}) };
-  next.character = { ...(current.character || {}) };
-  next.flags     = { ...(current.flags     || {}) };
-  next.music     = { ...(current.music     || {}) };
-
-  // --- HARD APPLY: always overwrite with profile defaults ---
-  // Environment / base scene
-  next.setting.environment = profile.environment || "env_auto";
-  next.setting.base        = profile.base || null;
-
-  // Packs
-  next.setting.stylePack   = profile.style || null;
-  next.character.lookPack  = profile.look  || null;
-  next.setting.motionPack  = profile.motion || null;
-  next.setting.propsPack   = profile.props || null;
-
-  // Persona
-  if (profile.personaKind) next.character.personaKind = profile.personaKind;
-
-  // Flags
-  if (profile.flagDefaults) {
-    next.flags.captions     = profile.flagDefaults.captions ?? next.flags.captions ?? true;
-    next.flags.music        = profile.flagDefaults.music ?? next.flags.music ?? true;
-    next.flags.podcastStill = profile.flagDefaults.podcastStill ?? next.flags.podcastStill ?? false;
-  } else {
-    // reasonable fallbacks
-    next.flags.captions = next.flags.captions ?? true;
-    next.flags.music    = next.flags.music ?? true;
-  }
-
-  // Music defaults
-  next.music.mood     = (profile.music && profile.music.mood)  || "light underscore";
-  next.music.tempo    = (profile.music && profile.music.tempo) || "95-110bpm";
-  if (typeof profile.music?.tempoVal === "number") {
-    next.music.tempoVal = profile.music.tempoVal;
-  } else if (typeof next.music.tempoVal !== "number") {
-    next.music.tempoVal = 100;
-  }
-
-  return next;
-}
 
 // --- Supabase (public, read-only) ---
 // We will read the public "speakers" table to populate the voice list.
@@ -210,93 +101,11 @@ const RES_PRESETS = {
   "Square": { width: 1024, height: 1024 }, // max square
 };
 const FPS_PRESETS = [24, 30, 60];
-const ENV_PRESETS = ["studio", "city street", "kitchen", "forest", "classroom"];
-const LIGHT_PRESETS = ["day", "night", "sunset", "moody", "neon"];
-const WEATHER_PRESETS = ["clear", "rain", "snow", "fog"];
-const SHOT_TYPES = ["selfie", "wide", "medium wide", "medium", "medium close-up", "close-up", "extreme close-up", "long shot", "over-shoulder", "two-shot", "overhead", "dolly", "drone"];
-const MOTION_TEMPLATES = ["handheld vlog", "cinematic pan", "locked interview"];
 const PERSONA_KINDS = ["human", "baby", "robot", "cartoon", "animal"];
 const VOICE_PRESETS = ["neutral_narrator", "warm_host", "energetic_youth", "deep_radio", "soft_whisper"];
 const AMBIENCE_PRESETS = ["studio", "street", "crowd", "birds", "silence"];
-const TEMPLATE_PRESETS = ["Studio Podcast", "Cooking Show", "Explainer", "Vlog", "Cinematic Short"];
 
-// --- n8n pack libraries (IDs) -> used for dropdowns ---
-const PACK_OPTIONS = {
-  base: [
-    "base_podcast_studio_video",
-    "base_newsroom_desk",
-    "base_gaming_desk",
-    "base_creator_green_corner",
-    "base_cinematic_interview",
-    "base_lecture_hall",
-    "base_white_cyclorama",
-    "base_street_vlog",
-    "base_vlog_handheld",
-    "base_creator_video"
-  ],
-  look: [
-    "pack_look_studio_warm",
-    "pack_look_studio_moody",
-    "pack_look_newsroom_clean",
-    "pack_look_clean_host",
-    "pack_look_glow_ui",
-    "pack_look_daylight_casual",
-    "pack_look_filmic_soft",
-    "pack_look_concert_dark"
-  ],
-  style: [
-    "pack_style_podcast_pro",
-    "pack_style_podcast_casual",
-    "pack_style_podcast_moody",
-    "pack_style_tech_explainer",
-    "pack_style_founder_fireside",
-    "pack_style_vlog_daily",
-    "pack_style_product_show",
-    "pack_style_musicvideo",
-    "pack_style_broll_montage",
-    "pack_style_presenter"
-  ],
-  persona: [
-    "pack_persona_human_adult",
-    "pack_persona_human_baby",
-    "pack_persona_animal_cat",
-    "pack_persona_animal_dog",
-    "pack_persona_animal_gorilla",
-    "pack_persona_mascot_plush",
-    "pack_persona_anime_avatar",
-    "pack_persona_robot_synth"
-  ],
-  motion: [
-    "pack_motion_headtalk",
-    "pack_motion_confident",
-    "pack_motion_minimal",
-    "pack_motion_vlog",
-    "pack_motion_kinetic"
-  ],
-  props: [
-    "pack_props_podcast_headset_mic",
-    "pack_props_desk_mic_boom",
-    "pack_props_cozy_backdrop",
-    "pack_props_jungle_backdrop",
-    "pack_props_studio_backdrop"
-  ],
-  music: [
-    "pack_music_lofi_warm",
-    "pack_music_light_underscore",
-    "pack_music_future_pop",
-    "pack_music_indie_chill",
-    "pack_music_beat_driven",
-    "pack_music_moody_ambient"
-  ],
-  accent: [
-    "pack_accent_neutral",
-    "pack_accent_soft_american",
-    "pack_accent_casual",
-    "pack_accent_announcer",
-    "pack_accent_intimate",
-    "pack_accent_none"
-  ]
-};
+
 
 function Slider({ label, value, onChange, min=0, max=1, step=0.01, required=false, hint }) {
   return (
@@ -476,36 +285,6 @@ function StepConcept({ value, onChange, errors = {}, required = [] }) {
         </select>
       </div>
 
-      {/* Templates */}
-      <div>
-        <label className="text-sm font-medium text-slate-700">Templates (select any)</label>
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-          {TEMPLATE_PRESETS.map(t => {
-            const checked = (v.templates || []).includes(t);
-            return (
-              <label key={t} className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 rounded px-2 py-1">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(e) => {
-                    const cur = new Set(v.templates || []);
-                    if (e.target.checked) cur.add(t); else cur.delete(t);
-                    const nextTemplates = Array.from(cur);
-                    set('templates', nextTemplates);
-
-                    // Notify App that the top template changed so it can hydrate defaults
-                    try {
-                      const top = nextTemplates[0] || '';
-                      window.dispatchEvent(new CustomEvent('wizard:templateChanged', { detail: { topTemplate: top } }));
-                    } catch {}
-                  }}
-                />
-                <span>{t.replace(/_/g, " ")}</span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
 
       <div>
         <label className="text-sm font-medium text-slate-700">Tags{mark("tags")}</label>
@@ -620,7 +399,7 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-medium text-slate-700">Persona Kind{mark("personaKind")}</label>
           <select className={cls("personaKind")} value={v.personaKind || "human"} onChange={(e)=>set("personaKind", e.target.value)}>
@@ -629,37 +408,12 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
           </select>
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700">Look Presets{mark("lookPack")}</label>
-          <select className={cls("lookPack")} value={v.lookPack ?? ""} onChange={(e)=>set("lookPack", e.target.value)}>
-            <option value="">— Select —</option>
-            {PACK_OPTIONS.look.map(id =>
-              <option key={id} value={id}>
-                {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-              </option>
-            )}
-          </select>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-slate-700">Persona Presets{mark("personaPack")}</label>
-          <select className={cls("personaPack")} value={v.personaPack ?? ""} onChange={(e)=>set("personaPack", e.target.value)}>
-            <option value="">— Select —</option>
-            {PACK_OPTIONS.persona.map(id =>
-              <option key={id} value={id}>
-                {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-              </option>
-            )}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div>
           <label className="text-sm font-medium text-slate-700">Style Tags</label>
           <input className={cls("styleTags")} value={v.styleTags || ""} onChange={(e)=>set("styleTags", e.target.value)} placeholder="realistic, pixar-like" />
-        </div>
-        <div className="flex items-end gap-2">
-          <input id="pinLook" type="checkbox" checked={!!v.pinLook} onChange={(e)=>set("pinLook", e.target.checked)} />
-          <label htmlFor="pinLook" className="text-sm">Pin look</label>
+          <div className="flex items-end gap-2 mt-2">
+            <input id="pinLook" type="checkbox" checked={!!v.pinLook} onChange={(e)=>set("pinLook", e.target.checked)} />
+            <label htmlFor="pinLook" className="text-sm">Pin look</label>
+          </div>
         </div>
       </div>
 
@@ -675,7 +429,13 @@ function StepCharacter({ value, onChange, errors = {}, required = [] }) {
                 value={v.voicePreset || ""}
                 onChange={(e) => {
                   const val = e.target.value;
-                  onChange({ ...v, voicePreset: val });
+                  let gender = v.characterGender || null;
+                  if (val) {
+                    const voiceName = voices.find((sp) => sp.id === val)?.name || val;
+                    if (/female/i.test(voiceName)) gender = "female";
+                    else if (/male/i.test(voiceName)) gender = "male";
+                  }
+                  onChange({ ...v, voicePreset: val, characterGender: gender });
                 }}
               >
                 <option value="">— Select —</option>
@@ -837,14 +597,7 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
       {/* Environment */}
       <div className="rounded border border-slate-200 p-3 space-y-4">
         <p className="font-medium text-sm">Environment</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div>
-            <label className="text-sm font-medium text-slate-700">Environment preset</label>
-            <select className={cls("envPreset")} value={v.envPreset ?? ""} onChange={(e)=>set("envPreset", e.target.value)}>
-              <option value="">— Select —</option>
-              {ENV_PRESETS.map(p=> <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
             <label className="text-sm font-medium text-slate-700">Environment (freeform){mark("environment")}</label>
             <input
@@ -862,57 +615,6 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
         </div>
       </div>
 
-      {/* Packs (from libraries) */}
-      <div className="rounded border border-slate-200 p-3 space-y-4">
-        <p className="font-medium text-sm">Presets</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
-          <div>
-            <label className="text-sm font-medium text-slate-700">Base</label>
-            <select className={cls("base")} value={v.base ?? ""} onChange={(e)=>set("base", e.target.value)}>
-              <option value="">— Select —</option>
-              {PACK_OPTIONS.base.map(id =>
-                <option key={id} value={id}>
-                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-                </option>
-              )}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Style Presets</label>
-            <select className={cls("stylePack")} value={v.stylePack ?? ""} onChange={(e)=>set("stylePack", e.target.value)}>
-              <option value="">— Select —</option>
-              {PACK_OPTIONS.style.map(id =>
-                <option key={id} value={id}>
-                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-                </option>
-              )}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Motion Presets</label>
-            <select className={cls("motionPack")} value={v.motionPack ?? ""} onChange={(e)=>set("motionPack", e.target.value)}>
-              <option value="">— Select —</option>
-              {PACK_OPTIONS.motion.map(id =>
-                <option key={id} value={id}>
-                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-                </option>
-              )}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700">Props Presets</label>
-            <select className={cls("propsPack")} value={v.propsPack ?? ""} onChange={(e)=>set("propsPack", e.target.value)}>
-              <option value="">— Select —</option>
-              {PACK_OPTIONS.props.map(id =>
-                <option key={id} value={id}>
-                  {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-                </option>
-              )}
-            </select>
-          </div>
-        </div>
-      </div>
-
       {/* Camera, Atmosphere & Framing */}
       <div className="rounded border border-slate-200 p-3 space-y-4">
         <p className="font-medium text-sm">Camera, Atmosphere & Framing</p>
@@ -922,17 +624,11 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Camera</p>
             <div>
               <label className="text-sm font-medium text-slate-700">Shot type</label>
-              <select className={cls("shotType")} value={v.shotType || "medium close-up"} onChange={(e)=>set("shotType", e.target.value)}>
-                <option value="">— Select —</option>
-                {SHOT_TYPES.map(s=> <option key={s} value={s}>{s}</option>)}
-              </select>
+              <input className={cls("shotType")} value={v.shotType || ""} onChange={(e)=>set("shotType", e.target.value)} placeholder="e.g., medium close-up" />
             </div>
             <div>
               <label className="text-sm font-medium text-slate-700">Motion template</label>
-              <select className={cls("motionTemplate")} value={v.motionTemplate ?? "locked interview"} onChange={(e)=>set("motionTemplate", e.target.value)}>
-                <option value="">— Select —</option>
-                {MOTION_TEMPLATES.map(m=> <option key={m} value={m}>{m}</option>)}
-              </select>
+              <input className={cls("motionTemplate")} value={v.motionTemplate ?? ""} onChange={(e)=>set("motionTemplate", e.target.value)} placeholder="e.g., locked interview" />
             </div>
           </div>
 
@@ -940,18 +636,12 @@ function StepSetting({ value, onChange, errors = {}, required = [] }) {
           <div className="space-y-4">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Atmosphere</p>
             <div>
-              <label className="text-sm font-medium text-slate-700">Lighting preset</label>
-              <select className={cls("lightingPreset")} value={v.lightingPreset ?? ""} onChange={(e)=>set("lightingPreset", e.target.value)}>
-                <option value="">— Select —</option>
-                {LIGHT_PRESETS.map(p=> <option key={p} value={p}>{p}</option>)}
-              </select>
+              <label className="text-sm font-medium text-slate-700">Lighting</label>
+              <input className={cls("lightingPreset")} value={v.lightingPreset ?? ""} onChange={(e)=>set("lightingPreset", e.target.value)} placeholder="e.g., day" />
             </div>
             <div>
               <label className="text-sm font-medium text-slate-700">Weather</label>
-              <select className={cls("weather")} value={v.weather ?? ""} onChange={(e)=>set("weather", e.target.value)}>
-                <option value="">— Select —</option>
-                {WEATHER_PRESETS.map(w=> <option key={w} value={w}>{w}</option>)}
-              </select>
+              <input className={cls("weather")} value={v.weather ?? ""} onChange={(e)=>set("weather", e.target.value)} placeholder="e.g., clear" />
             </div>
           </div>
 
@@ -1192,18 +882,6 @@ function StepMusic({ value, onChange, errors = {}, required = [] }) {
         </div>
       </div>
 
-      {/* Music pack (library) */}
-      <div>
-        <label className="text-sm font-medium text-slate-700">Music Presets</label>
-        <select className={cls("musicPack")} value={v.musicPack ?? ""} onChange={(e)=>set("musicPack", e.target.value)}>
-          <option value="">— Select —</option>
-          {PACK_OPTIONS.music.map(id =>
-            <option key={id} value={id}>
-              {id.replace(/^pack_(base|look|style|persona|motion|props|music|accent)_/, "").replace(/_/g, " ")}
-            </option>
-          )}
-        </select>
-      </div>
 
       {/* Vocal options (basic) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1652,7 +1330,6 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
 
   function buildPayload(state) {
     const { minimalInput, character, setting } = state || {};
-    const eff = computeEffectiveState(state);
 
     const videoType =
       minimalInput?.route === "aroll" ? "A-Roll" :
@@ -1665,31 +1342,6 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
     const aspect = state?.flags?.aspect || "16:9";
     const fps = state?.flags?.fps ?? 30;
 
-    const characters = [{
-      id: "char1",
-      name: character?.name || "Host",
-      voiceSelectionName: character?.voicePreset || character?.voiceId || "",
-    }];
-
-    const personaMeta = {
-      name: character?.name || "",
-      alias: minimalInput?.title || "",
-      packId: character?.personaPack || "pack_persona_human_adult",
-      kind: character?.personaKind || "human",
-    };
-
-    const packs = {
-      stylePack:   eff.packs.stylePack,
-      lookPack:    eff.packs.lookPack,
-      accentPack:  eff.packs.accentPack,
-      motionPack:  eff.packs.motionPack,
-      musicPack:   eff.packs.musicPack,
-      personaPack: eff.packs.personaPack,
-      propsPack:   eff.packs.propsPack,
-      mouthPack:   eff.packs.mouthPack,
-      basePack:    eff.packs.basePack,
-    };
-
     const resolution = (() => {
       const aspectMap = {
         "16:9": { width: 1024, height: 576 },
@@ -1700,11 +1352,24 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
       return aspectMap[aspect] || aspectMap["16:9"];
     })();
 
-    const includeCaptions = !!eff.flags.captions;
-    const includeMusic    = !!eff.flags.music;
+    const includeCaptions = !!state?.flags?.captions;
+    const includeMusic    = !!state?.flags?.music;
+
+    const characters = [{
+      id: "char1",
+      name: character?.name || "Host",
+      voiceSelectionName: character?.voicePreset || character?.voiceId || "",
+      characterGender: character?.characterGender || null,
+    }];
+
+    const personaMeta = {
+      name: character?.name || "",
+      alias: minimalInput?.title || "",
+      kind: character?.personaKind || "human",
+    };
 
     return {
-      packsLibraryVersion: 1,
+      version: 1,
       mergedFromForm: {
         title: minimalInput?.title || "Untitled",
         subject: minimalInput?.subject || "",
@@ -1717,12 +1382,8 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
         characters,
         personaMeta,
         referenceText: minimalInput?.referenceText || "",
-        packs: { ...packs },
-        packIds: { ...packs },
         style: minimalInput?.style || "",
         tone: minimalInput?.tone || "",
-        template: (minimalInput?.templates && minimalInput.templates[0]) || "",
-        styleKey: eff.styleKey,
         submittedAt: new Date().toISOString(),
         formMode: "wizard",
       },
@@ -1731,27 +1392,27 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
         resPreset,
         fps,
         wordsPerSecond: state?.flags?.wordsPerSecond ?? 2.5,
-        podcastStill: !!eff.flags.podcastStill,
+        podcastStill: !!state?.flags?.podcastStill,
         strictness: state?.flags?.strictness ?? 0.6,
         respectKeyframes: !!state?.flags?.respectKeyframes,
         seedLock: !!state?.flags?.seedLock,
       },
       setting: {
         envPreset: setting?.envPreset,
-        environment: setting?.environment || eff.profile?.environment || "env_auto",
+        environment: setting?.environment || "env_auto",
         location: setting?.location,
-        base: packs.basePack,
+        base: setting?.base || null,
         lightingPreset: setting?.lightingPreset,
         weather: setting?.weather,
-        shotType: setting?.shotType || "medium close-up",
+        shotType: setting?.shotType || "",
         subjectPos: setting?.subjectPos,
         keyframeCue: setting?.keyframeCue,
         transition: setting?.transition,
       },
       music: {
-        mood: eff.music.mood,
-        tempo: eff.music.tempo,
-        tempoVal: eff.music.tempoVal,
+        mood: state?.music?.mood || "",
+        tempo: state?.music?.tempo || "",
+        tempoVal: typeof state?.music?.tempoVal === "number" ? state.music.tempoVal : 100,
         vocals: !!state?.music?.vocals,
         ducking: !!state?.music?.ducking,
         ambience: state?.music?.ambience,
@@ -1801,580 +1462,152 @@ const StepReview = React.forwardRef(function StepReview({ fullState, errors = {}
 
   // ---- Submit --------------------------------------------------------------
 
-  async function sendToApi() {
-    setSendMsg(null);
-    const payload = buildPayload(fullState);
-    setSending(true);
-    try {
-      const res = await fetch(SUBMIT_WEBHOOK, {
-        method: "POST",
-        headers: safeHeaders(),
-        body: JSON.stringify(payload),
-        mode: "cors",
-        keepalive: true,
-      });
-      const dataText = await res.text();
-      if (!res.ok) throw new Error(dataText || `HTTP ${res.status}`);
+// Replace the whole sendToApi with this:
+async function sendToApi() {
+  setSendMsg(null);
+  const payload = buildPayload(fullState);
+  setSending(true);
+  try {
+    const res = await fetch(SUBMIT_WEBHOOK, {
+      method: "POST",
+      headers: safeHeaders(),
+      body: JSON.stringify(payload),
+      mode: "cors",
+      keepalive: true,
+    });
 
-      let data; try { data = JSON.parse(dataText); } catch { data = {}; }
-      const returnedJobId = data?.jobId || data?.id || null;
+    const dataText = await res.text();
+    if (!res.ok) throw new Error(dataText || `HTTP ${res.status}`);
 
+    let data;
+    try { data = JSON.parse(dataText); } catch { data = {}; }
+
+    const returnedJobId = data?.jobId || data?.id || null;
+
+    setSendMsg({
+      kind: "ok",
+      text: "Submitting will auto-poll for status until the final video is ready.",
+    });
+
+    if (returnedJobId) {
+      setJobId(returnedJobId);
+      setJobIdInUrl(returnedJobId);
+      startPolling(returnedJobId);
+    } else {
+      console.warn("Submit returned no jobId:", data);
       setSendMsg({
-        kind: "ok",
-        text: "Submitting will auto-poll for status until the final video is ready. This could take up to an hour",
+        kind: "warn",
+        text: "Submitted, but the server did not return a job id. Check logs or re-submit.",
       });
-
-      if (returnedJobId) {
-        setJobId(returnedJobId);
-        setJobIdInUrl(returnedJobId);
-        startPolling(returnedJobId);
-      } else {
-        console.warn("No jobId returned from API.");
-      }
-    } catch (e) {
-      setSendMsg({
-        kind: "error",
-        text: "Send failed.",
-        detail: (e && (e.stack || e.message)) ? (e.stack || e.message) : String(e)
-      });
-    } finally {
-      setSending(false);
     }
+  } catch (err) {
+    console.error("Submit error:", err);
+    setSendMsg({
+      kind: "error",
+      text: `Submit failed: ${err?.message || err}`,
+    });
+  } finally {
+    setSending(false);
   }
+}
 
-  // ---- pretty review helpers (unchanged) -----------------------------------
-
-  function PrettyValue({ value }) {
-    if (value == null) return <span className="text-slate-500">—</span>;
-    const t = typeof value;
-    if (t === "string" || t === "number" || t === "boolean") return <span>{String(value)}</span>;
-    if (Array.isArray(value)) {
-      if (!value.length) return <span className="text-slate-500">—</span>;
-      return (
-        <ul className="list-disc pl-5 space-y-1">
-          {value.map((v, i) => (<li key={i}><PrettyValue value={v} /></li>))}
-        </ul>
-      );
-    }
-    return (
-      <div className="space-y-1">
-        {Object.entries(value).map(([k, v]) => (
-          <div key={k} className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-x-4">
-            <div className="text-slate-500">{k}</div>
-            <div className="break-words"><PrettyValue value={v} /></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  function SectionBlock({ title, obj }) {
-    if (!obj || (typeof obj === "object" && !Array.isArray(obj) && Object.keys(obj).length === 0)) return null;
-    return (
-      <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-slate-700">{title}</h4>
-        <div className="rounded border border-slate-200 p-3">
-          <PrettyValue value={obj} />
-        </div>
-      </div>
-    );
-  }
-
-  // Expose sender to parent
-  React.useImperativeHandle(ref, () => ({ send: sendToApi }));
-
-  // ---- render --------------------------------------------------------------
-
+// ---- Render --------------------------------------------------------------
   return (
-    <div className="space-y-4">
-      <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-        <p className="mb-1 font-medium">Validation</p>
-        {ready ? (
-          <p className="text-green-700">All required fields look good. 🎉</p>
-        ) : (
-          <p className="text-red-600">
-            Some steps still have issues — missing required fields are highlighted in their forms.
-          </p>
-        )}
-      </div>
-
-      <h3 className="text-base font-semibold">Review Summary</h3>
-      <div className="rounded border border-slate-200 p-3 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          {/* left column */}
-          <div className="space-y-2">
-            <div><span className="text-slate-500">Title:</span> <span className="font-medium">{fullState?.minimalInput?.title || "—"}</span></div>
-            <div><span className="text-slate-500">Subject:</span> <span>{fullState?.minimalInput?.subject || "—"}</span></div>
-            <div><span className="text-slate-500">Duration:</span> <span>{fullState?.minimalInput?.durationSec ?? "—"} sec</span></div>
-            <div><span className="text-slate-500">Route:</span> <span>{fullState?.minimalInput?.route || "—"}</span></div>
-            <div><span className="text-slate-500">Style:</span> <span>{fullState?.minimalInput?.style || "—"}</span></div>
-            <div><span className="text-slate-500">Tone:</span> <span>{fullState?.minimalInput?.tone || "—"}</span></div>
-          </div>
-          {/* right column */}
-          <div className="space-y-2">
-            <div>
-              <span className="text-slate-500">Character:</span> <span>{fullState?.character?.name || "—"}</span>
-              {fullState?.character?.visualName ? <span className="text-slate-500"> ({fullState.character.visualName})</span> : null}
-            </div>
-            <div>
-              <span className="text-slate-500">Packs:</span>{" "}
-              <span className="block">
-                {[
-                  fullState?.setting?.base && `base: ${fullState.setting.base}`,
-                  fullState?.setting?.stylePack && `style: ${fullState.setting.stylePack}`,
-                  fullState?.character?.lookPack && `look: ${fullState.character.lookPack}`,
-                  fullState?.setting?.motionPack && `motion: ${fullState.setting.motionPack}`,
-                  fullState?.setting?.propsPack && `props: ${fullState.setting.propsPack}`,
-                  fullState?.setting?.mouthPack && `mouth: ${fullState.setting.mouthPack}`,
-                  fullState?.character?.personaPack && `persona: ${fullState.character.personaPack}`,
-                  fullState?.music?.musicPack && `music: ${fullState.music.musicPack}`,
-                ].filter(Boolean).join(" · ") || "—"}
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-500">Music:</span>{" "}
-              <span>
-                {fullState?.flags?.music
-                  ? `on (${fullState?.music?.mood || "mood"}, ${fullState?.music?.tempoVal ?? "?"} bpm${fullState?.music?.vocals ? ", vocals" : ", no vocals"})`
-                  : "off"}
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-500">Captions:</span> <span>{fullState?.flags?.captions ? "on" : "off"}</span>
-            </div>
-            <div>
-              <span className="text-slate-500">Video Spec:</span>{" "}
-              <span>{fullState?.flags?.aspect || "—"} · {fullState?.flags?.fps ?? "—"} fps · {fullState?.flags?.resPreset || "—"}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Review details (all inputs, pretty formatted) */}
-      <div className="space-y-4">
-        <h3 className="text-base font-semibold">Review details</h3>
-        <div className="text-sm space-y-4">
-          <SectionBlock title="Concept" obj={fullState?.minimalInput} />
-          <SectionBlock title="Character" obj={fullState?.character} />
-          <SectionBlock title="Setting &amp; Keyframes" obj={fullState?.setting} />
-          <SectionBlock title="Video Prompts" obj={fullState?.broll} />
-          <SectionBlock title="Music" obj={fullState?.music} />
-          <SectionBlock title="Settings" obj={fullState?.flags} />
-          {/* Any unexpected top-level fields */}
-          {Object.entries(fullState || {})
-            .filter(([k]) => !['minimalInput','character','setting','broll','music','flags'].includes(k))
-            .map(([k,v]) => <SectionBlock key={k} title={k} obj={v} />)}
-        </div>
-      </div>
-
-      {/* Submit + status */}
-      <div className="rounded border border-slate-200 p-3 space-y-3">
-        <p className="font-medium text-sm">Review and submit</p>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={sendToApi} disabled={sending} className="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-            {sending ? "Sending…" : "Submit"}
+    <div ref={ref} className="space-y-6">
+      {/* Submit / actions */}
+      <div className="rounded border border-slate-200 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={sendToApi}
+            disabled={sending || !ready}
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 hover:bg-indigo-700"
+            title={ready ? "Submit to backend" : "Please fix validation errors before submitting"}
+          >
+            {sending ? "Submitting..." : "Submit"}
           </button>
-          <button onClick={copyJson} className="rounded bg-slate-200 px-3 py-1 text-sm">Copy JSON</button>
-          <button onClick={downloadJson} className="rounded bg-slate-200 px-3 py-1 text-sm">Download JSON</button>
-        </div>
 
-        {/* Job state */}
-        <div className="text-xs text-slate-600 flex flex-wrap items-center gap-3">
-          <div><span className="font-semibold">Job:</span> {jobId || "—"}</div>
-          <div>
-            <span className="font-semibold">Status:</span>{" "}
-            {jobStatus || (jobId && !jobResult?.url ? "PROCESSING" : (pollRef.current.running ? "queued/processing" : "—"))}
-          </div>
-          {jobResult?.url && <span className="text-green-700 font-medium">Ready</span>}
-          {jobId && (
-            <button
-              type="button"
-              onClick={() => {
-                stopPoll();
-                setJobId(null);
-                setJobStatus(null);
-                setJobResult(null);
-                try { localStorage.removeItem(JOB_LS_KEY); } catch {}
-                setJobIdInUrl(null);
-              }}
-              className="ml-2 rounded bg-rose-100 text-rose-700 px-2 py-0.5 text-[11px] hover:bg-rose-200"
-              title="Clear current job and stop polling"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+          <button
+            type="button"
+            onClick={copyJson}
+            className="inline-flex items-center rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-200"
+          >
+            Copy JSON
+          </button>
 
-        {/* Final video preview */}
-        {jobResult?.url && (
-          <div className="mt-3">
-            <video src={jobResult.url} controls className="w-full max-h-96 rounded border border-slate-200" />
-            <div className="text-xs text-slate-600 mt-1 break-all">{jobResult.url}</div>
-          </div>
-        )}
+          <button
+            type="button"
+            onClick={downloadJson}
+            className="inline-flex items-center rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-200"
+          >
+            Download JSON
+          </button>
+        </div>
 
         {sendMsg && (
-          <div className={`text-sm ${sendMsg.kind === "ok" ? "text-green-700" : "text-red-700"}`}>
+          <div
+            className={
+              "mt-3 text-sm " +
+              (sendMsg.kind === "ok"
+                ? "text-emerald-700"
+                : sendMsg.kind === "warn"
+                ? "text-amber-700"
+                : "text-rose-700")
+            }
+          >
             {sendMsg.text}
-            {sendMsg.detail && <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-600">{sendMsg.detail}</pre>}
           </div>
         )}
       </div>
+
+      {/* Job status */}
+      <div className="rounded border border-slate-200 p-3">
+        <p className="font-medium text-sm">Job</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mt-2">
+          <div><span className="text-slate-500">ID:</span> <span className="font-mono">{jobId || "—"}</span></div>
+          <div><span className="text-slate-500">Status:</span> <span className="font-mono">{jobStatus || "—"}</span></div>
+          <div>
+            <span className="text-slate-500">Result:</span>{" "}
+            {jobResult?.url ? (
+              <a
+                className="text-indigo-600 underline break-all"
+                href={jobResult.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open video
+              </a>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* State preview */}
+      <details className="rounded border border-slate-200 p-3" open>
+        <summary className="cursor-pointer font-medium">Payload (state preview)</summary>
+        <pre className="mt-2 text-xs whitespace-pre-wrap bg-slate-50 p-3 rounded border border-slate-100">
+{JSON.stringify(fullState, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 });
 
-// ---------------- App wrapper with stepper ----------------
-
-const REQUIRED = {
-  Concept: ["title", "subject", "durationSec", "route"],
-  // others are optional for now; expand as you wish
+// ---- Exports -------------------------------------------------------------
+export {
+  StepConcept,
+  StepCharacter,
+  StepSetting,
+  StepBroll,
+  StepMusic,
+  StepFlags,
+  StepReview,
+  HeaderResetButton,
+  resetWizardFormGlobal,
 };
 
-// map step keys to the branch name in state
-const STEP_TO_STATE_KEY = {
-  Concept: "minimalInput",
-  character: "character",
-  setting: "setting",
-  broll: "broll",
-  music: "music",
-  flags: "flags",
-};
-
-// tiny validator: returns an object of field->message for missing required
-function validateFields(obj, required = []) {
-  const out = {};
-  (required || []).forEach((k) => {
-    const v = obj?.[k];
-    if (v == null || v === "" || (typeof v === "number" && Number.isNaN(v))) {
-      out[k] = "This field is required";
-    }
-  });
-  return out;
-}
-
-// step list
-const STEPS = [
-  { key: "Concept", label: "Concept", component: StepConcept, required: REQUIRED.Concept },
-  { key: "character", label: "Character", component: StepCharacter },
-  { key: "setting", label: "Setting & Keyframes", component: StepSetting },
-  { key: "broll", label: "Video Prompts", component: StepBroll },
-  { key: "music", label: "Music", component: StepMusic },
-  { key: "flags", label: "Settings", component: StepFlags },
-  { key: "review", label: "Review", component: StepReview },
-];
-
-const DEFAULT_STATE = {
-  minimalInput: {
-    title: "",
-    subject: "",
-    durationSec: 60,
-    route: "aroll",
-    style: "",
-    tone: "",
-    referenceText: "",
-    referenceUploadMeta: null,
-    templates: [],
-    audience: "",
-    tags: "",
-    location: "",
-    matchPriorEpisode: false,
-    seriesMode: false,
-  },
-  character: {
-    name: "",
-    visualName: "",
-    personaKind: "human",
-    lookPack: "pack_look_clean_host",
-    personaPack: "pack_persona_human_adult",
-    accent: "",
-    styleTags: "",
-    pinLook: false,
-    voiceId: "",
-    voicePreset: "",
-    uploadVoiceMeta: null,
-    recordingUrl: null,
-    pitchSemitones: 0,
-    speed: 1.0,
-    emotion: "",
-    gesture: 0.5,
-    eyeContact: false,
-    lipSyncStrict: false,
-    lockCharacter: false,
-    seedLock: false,
-    seed: null,
-    refImages: [],
-    refVideos: [],
-    refNotes: ""
-  },
-  setting: {
-    envPreset: "studio",
-    environment: "env_auto",
-    location: "",
-    base: "base_creator_video",
-    stylePack: "pack_style_presenter",
-    motionPack: "pack_motion_confident",
-    propsPack: "pack_props_studio_backdrop",
-    mouthPack: "pack_mouth_subtle",
-    bgImages: [],
-    bgVideos: [],
-    shotType: "medium close-up",
-    cameraMovement: 0,
-    motionTemplate: "locked interview",
-    lightingPreset: "day",
-    brightness: 0,
-    contrast: 0,
-    weather: "clear",
-    safeZones: false,
-    subjectPos: "center",
-    keyframeCue: "",
-    keyframeStills: [],
-    anchorClips: [],
-    perShotBroll: "",
-    positivePromptTail: "",
-    negativePromptTail: "",
-    matchPrev: false,
-    transition: "cut",
-  },
-  broll: {
-    guidance: "",
-    shotIdeas: "",
-    allowSynth: true,
-    images: [],
-    videos: [],
-    audio: [],
-    keyframeStills: [],
-    anchorClips: [],
-    perShotBroll: "",
-  },
-  music: {
-    mood: "",
-    tempo: "",
-    tempoVal: 100,
-    vocals: false,
-    ducking: true,
-    musicUpload: null,
-    musicPack: "pack_music_light_underscore",
-    ambience: "studio",
-    fxUploads: [],
-    voVol: 1.0,
-    musicVol: 0.10,
-    fxVol: 0.5,
-  },
-  flags: {
-    captions: true,
-    music: true,
-    podcastStill: false,
-    wordsPerSecond: 2.5,
-    resPreset: "1080p",
-    aspect: "16:9",
-    fps: 30,
-    seedLock: false,
-    strictness: 0.6,
-    respectKeyframes: true,
-    subtitleLang: "en",
-    autoTranslate: false,
-    altTextExport: false,
-  },
-};
-
-function App() {
-  const [state, setState] = React.useState(() => {
-    try {
-      const raw = localStorage.getItem("ai-wizard-state");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // Deep-merge per branch so new default leaf fields are preserved
-        return {
-          ...DEFAULT_STATE,
-          minimalInput: { ...DEFAULT_STATE.minimalInput, ...(parsed.minimalInput || {}) },
-          character:    { ...DEFAULT_STATE.character,    ...(parsed.character    || {}) },
-          setting:      { ...DEFAULT_STATE.setting,      ...(parsed.setting      || {}) },
-          broll:        { ...DEFAULT_STATE.broll,        ...(parsed.broll        || {}) },
-          music:        { ...DEFAULT_STATE.music,        ...(parsed.music        || {}) },
-          flags:        { ...DEFAULT_STATE.flags,        ...(parsed.flags        || {}) },
-        };
-      }
-    } catch (e) {
-      console.warn("State load failed:", e);
-    }
-    return { ...DEFAULT_STATE };
-  });
-  // Track the last template styleKey we applied to avoid hydration loops
-  const lastHydratedKeyRef = React.useRef(null);
-
-  // When the top template selection changes, OVERWRITE form fields with the template profile
-  React.useEffect(() => {
-    const topLabel = state?.minimalInput?.templates?.[0] || null;
-    const styleKey = resolveStyleKeyFromTemplateLabel(topLabel); // falls back to "generic-video"
-    if (!styleKey) return;
-    if (lastHydratedKeyRef.current === styleKey) return; // already applied -> no-op
-    setState(prev => hydrateDefaultsFromProfile(prev, styleKey));
-    lastHydratedKeyRef.current = styleKey;
-  }, [state?.minimalInput?.templates?.[0]]);
-
-  // Also respond to the custom event the Templates checkboxes fire
-  React.useEffect(() => {
-    const onTpl = (e) => {
-      const label = e?.detail?.topTemplate || null;
-      const key = resolveStyleKeyFromTemplateLabel(label);
-      if (!key) return;
-      if (lastHydratedKeyRef.current === key) return;
-      setState(prev => hydrateDefaultsFromProfile(prev, key));
-      lastHydratedKeyRef.current = key;
-    };
-    window.addEventListener('wizard:templateChanged', onTpl);
-    return () => window.removeEventListener('wizard:templateChanged', onTpl);
-  }, []);
-
-
-  // On initial mount, hydrate once from the current (or default) template
-  React.useEffect(() => {
-    const key = resolveStyleKeyFromTemplateLabel(
-      state?.minimalInput?.templates?.[0] || DEFAULT_STYLE_KEY || "generic-video"
-    );
-    if (key && key !== lastHydratedKeyRef.current) {
-      setState((cur) => hydrateDefaultsFromProfile(cur, key));
-      lastHydratedKeyRef.current = key;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Whenever the first selected template changes, re-hydrate soft defaults
-  React.useEffect(() => {
-    const key = resolveStyleKeyFromTemplateLabel(
-      state?.minimalInput?.templates?.[0] || DEFAULT_STYLE_KEY || "generic-video"
-    );
-    if (key && key !== lastHydratedKeyRef.current) {
-      setState((cur) => hydrateDefaultsFromProfile(cur, key));
-      lastHydratedKeyRef.current = key;
-    }
-  }, [state?.minimalInput?.templates?.[0]]);
-  
-  // When the top template changes (StepConcept dispatches 'wizard:templateChanged'),
-  // hydrate defaults from the selected style profile into empty fields only.
-  React.useEffect(() => {
-    function onTemplateChanged(ev) {
-      const top = ev?.detail?.topTemplate || "";
-      const styleKey = resolveStyleKeyFromTemplateLabel(top);
-      setState((cur) => hydrateDefaultsFromProfile(cur, styleKey));
-    }
-    window.addEventListener("wizard:templateChanged", onTemplateChanged);
-    return () => window.removeEventListener("wizard:templateChanged", onTemplateChanged);
-  }, []);
-
-  // Persist wizard state so refreshes keep progress
-  React.useEffect(() => {
-    try {
-      localStorage.setItem("ai-wizard-state", JSON.stringify(state));
-    } catch (e) {
-      // ignore write errors (private mode, etc.)
-    }
-  }, [state]);
-
-  // --- Tabs (below header) ---
-  const [activeStep, setActiveStep] = React.useState(() => {
-    try {
-      return localStorage.getItem("ai-wizard-activeStep") || STEPS[0].key;
-    } catch {
-      return STEPS[0].key;
-    }
-  });
-
-  React.useEffect(() => {
-    try {
-      localStorage.setItem("ai-wizard-activeStep", activeStep);
-    } catch {}
-  }, [activeStep]);
-
-  // Render helpers for the active step
-  function renderActiveStep() {
-    const active = STEPS.find((s) => s.key === activeStep) || STEPS[0];
-    const StepComp = active.component;
-
-  if (active.key === "review") {
-    // Review step expects the whole state and an error map
-    return (
-      <section className="bg-white rounded-xl border shadow-sm p-6">
-        <h2 className="text-base font-semibold">{active.label}</h2>
-        <div className="mt-4">
-          <StepComp
-            fullState={state}
-            errors={{
-              Concept: validateFields(state.minimalInput, REQUIRED.Concept),
-            }}
-          />
-        </div>
-      </section>
-    );
-  }
-
-  const stateKey = STEP_TO_STATE_KEY[active.key] || active.key;
-  const required = active.required || [];
-  const errors = validateFields(state[stateKey], required);
-  const onChange = (nv) => setState((s) => ({ ...s, [stateKey]: nv }));
-
-  return (
-    <section className="bg-white rounded-xl border shadow-sm p-6">
-      <h2 className="text-base font-semibold">{active.label}</h2>
-      <div className="mt-4">
-        <StepComp
-          value={state[stateKey]}
-          onChange={onChange}
-          required={required}
-          errors={errors}
-        />
-      </div>
-    </section>
-  );
-}
-
-return (
-  <AppErrorBoundary>
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">SceneMe</h1>
-          {/* Right-justified global reset */}
-          <HeaderResetButton />
-        </div>
-
-        {/* Tabs directly under header */}
-        <nav className="mx-auto max-w-5xl px-2 pb-2 overflow-x-auto">
-          <ul className="flex gap-1">
-            {STEPS.map((s) => {
-              const isActive = s.key === activeStep;
-              return (
-                <li key={s.key}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveStep(s.key)}
-                    className={[
-                      "px-3 py-2 rounded-t-md text-sm",
-                      isActive
-                        ? "bg-slate-100 border border-b-white border-slate-200 font-medium"
-                        : "text-slate-600 hover:text-slate-900"
-                    ].join(" ")}
-                  >
-                    {s.label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      </header>
-
-      {/* Content */}
-      <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-        {renderActiveStep()}
-      </main>
-
-    </div>
-  </AppErrorBoundary>
-);
-
-}
-
-export default App;
+// Provide a default export for app shells that import App.jsx directly.
+// Using StepReview as a harmless default keeps the module loadable.
+export default StepReview;
