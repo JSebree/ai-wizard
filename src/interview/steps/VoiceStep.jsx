@@ -260,11 +260,13 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         )}
       </div>
 
-      <label className="label" htmlFor="voiceSelect">Voice (select or paste ID)</label>
+      <label className="label" htmlFor="voiceSelect">Voice (pick from list)</label>
       <select
         id="voiceSelect"
         className="input"
+        style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
         value={selectedId || ''}
+        disabled={!availableVoices || availableVoices.length === 0}
         onChange={(e) => {
           const id = e.target.value || '';
           setSelectedId(id || null);
@@ -281,7 +283,9 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         }}
         aria-label="Select a voice from list"
       >
-        <option value="" disabled>{availableVoices && availableVoices.length ? 'Choose a voice…' : 'No voices available (paste ID or Reload)'}</option>
+        <option value="" disabled={Boolean(availableVoices && availableVoices.length)}>
+          {availableVoices && availableVoices.length ? 'Choose a voice…' : 'No voices loaded — click Reload above'}
+        </option>
         {(availableVoices || []).map(v => (
           <option key={v.id} value={v.id}>
             {v.name}
@@ -289,28 +293,30 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         ))}
       </select>
 
-      <input
-        type="text"
-        className="input mt-2"
-        placeholder="e.g., Ava (female) — fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
-        value={manualId}
-        onChange={(e) => {
-          const id = e.target.value;
-          setManualId(id);
-          setSelectedId(id || null);
-          // if it matches a known voice, adopt its label and gender
-          const v = (availableVoices || []).find(vv => vv.id === id) || null;
-          if (v) {
-            const gender = extractGenderFromVoiceName(v.name);
-            setVoiceLabel(v.name || '');
-            setInferred(gender);
-            onChange?.({ voiceId: v.id, characterGender: gender, voiceLabel: v.name });
-          } else {
-            onChange?.({ voiceId: id || null, characterGender: extractGenderFromVoiceName(voiceLabel) });
-          }
-        }}
-        aria-label="Paste a specific voice ID"
-      />
+      <details className="mt-2">
+        <summary className="cursor-pointer text-sm muted">Can’t find your voice in the list? Paste an ID</summary>
+        <input
+          type="text"
+          className="input mt-2"
+          placeholder="e.g., fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
+          value={manualId}
+          onChange={(e) => {
+            const id = e.target.value;
+            setManualId(id);
+            setSelectedId(id || null);
+            const v = (availableVoices || []).find(vv => vv.id === id) || null;
+            if (v) {
+              const gender = extractGenderFromVoiceName(v.name);
+              setVoiceLabel(v.name || '');
+              setInferred(gender);
+              onChange?.({ voiceId: v.id, characterGender: gender, voiceLabel: v.name });
+            } else {
+              onChange?.({ voiceId: id || null, characterGender: extractGenderFromVoiceName(voiceLabel) });
+            }
+          }}
+          aria-label="Paste a specific voice ID"
+        />
+      </details>
 
       <label className="label mt-3" htmlFor="voiceLabel">Voice label (optional, used for gender inference)</label>
       <input
