@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-// VoiceStep — loads voices from /public/voices.json and renders a dropdown.
-// No external libs (removed PropTypes). Keeps a hidden manual ID input (collapsed).
+// VoiceStep — loads voices from /public/voices.json and renders a polished dropdown
+// with search, optional manual ID fallback, and a working audio preview.
+// No external libs.
 
 const VOICES_CACHE_KEY = 'voices_cache_v1';
 const VOICE_SRC_URL = '/voices.json'; // served from public/voices.json
@@ -40,12 +41,15 @@ function normalizeVoice(v) {
 export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
   const [selectedId, setSelectedId] = useState(value || '');
   const [manualId, setManualId] = useState(value || '');
-  const [voiceLabel, setVoiceLabel] = useState('');
   const [inferred, setInferred] = useState(null);
 
   const [fallbackVoices, setFallbackVoices] = useState([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [voicesError, setVoicesError] = useState(null);
+
+  const [query, setQuery] = useState('');
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     setSelectedId(value || '');
@@ -112,24 +116,69 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     return fallbackVoices;
   }, [voices, fallbackVoices]);
 
+  const filteredVoices = useMemo(() => {
+    const q = normalize(query);
+    if (!q) return availableVoices;
+    return (availableVoices || []).filter(v => normalize(v.name).includes(q));
+  }, [availableVoices, query]);
+
   const selectedVoice = useMemo(
     () => (availableVoices || []).find(v => v.id === selectedId) || null,
     [availableVoices, selectedId]
   );
 
+  // Update inferred gender when selection changes
   useEffect(() => {
     if (selectedVoice) {
-      setVoiceLabel(selectedVoice.name || '');
       setInferred(extractGenderFromVoiceName(selectedVoice.name));
+      // wire up audio preview
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {}
+        audioRef.current.src = selectedVoice.previewUrl || '';
+        audioRef.current.currentTime = 0;
+        setIsPlaying(false);
+      }
     }
   }, [selectedVoice]);
 
-  const canNext = Boolean(selectedVoice || manualId);
+  // Audio element event hooks
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    el.addEventListener('play', onPlay);
+    el.addEventListener('pause', onPause);
+    el.addEventListener('ended', onEnded);
+    return () => {
+      el.removeEventListener('play', onPlay);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('ended', onEnded);
+    };
+  }, []);
+
+  const canNext = Boolean(selectedId || manualId);
 
   const handleNext = () => {
     const id = selectedId || manualId || '';
     if (!id) return;
     onNext?.();
+  };
+
+  const applySelection = (id) => {
+    setSelectedId(id);
+    setManualId(id);
+    const v = (availableVoices || []).find(vv => vv.id === id) || null;
+    if (v) {
+      const gender = extractGenderFromVoiceName(v.name);
+      setInferred(gender);
+      onChange?.({ voiceId: v.id, characterGender: gender, voiceLabel: v.name });
+    } else {
+      onChange?.({ voiceId: id || null, characterGender: null });
+    }
   };
 
   return (
@@ -146,7 +195,6 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                 type="button"
                 className="btn btn-xs ml-2"
                 onClick={() => {
-                  // force reload bypassing cache
                   try { localStorage.removeItem(VOICES_CACHE_KEY); } catch {}
                   window.location.reload();
                 }}
@@ -156,40 +204,37 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         )}
       </div>
 
-      <label className="label" htmlFor="voiceSelect">Voice (pick from list)</label>
-      <select
-        id="voiceSelect"
-        className="input"
-        style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
-        value={selectedId}
-        disabled={!availableVoices || availableVoices.length === 0}
-        onChange={(e) => {
-          const id = e.target.value;
-          setSelectedId(id);
-          setManualId(id);
-          const v = (availableVoices || []).find(vv => vv.id === id) || null;
-          if (v) {
-            const gender = extractGenderFromVoiceName(v.name);
-            setVoiceLabel(v.name || '');
-            setInferred(gender);
-            onChange?.({ voiceId: v.id, characterGender: gender, voiceLabel: v.name });
-          } else {
-            onChange?.({ voiceId: id || null, characterGender: null });
-          }
-        }}
-        aria-label="Select a voice from list"
-      >
-        <option value="" disabled={Boolean(availableVoices && availableVoices.length)}>
-          {availableVoices && availableVoices.length ? 'Choose a voice…' : 'No voices loaded — click Reload above'}
-        </option>
-        {(availableVoices || []).map(v => (
-          <option key={v.id} value={v.id}>
-            {v.name}
+      {/* Search + Select */}
+      <div className="flex gap-2 items-center">
+        <input
+          type="text"
+          className="input flex-1"
+          placeholder="Search voices…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search voices"
+        />
+        <select
+          id="voiceSelect"
+          className="input w-1/2"
+          style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
+          value={selectedId}
+          disabled={!filteredVoices || filteredVoices.length === 0}
+          onChange={(e) => applySelection(e.target.value)}
+          aria-label="Select a voice from list"
+        >
+          <option value="" disabled={Boolean(filteredVoices && filteredVoices.length)}>
+            {filteredVoices && filteredVoices.length ? 'Choose a voice…' : 'No voices match filter'}
           </option>
-        ))}
-      </select>
+          {(filteredVoices || []).map(v => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {/* Hidden manual ID field (collapsed) */}
+      {/* Optional manual ID (collapsed) */}
       <details className="mt-2">
         <summary className="cursor-pointer text-sm muted">Can’t find your voice in the list? Paste an ID</summary>
         <input
@@ -197,60 +242,37 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
           className="input mt-2"
           placeholder="e.g., fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
           value={manualId}
-          onChange={(e) => {
-            const id = e.target.value;
-            setManualId(id);
-            setSelectedId(id);
-            const v = (availableVoices || []).find(vv => vv.id === id) || null;
-            if (v) {
-              const gender = extractGenderFromVoiceName(v.name);
-              setVoiceLabel(v.name || '');
-              setInferred(gender);
-              onChange?.({ voiceId: v.id, characterGender: gender, voiceLabel: v.name });
-            } else {
-              onChange?.({ voiceId: id || null, characterGender: extractGenderFromVoiceName(voiceLabel) });
-            }
-          }}
+          onChange={(e) => applySelection(e.target.value)}
           aria-label="Paste a specific voice ID"
         />
       </details>
 
-      <label className="label mt-3" htmlFor="voiceLabel">Voice label (optional, used for gender inference)</label>
-      <input
-        id="voiceLabel"
-        type="text"
-        className="input"
-        placeholder="e.g., Ava (female)"
-        value={voiceLabel}
-        onChange={(e) => {
-          const lbl = e.target.value;
-          setVoiceLabel(lbl);
-          const g = extractGenderFromVoiceName(lbl);
-          setInferred(g);
-          onChange?.({ voiceId: selectedId || manualId || null, characterGender: g, voiceLabel: lbl });
-        }}
-      />
+      <div className="muted mt-3">Inference preview: {inferred ?? '—'}</div>
 
-      <div className="muted mt-1">Inference preview: {inferred ?? '—'}</div>
-
-      {selectedVoice?.previewUrl && (
-        <div className="voice-preview">
-          <audio id="voicePreviewAudio" src={selectedVoice.previewUrl} preload="none" />
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => {
-              const el = document.getElementById('voicePreviewAudio');
-              if (el) {
-                el.currentTime = 0;
-                el.play();
-              }
-            }}
-          >
-            Preview
-          </button>
-        </div>
-      )}
+      {/* Preview Controls */}
+      <div className="voice-preview mt-2 flex items-center gap-2">
+        <audio ref={audioRef} preload="none" />
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={!selectedVoice?.previewUrl}
+          onClick={() => {
+            const el = audioRef.current;
+            if (!el) return;
+            if (isPlaying) el.pause(); else {
+              try { el.currentTime = 0; } catch {}
+              el.play();
+            }
+          }}
+        >
+          {isPlaying ? 'Pause preview' : 'Preview'}
+        </button>
+        {selectedVoice?.previewUrl ? (
+          <span className="muted text-xs">Preview: {selectedVoice.name}</span>
+        ) : (
+          <span className="muted text-xs">No preview available</span>
+        )}
+      </div>
 
       <div className="nav-row">
         <button type="button" className="btn btn-secondary" onClick={onBack}>
