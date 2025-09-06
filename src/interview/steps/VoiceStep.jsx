@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
+const VOICES_CACHE_KEY = 'voices:list';
+
 /**
  * VoiceStep
  * ------------------------------------------------------------
@@ -59,16 +61,59 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
   const [voiceLabel, setVoiceLabel] = useState('');
   const [inferred, setInferred] = useState(null);
 
+  const [fallbackVoices, setFallbackVoices] = useState([]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
+  const [voicesError, setVoicesError] = useState(null);
+
   useEffect(() => {
     setSelectedId(value || null);
     setManualId(value || '');
   }, [value]);
 
-  const filtered = useMemo(() => voices || [], [voices]);
+  useEffect(() => {
+    // If voices prop is provided and non-empty, keep using it.
+    if (Array.isArray(voices) && voices.length > 0) return;
+
+    // Try cache first
+    try {
+      const cached = JSON.parse(localStorage.getItem(VOICES_CACHE_KEY) || 'null');
+      if (Array.isArray(cached) && cached.length > 0) {
+        setFallbackVoices(cached);
+        return;
+      }
+    } catch {}
+
+    // Try fetching from a conventional endpoint if available
+    (async () => {
+      setLoadingVoices(true);
+      setVoicesError(null);
+      try {
+        const res = await fetch('/api/voices', { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setFallbackVoices(data);
+            try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(data)); } catch {}
+          }
+        } else {
+          setVoicesError('Failed to load voices');
+        }
+      } catch (e) {
+        setVoicesError('Failed to load voices');
+      } finally {
+        setLoadingVoices(false);
+      }
+    })();
+  }, [voices]);
+
+  const availableVoices = useMemo(() => {
+    if (Array.isArray(voices) && voices.length > 0) return voices;
+    return fallbackVoices;
+  }, [voices, fallbackVoices]);
 
   const selectedVoice = useMemo(
-    () => (voices || []).find(v => v.id === selectedId) || null,
-    [voices, selectedId]
+    () => (availableVoices || []).find(v => v.id === selectedId) || null,
+    [availableVoices, selectedId]
   );
 
   useEffect(() => {
@@ -89,6 +134,46 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     <div className="step">
       <h2 className="step-title">Pick your character or narrator’s voice.</h2>
 
+      <div className="muted mb-2">
+        {loadingVoices ? 'Loading voices…' : (
+          <>
+            Voices available: {Array.isArray(availableVoices) ? availableVoices.length : 0}
+            {voicesError ? <span className="text-error"> – {voicesError}</span> : null}
+            {!Array.isArray(voices) || voices.length === 0 ? (
+              <button
+                type="button"
+                className="btn btn-xs ml-2"
+                onClick={async () => {
+                  // manual reload
+                  try {
+                    setLoadingVoices(true);
+                    setVoicesError(null);
+                    const res = await fetch('/api/voices');
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (Array.isArray(data) && data.length > 0) {
+                        setFallbackVoices(data);
+                        try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(data)); } catch {}
+                      } else {
+                        setVoicesError('No voices returned');
+                      }
+                    } else {
+                      setVoicesError('Failed to load voices');
+                    }
+                  } catch {
+                    setVoicesError('Failed to load voices');
+                  } finally {
+                    setLoadingVoices(false);
+                  }
+                }}
+              >
+                Reload
+              </button>
+            ) : null}
+          </>
+        )}
+      </div>
+
       <label className="label" htmlFor="voiceSelect">Voice (select or paste ID)</label>
       <select
         id="voiceSelect"
@@ -98,7 +183,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
           const id = e.target.value || '';
           setSelectedId(id || null);
           setManualId(id);
-          const v = (voices || []).find(vv => vv.id === id) || null;
+          const v = (availableVoices || []).find(vv => vv.id === id) || null;
           if (v) {
             const gender = extractGenderFromVoiceName(v.name);
             setVoiceLabel(v.name || '');
@@ -110,8 +195,8 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         }}
         aria-label="Select a voice from list"
       >
-        <option value="" disabled>{voices && voices.length ? 'Choose a voice…' : 'No voices available'}</option>
-        {(voices || []).map(v => (
+        <option value="" disabled>{availableVoices && availableVoices.length ? 'Choose a voice…' : 'No voices available (paste ID or Reload)'}</option>
+        {(availableVoices || []).map(v => (
           <option key={v.id} value={v.id}>
             {v.name}
           </option>
@@ -128,7 +213,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
           setManualId(id);
           setSelectedId(id || null);
           // if it matches a known voice, adopt its label and gender
-          const v = (voices || []).find(vv => vv.id === id) || null;
+          const v = (availableVoices || []).find(vv => vv.id === id) || null;
           if (v) {
             const gender = extractGenderFromVoiceName(v.name);
             setVoiceLabel(v.name || '');
