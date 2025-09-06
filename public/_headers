@@ -1,0 +1,7 @@
+/index.html
+  Cache-Control: no-store, must-revalidate
+  ETag: "always-changes"
+
+# keep hashed assets aggressively cached
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
