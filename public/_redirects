@@ -1,5 +1,2 @@
-/*.css            /:splat            200
-/*.js             /:splat            200
-/assets/*.css     /assets/:splat     200
-/assets/*.js      /assets/:splat     200
-/*                /index.html        200
+/assets/*    /assets/:splat   200
+/*           /index.html      200
