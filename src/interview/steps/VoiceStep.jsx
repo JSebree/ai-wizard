@@ -43,6 +43,7 @@ function normalizeVoice(v) {
       v?.sample ||
       v?.demo ||
       v?.url ||
+      v?.audio ||
       null,
   };
 }
@@ -140,35 +141,14 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
   useEffect(() => {
     if (selectedVoice) {
       setInferred(extractGenderFromVoiceName(selectedVoice.name));
-      // wire up audio preview
+      // reset preview state
       if (audioRef.current) {
-        const el = audioRef.current;
-        try { el.pause(); } catch {}
-        el.crossOrigin = 'anonymous';
-        el.src = (selectedVoice.previewUrl ? `${selectedVoice.previewUrl}${selectedVoice.previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : '');
-        try { el.load(); } catch {}
-        el.currentTime = 0;
+        try { audioRef.current.pause(); } catch {}
+        try { audioRef.current.currentTime = 0; } catch {}
         setIsPlaying(false);
       }
     }
   }, [selectedVoice]);
-
-  // Audio element event hooks
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
-    el.addEventListener('play', onPlay);
-    el.addEventListener('pause', onPause);
-    el.addEventListener('ended', onEnded);
-    return () => {
-      el.removeEventListener('play', onPlay);
-      el.removeEventListener('pause', onPause);
-      el.removeEventListener('ended', onEnded);
-    };
-  }, []);
 
   const canNext = Boolean(selectedId || manualId);
 
@@ -215,8 +195,10 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       </div>
 
       {/* Search + Select */}
-      <label htmlFor="voiceSelect" className="block text-sm font-medium mb-1">Voice (pick from list)</label>
-      <div className="flex gap-2 items-center">
+      <label htmlFor="voiceSelect" className="block text-sm font-medium mb-1">
+        Pick your character or narrator’s voice.
+      </label>
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="text"
           className="input flex-1"
@@ -227,15 +209,15 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         />
         <select
           id="voiceSelect"
-          className="input w-1/2 rounded-md border border-slate-300 bg-white"
+          className="input w-full sm:w-1/2 rounded-md border border-slate-300 bg-white"
           style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
           value={selectedId}
           disabled={!filteredVoices || filteredVoices.length === 0}
           onChange={(e) => applySelection(e.target.value)}
           aria-label="Select a voice from list"
         >
-          <option value="" disabled={Boolean(filteredVoices && filteredVoices.length)}>
-            {filteredVoices && filteredVoices.length ? 'Choose a voice…' : 'No voices match filter'}
+          <option value="" disabled>
+            {filteredVoices && filteredVoices.length ? `Choose a voice… (${filteredVoices.length})` : 'No voices match filter'}
           </option>
           {(filteredVoices || []).map(v => (
             <option key={v.id} value={v.id}>
@@ -259,40 +241,45 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         />
       </details>
 
-      <div className="muted mt-3">Inference preview: {inferred ?? '—'}</div>
+      {inferred ? (
+        <div className="muted mt-2">Inference preview: {inferred}</div>
+      ) : null}
 
       {/* Preview Controls */}
-      <div className="voice-preview mt-2 flex items-center gap-2">
-        <audio ref={audioRef} preload="none" />
-        <button
-          type="button"
-          className="btn btn-sm"
-          disabled={!selectedVoice?.previewUrl}
-          onClick={() => {
-            const el = audioRef.current;
-            if (!el) return;
-            if (isPlaying) el.pause(); else {
-              try { el.currentTime = 0; } catch {}
-              el.play();
-            }
-          }}
-        >
-          {isPlaying ? 'Pause preview' : 'Preview'}
-        </button>
-        {selectedVoice?.previewUrl && (
-          <a
-            className="link text-xs"
-            href={selectedVoice.previewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open sample
-          </a>
-        )}
+      <div className="voice-preview mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         {selectedVoice?.previewUrl ? (
-          <span className="muted text-xs">Preview: {selectedVoice.name}</span>
+          <>
+            <audio
+              ref={audioRef}
+              src={selectedVoice.previewUrl ? `${selectedVoice.previewUrl}${selectedVoice.previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : ''}
+              preload="metadata"
+              controls
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => setIsPlaying(false)}
+            />
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                const el = audioRef.current;
+                if (!el) return;
+                if (isPlaying) el.pause();
+                else {
+                  try { el.currentTime = 0; } catch {}
+                  el.play();
+                }
+              }}
+            >
+              {isPlaying ? 'Pause preview' : 'Preview'}
+            </button>
+            <span className="muted text-xs">Preview: {selectedVoice.name}</span>
+          </>
         ) : (
-          <span className="muted text-xs">No preview available</span>
+          <>
+            <button type="button" className="btn btn-sm" disabled>Preview</button>
+            <span className="muted text-xs">No preview available</span>
+          </>
         )}
       </div>
 
