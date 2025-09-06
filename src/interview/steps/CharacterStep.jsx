@@ -125,7 +125,7 @@ export default function CharacterStep({ onNext, onBack }) {
           onChange={(e) => setCharacterDesc(e.target.value)}
         />
         <p className="iw-help">
-          Include age range, vibe, appearance, wardrobe, camera framing preferences, etc.
+          The more detail you provide, the better your results will match your intentions.
         </p>
       </div>
 

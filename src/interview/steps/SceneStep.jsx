@@ -71,6 +71,7 @@ export default function SceneStep({ value = '', onChange, onNext, onBack, autoFo
           rows={8}
           autoFocus={autoFocus}
         />
+        <p className="iw-subtext">The more detail you provide, the better your results will match your intentions.</p>
 
         <div className="iw-row iw-justify-between iw-items-center iw-gap-2">
           <div className="iw-hint">

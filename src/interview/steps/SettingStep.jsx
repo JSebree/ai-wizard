@@ -17,6 +17,9 @@ function SettingStep({ onNext, onBack }) {
         onChange={handleChange}
         placeholder="Enter the setting description here..."
       />
+      <div style={{ color: "#667085", fontSize: "12px", marginTop: "6px" }}>
+        The more detail you provide, the better your results will match your intentions.
+      </div>
       <div className="navigation-buttons">
         <button type="button" onClick={onBack}>
           Back

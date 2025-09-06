@@ -72,6 +72,9 @@ export default function ActionStep() {
           <span className="iw-hint">You can add shot suggestions and pacing notes.</span>
           <span className="iw-count">{remaining} characters left</span>
         </div>
+        <div style={{ color: "#667085", fontSize: 12, marginTop: 6 }}>
+          The more detail you provide, the better your results will match your intentions.
+        </div>
         {error && <p className="iw-error">{error}</p>}
       </div>
     </StepShell>

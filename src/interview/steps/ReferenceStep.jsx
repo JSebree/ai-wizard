@@ -93,6 +93,9 @@ export default function ReferenceStep(props) {
           <span style={{ color: "#6b7280" }}>{helper}</span>
           <span style={{ color: "#9ca3af" }}>{chars} chars</span>
         </div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+          The more detail you provide, the better your results will match your intentions.
+        </div>
       </div>
 
       <div style={styles.actions}>

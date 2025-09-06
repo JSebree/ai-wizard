@@ -145,6 +145,9 @@ export default function MusicStep(props) {
             <span className="muted">{chars} characters</span>
           )}
         </div>
+        <div style={{ color: "#667085", fontSize: "0.85rem", marginTop: "4px" }}>
+          The more detail you provide, the better your results will match your intentions.
+        </div>
       </div>
 
       <footer className="step-actions">

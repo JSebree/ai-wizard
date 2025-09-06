@@ -14,11 +14,6 @@ function AppShell({ children }) {
           <Link
             to="/"
             onClick={(e) => {
-              // Always reset interview state when clicking the brand
-              try {
-                window.localStorage.removeItem("interview_answers_v1");
-                window.localStorage.removeItem("interview_step_v1");
-              } catch {}
               // If we're already on the same route, force a soft reload to remount
               if (window.location.pathname === "/") {
                 e.preventDefault();

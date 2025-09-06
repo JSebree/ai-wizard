@@ -97,6 +97,9 @@ export default function DirectorsNotesStep(props) {
             outline: 'none',
           }}
         />
+          <div style={{ color: 'var(--muted-foreground, #666)', fontSize: 12 }}>
+            The more detail you provide, the better your results will match your intentions.
+          </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted-foreground, #666)', fontSize: 12 }}>
           <span>Optional</span>
           <span>{count} characters</span>
