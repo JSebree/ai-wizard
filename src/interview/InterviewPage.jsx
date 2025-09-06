@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import VoiceStep from "./steps/VoiceStep.jsx";
+import ReviewStep from "./steps/ReviewStep.jsx";
 
 /**
  * InterviewPage.jsx
@@ -567,6 +568,27 @@ export default function InterviewPage({ onComplete }) {
       ),
       valid: () => true,
     },
+    {
+      key: "review",
+      label: "Review your answers",
+      render: () => (
+        <ReviewStep
+          ui={uiPayload}
+          onSubmit={() => {
+            if (onComplete) {
+              onComplete({ ui: uiPayload });
+            } else {
+              setShowPreview(true);
+            }
+          }}
+          onEditStep={(editStepKey) => {
+            const editIdx = steps.findIndex((s) => s.key === editStepKey);
+            if (editIdx >= 0) setStepIndex(editIdx);
+          }}
+        />
+      ),
+      valid: () => true,
+    },
   ];
 
   const total = steps.length;
@@ -579,14 +601,6 @@ export default function InterviewPage({ onComplete }) {
     if (stepIndex < total - 1) {
       setStepIndex(stepIndex + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      // Last step → complete
-      if (onComplete) {
-        onComplete({ ui: uiPayload });
-      } else {
-        // inline preview fallback
-        setShowPreview(true);
-      }
     }
   }
 
@@ -631,7 +645,7 @@ export default function InterviewPage({ onComplete }) {
             ← Back
           </button>
           <button type="button" onClick={handleNext} disabled={!step.valid()} className="btn btn-primary">
-            {stepIndex === total - 1 ? "Finish" : "Next →"}
+            {stepIndex === total - 1 ? "Review" : "Next →"}
           </button>
         </div>
       </div>
