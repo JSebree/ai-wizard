@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 
-const VOICES_CACHE_KEY = 'voices:list';
+// --- Supabase (public, read-only) — used to populate the voice list from "speakers"
+const SUPABASE_URL = "https://ldgujihabgikdkoxztnk.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZ3VqaWhhYmdpa2Rrb3h6dG5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyMzUwNTcsImV4cCI6MjA2NDgxMTA1N30.uifx8GrUtE4kgg3xahJtesb-OxLgsi4BNsApd1KgulE";
 
 // --- Gender parsing helper ----------------------------------------------------
 const normalize = (s) => (s || '').toLowerCase();
@@ -46,17 +48,20 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
 
     const accept = (list) => {
       if (Array.isArray(list) && list.length > 0) {
-        setFallbackVoices(list);
-        try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(list)); } catch {}
-        return true;
+        // Normalize possible shapes:
+        const normalized = list.map(v => ({
+          id: v.id,
+          name: v.name || v.label || v.displayName || '',
+          previewUrl: v.previewUrl || v.audio_url || v.preview_url || null,
+        })).filter(v => v.id && v.name);
+        if (normalized.length > 0) {
+          setFallbackVoices(normalized);
+          try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(normalized)); } catch {}
+          return true;
+        }
       }
       return false;
     };
-
-    try {
-      const cached = JSON.parse(localStorage.getItem(VOICES_CACHE_KEY) || 'null');
-      if (accept(cached)) return;
-    } catch {}
 
     const tryStaticVoices = async () => {
       try {
@@ -80,11 +85,11 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       return false;
     };
 
-    const trySupabaseDirect = async () => {
-      const url = import.meta.env?.VITE_SUPABASE_URL;
-      const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+    const trySupabaseSpeakers = async () => {
+      const url = SUPABASE_URL;
+      const key = SUPABASE_ANON_KEY;
       if (!url || !key) return false;
-      const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/voices?select=id,name,previewUrl`;
+      const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/speakers?select=id,name,audio_url&order=name.asc`;
       try {
         const res = await fetch(endpoint, {
           headers: {
@@ -105,16 +110,16 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       setLoadingVoices(true);
       setVoicesError(null);
 
+      const okFromSb = await trySupabaseSpeakers();
+      if (okFromSb) { setLoadingVoices(false); return; }
+
       const okFromStatic = await tryStaticVoices();
       if (okFromStatic) { setLoadingVoices(false); return; }
 
       const okFromApi = await tryApiVoices();
       if (okFromApi) { setLoadingVoices(false); return; }
 
-      const okFromSupabase = await trySupabaseDirect();
-      if (okFromSupabase) { setLoadingVoices(false); return; }
-
-      setVoicesError('No voices available. Paste an ID or configure /api/voices or VITE_SUPABASE_* env.');
+      setVoicesError('No voices available. Paste an ID or configure Supabase /api/voices.');
       setLoadingVoices(false);
     })();
   }, [voices]);
@@ -157,41 +162,55 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                 type="button"
                 className="btn btn-xs ml-2"
                 onClick={async () => {
-                  const accept = (list) => {
-                    if (Array.isArray(list) && list.length > 0) {
-                      setFallbackVoices(list);
-                      try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(list)); } catch {}
-                      return true;
-                    }
-                    return false;
-                  };
-
                   setLoadingVoices(true);
                   setVoicesError(null);
                   try {
+                    const accept = (list) => {
+                      if (Array.isArray(list) && list.length > 0) {
+                        const normalized = list.map(v => ({
+                          id: v.id,
+                          name: v.name || v.label || v.displayName || '',
+                          previewUrl: v.previewUrl || v.audio_url || v.preview_url || null,
+                        })).filter(v => v.id && v.name);
+                        if (normalized.length > 0) {
+                          setFallbackVoices(normalized);
+                          try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(normalized)); } catch {}
+                          return true;
+                        }
+                      }
+                      return false;
+                    };
+
                     let ok = false;
+
+                    // Supabase first
                     try {
-                      const resStatic = await fetch('/voices.json', { cache: 'no-store' });
-                      if (resStatic.ok) ok = accept(await resStatic.json());
+                      const url = SUPABASE_URL;
+                      const key = SUPABASE_ANON_KEY;
+                      if (url && key) {
+                        const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/speakers?select=id,name,audio_url&order=name.asc`;
+                        const resSb = await fetch(endpoint, { headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' } });
+                        if (resSb.ok) ok = accept(await resSb.json());
+                      }
                     } catch {}
+
+                    // Static JSON
+                    if (!ok) {
+                      try {
+                        const resStatic = await fetch('/voices.json', { cache: 'no-store' });
+                        if (resStatic.ok) ok = accept(await resStatic.json());
+                      } catch {}
+                    }
+
+                    // API proxy
                     if (!ok) {
                       try {
                         const res = await fetch('/api/voices');
                         if (res.ok) ok = accept(await res.json());
                       } catch {}
                     }
-                    if (!ok) {
-                      const url = import.meta.env?.VITE_SUPABASE_URL;
-                      const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
-                      if (url && key) {
-                        const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/voices?select=id,name,previewUrl`;
-                        const res2 = await fetch(endpoint, {
-                          headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' },
-                        });
-                        if (res2.ok) ok = accept(await res2.json());
-                      }
-                    }
-                    if (!ok) setVoicesError('Still no voices. Add /public/voices.json or configure /api/voices / VITE_SUPABASE_*.');
+
+                    if (!ok) setVoicesError('Still no voices. Ensure Supabase or /public/voices.json is configured.');
                   } catch {
                     setVoicesError('Failed to load voices');
                   } finally {
