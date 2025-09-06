@@ -492,6 +492,8 @@ export default function InterviewPage({ onComplete }) {
                   ...s,
                   wantsMusic: v === "yes",
                   musicDesc: v === "yes" ? s.musicDesc : "",
+                  // Reset/include vocals only relevant if user wants music
+                  musicIncludeVocals: v === "yes" ? (s.musicIncludeVocals ?? undefined) : undefined,
                 }))
               }
               options={[
@@ -503,15 +505,44 @@ export default function InterviewPage({ onComplete }) {
           </FieldRow>
 
           {answers.wantsMusic && (
-            <FieldRow label="Describe the music you want">
-              <textarea
-                placeholder="e.g., Warm Mediterranean acoustic with subtle strings and percussion."
-                value={answers.musicDesc}
-                onChange={(e) =>
-                  setAnswers((s) => ({ ...s, musicDesc: e.target.value }))
-                }
-              />
-            </FieldRow>
+            <>
+              <FieldRow
+                label="Describe the music you want"
+                hint="The more detail you provide, the better your results will match your intentions."
+              >
+                <textarea
+                  placeholder="e.g., Warm Mediterranean acoustic with subtle strings and percussion."
+                  value={answers.musicDesc}
+                  onChange={(e) =>
+                    setAnswers((s) => ({ ...s, musicDesc: e.target.value }))
+                  }
+                />
+              </FieldRow>
+
+              <FieldRow label="Include vocals in music?">
+                <RadioGroup
+                  name="musicIncludeVocals"
+                  value={
+                    answers.musicIncludeVocals === true
+                      ? "yes"
+                      : answers.musicIncludeVocals === false
+                      ? "no"
+                      : ""
+                  }
+                  onChange={(v) =>
+                    setAnswers((s) => ({
+                      ...s,
+                      musicIncludeVocals: v === "yes",
+                    }))
+                  }
+                  options={[
+                    { value: "yes", label: "Yes" },
+                    { value: "no", label: "No" },
+                  ]}
+                  inline
+                />
+              </FieldRow>
+            </>
           )}
         </>
       ),
