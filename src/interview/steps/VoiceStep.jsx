@@ -4,7 +4,7 @@ import React from "react";
 // Normalize a voice record from voices.json (or any shape)
 function normalizeVoice(v) {
   return {
-    id: v?.tts_id || v?.uuid || v?.id || v?.name || "",
+    id: v?.id || v?.name || "",
     name: v?.name || v?.label || v?.displayName || v?.tts_id || "Untitled",
     // Prefer your Supabase/DigitalOcean field
     previewUrl:
