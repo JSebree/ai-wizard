@@ -1,3 +1,2 @@
-/assets/*   /assets/:splat   200
-/vite.svg   /vite.svg        200
-/*          /index.html      200
+/assets/*           /assets/:splat   200
+/*                  /index.html      200
