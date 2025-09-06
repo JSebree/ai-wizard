@@ -34,7 +34,16 @@ function normalizeVoice(v) {
   return {
     id: v?.id || v?.tts_id || v?.name || '',
     name: v?.name || v?.label || v?.displayName || v?.tts_id || 'Untitled',
-    previewUrl: v?.previewUrl || v?.audio_url || v?.preview_url || null,
+    // accept several common preview keys
+    previewUrl:
+      v?.previewUrl ||
+      v?.audio_url ||
+      v?.preview_url ||
+      v?.preview ||
+      v?.sample ||
+      v?.demo ||
+      v?.url ||
+      null,
   };
 }
 
@@ -133,11 +142,12 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       setInferred(extractGenderFromVoiceName(selectedVoice.name));
       // wire up audio preview
       if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-        } catch {}
-        audioRef.current.src = selectedVoice.previewUrl || '';
-        audioRef.current.currentTime = 0;
+        const el = audioRef.current;
+        try { el.pause(); } catch {}
+        el.crossOrigin = 'anonymous';
+        el.src = (selectedVoice.previewUrl ? `${selectedVoice.previewUrl}${selectedVoice.previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : '');
+        try { el.load(); } catch {}
+        el.currentTime = 0;
         setIsPlaying(false);
       }
     }
@@ -205,6 +215,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       </div>
 
       {/* Search + Select */}
+      <label htmlFor="voiceSelect" className="block text-sm font-medium mb-1">Voice (pick from list)</label>
       <div className="flex gap-2 items-center">
         <input
           type="text"
@@ -216,7 +227,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         />
         <select
           id="voiceSelect"
-          className="input w-1/2"
+          className="input w-1/2 rounded-md border border-slate-300 bg-white"
           style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
           value={selectedId}
           disabled={!filteredVoices || filteredVoices.length === 0}
@@ -234,9 +245,10 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         </select>
       </div>
 
-      {/* Optional manual ID (collapsed) */}
       <details className="mt-2">
-        <summary className="cursor-pointer text-sm muted">Can’t find your voice in the list? Paste an ID</summary>
+        <summary className="cursor-pointer text-sm muted">
+          Can’t find the voice in the list? Paste a specific ID
+        </summary>
         <input
           type="text"
           className="input mt-2"
@@ -267,6 +279,16 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         >
           {isPlaying ? 'Pause preview' : 'Preview'}
         </button>
+        {selectedVoice?.previewUrl && (
+          <a
+            className="link text-xs"
+            href={selectedVoice.previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open sample
+          </a>
+        )}
         {selectedVoice?.previewUrl ? (
           <span className="muted text-xs">Preview: {selectedVoice.name}</span>
         ) : (
