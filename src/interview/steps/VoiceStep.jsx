@@ -74,35 +74,71 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     // If voices prop is provided and non-empty, keep using it.
     if (Array.isArray(voices) && voices.length > 0) return;
 
-    // Try cache first
+    // Helper to stash successfully loaded voices
+    const accept = (list) => {
+      if (Array.isArray(list) && list.length > 0) {
+        setFallbackVoices(list);
+        try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(list)); } catch {}
+        return true;
+      }
+      return false;
+    };
+
+    // 1) Try cache first
     try {
       const cached = JSON.parse(localStorage.getItem(VOICES_CACHE_KEY) || 'null');
-      if (Array.isArray(cached) && cached.length > 0) {
-        setFallbackVoices(cached);
-        return;
-      }
+      if (accept(cached)) return;
     } catch {}
 
-    // Try fetching from a conventional endpoint if available
-    (async () => {
-      setLoadingVoices(true);
-      setVoicesError(null);
+    // 2) Try conventional endpoint if the app provides one
+    const tryApiVoices = async () => {
       try {
         const res = await fetch('/api/voices', { method: 'GET' });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setFallbackVoices(data);
-            try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(data)); } catch {}
-          }
-        } else {
-          setVoicesError('Failed to load voices');
+          if (accept(data)) return true;
         }
-      } catch (e) {
-        setVoicesError('Failed to load voices');
-      } finally {
-        setLoadingVoices(false);
-      }
+      } catch {}
+      return false;
+    };
+
+    // 3) Try Supabase REST if env is present (no client SDK required)
+    // Expose these through Vite env (build-time): VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+    const trySupabaseDirect = async () => {
+      const url = import.meta.env?.VITE_SUPABASE_URL;
+      const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+      if (!url || !key) return false;
+
+      // Adjust table/column names to your schema if different.
+      const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/voices?select=id,name,previewUrl`;
+      try {
+        const res = await fetch(endpoint, {
+          headers: {
+            apikey: key,
+            authorization: `Bearer ${key}`,
+            accept: 'application/json',
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (accept(data)) return true;
+        }
+      } catch {}
+      return false;
+    };
+
+    (async () => {
+      setLoadingVoices(true);
+      setVoicesError(null);
+
+      const okFromApi = await tryApiVoices();
+      if (okFromApi) { setLoadingVoices(false); return; }
+
+      const okFromSupabase = await trySupabaseDirect();
+      if (okFromSupabase) { setLoadingVoices(false); return; }
+
+      setVoicesError('No voices available. Paste an ID or configure /api/voices or VITE_SUPABASE_* env.');
+      setLoadingVoices(false);
     })();
   }, [voices]);
 
@@ -145,21 +181,46 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                 className="btn btn-xs ml-2"
                 onClick={async () => {
                   // manual reload
-                  try {
-                    setLoadingVoices(true);
-                    setVoicesError(null);
-                    const res = await fetch('/api/voices');
-                    if (res.ok) {
-                      const data = await res.json();
-                      if (Array.isArray(data) && data.length > 0) {
-                        setFallbackVoices(data);
-                        try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(data)); } catch {}
-                      } else {
-                        setVoicesError('No voices returned');
-                      }
-                    } else {
-                      setVoicesError('Failed to load voices');
+                  const accept = (list) => {
+                    if (Array.isArray(list) && list.length > 0) {
+                      setFallbackVoices(list);
+                      try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(list)); } catch {}
+                      return true;
                     }
+                    return false;
+                  };
+
+                  setLoadingVoices(true);
+                  setVoicesError(null);
+                  try {
+                    // Try /api/voices first
+                    let ok = false;
+                    try {
+                      const res = await fetch('/api/voices');
+                      if (res.ok) {
+                        const data = await res.json();
+                        ok = accept(data);
+                      }
+                    } catch {}
+
+                    // Then Supabase REST via env, if necessary
+                    if (!ok) {
+                      const url = import.meta.env?.VITE_SUPABASE_URL;
+                      const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+                      if (url && key) {
+                        const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/voices?select=id,name,previewUrl`;
+                        const res2 = await fetch(endpoint, {
+                          headers: {
+                            apikey: key,
+                            authorization: `Bearer ${key}`,
+                            accept: 'application/json',
+                          },
+                        });
+                        if (res2.ok) ok = accept(await res2.json());
+                      }
+                    }
+
+                    if (!ok) setVoicesError('Still no voices. Configure /api/voices or VITE_SUPABASE_* env.');
                   } catch {
                     setVoicesError('Failed to load voices');
                   } finally {
