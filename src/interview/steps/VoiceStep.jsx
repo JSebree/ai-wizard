@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
 
-// --- Supabase (public, read-only) — used to populate the voice list from "speakers"
-const SUPABASE_URL = "https://ldgujihabgikdkoxztnk.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZ3VqaWhhYmdpa2Rrb3h6dG5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyMzUwNTcsImV4cCI6MjA2NDgxMTA1N30.uifx8GrUtE4kgg3xahJtesb-OxLgsi4BNsApd1KgulE";
+// VoiceStep — loads voices from /public/voices.json and renders a dropdown.
+// No external libs (removed PropTypes). Keeps a hidden manual ID input (collapsed).
 
-// --- Gender parsing helper ----------------------------------------------------
+const VOICES_CACHE_KEY = 'voices_cache_v1';
+const VOICE_SRC_URL = '/voices.json'; // served from public/voices.json
+
+// --- helpers ---------------------------------------------------------------
 const normalize = (s) => (s || '').toLowerCase();
 const GENDER_TOKENS = [
   { re: /\bnon[-\s]?binary\b|\bnb\b|\benby\b/gi, out: 'nonbinary' },
@@ -28,8 +29,16 @@ function extractGenderFromVoiceName(name) {
   return null;
 }
 
+function normalizeVoice(v) {
+  return {
+    id: v?.id || v?.tts_id || v?.name || '',
+    name: v?.name || v?.label || v?.displayName || v?.tts_id || 'Untitled',
+    previewUrl: v?.previewUrl || v?.audio_url || v?.preview_url || null,
+  };
+}
+
 export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
-  const [selectedId, setSelectedId] = useState(value || null);
+  const [selectedId, setSelectedId] = useState(value || '');
   const [manualId, setManualId] = useState(value || '');
   const [voiceLabel, setVoiceLabel] = useState('');
   const [inferred, setInferred] = useState(null);
@@ -39,93 +48,67 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
   const [voicesError, setVoicesError] = useState(null);
 
   useEffect(() => {
-    setSelectedId(value || null);
+    setSelectedId(value || '');
     setManualId(value || '');
   }, [value]);
 
+  // Load voices from cache, then fetch /voices.json, then cache
   useEffect(() => {
-    if (Array.isArray(voices) && voices.length > 0) return;
+    let cancelled = false;
+
+    const safeGetCache = () => {
+      try { return localStorage.getItem(VOICES_CACHE_KEY); } catch { return null; }
+    };
+    const safeSetCache = (list) => {
+      try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(list)); } catch {}
+    };
 
     const accept = (list) => {
       if (Array.isArray(list) && list.length > 0) {
-        // Normalize possible shapes:
-        const normalized = list.map(v => ({
-          id: v.id,
-          name: v.name || v.label || v.displayName || '',
-          previewUrl: v.previewUrl || v.audio_url || v.preview_url || null,
-        })).filter(v => v.id && v.name);
+        const normalized = list.map(normalizeVoice).filter(v => v.id && v.name);
         if (normalized.length > 0) {
           setFallbackVoices(normalized);
-          try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(normalized)); } catch {}
+          safeSetCache(normalized);
           return true;
         }
       }
       return false;
     };
 
-    const tryStaticVoices = async () => {
+    const load = async () => {
       try {
-        const res = await fetch('/voices.json', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          if (accept(data)) return true;
+        setVoicesError(null);
+        setLoadingVoices(true);
+
+        // 1) cached
+        const cached = safeGetCache();
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (!cancelled) accept(parsed);
+          } catch {}
         }
-      } catch {}
-      return false;
+        // 2) fetch fresh
+        const res = await fetch(VOICE_SRC_URL, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`Failed to fetch voices.json (${res.status})`);
+        const data = await res.json();
+        if (!cancelled) accept(data);
+      } catch (e) {
+        if (!cancelled) setVoicesError(e?.message || 'Failed to load voices.');
+      } finally {
+        if (!cancelled) setLoadingVoices(false);
+      }
     };
 
-    const tryApiVoices = async () => {
-      try {
-        const res = await fetch('/api/voices', { method: 'GET' });
-        if (res.ok) {
-          const data = await res.json();
-          if (accept(data)) return true;
-        }
-      } catch {}
-      return false;
-    };
+    // If parent passed voices, prefer those; else load
+    if (!Array.isArray(voices) || voices.length === 0) load();
+    else setFallbackVoices([]);
 
-    const trySupabaseSpeakers = async () => {
-      const url = SUPABASE_URL;
-      const key = SUPABASE_ANON_KEY;
-      if (!url || !key) return false;
-      const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/speakers?select=id,name,audio_url&order=name.asc`;
-      try {
-        const res = await fetch(endpoint, {
-          headers: {
-            apikey: key,
-            authorization: `Bearer ${key}`,
-            accept: 'application/json',
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (accept(data)) return true;
-        }
-      } catch {}
-      return false;
-    };
-
-    (async () => {
-      setLoadingVoices(true);
-      setVoicesError(null);
-
-      const okFromSb = await trySupabaseSpeakers();
-      if (okFromSb) { setLoadingVoices(false); return; }
-
-      const okFromStatic = await tryStaticVoices();
-      if (okFromStatic) { setLoadingVoices(false); return; }
-
-      const okFromApi = await tryApiVoices();
-      if (okFromApi) { setLoadingVoices(false); return; }
-
-      setVoicesError('No voices available. Paste an ID or configure Supabase /api/voices.');
-      setLoadingVoices(false);
-    })();
+    return () => { cancelled = true; };
   }, [voices]);
 
   const availableVoices = useMemo(() => {
-    if (Array.isArray(voices) && voices.length > 0) return voices;
+    if (Array.isArray(voices) && voices.length > 0) return voices.map(normalizeVoice);
     return fallbackVoices;
   }, [voices, fallbackVoices]);
 
@@ -141,10 +124,11 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     }
   }, [selectedVoice]);
 
-  const canNext = Boolean(selectedVoice);
+  const canNext = Boolean(selectedVoice || manualId);
 
   const handleNext = () => {
-    if (!selectedVoice) return;
+    const id = selectedId || manualId || '';
+    if (!id) return;
     onNext?.();
   };
 
@@ -157,70 +141,17 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
           <>
             Voices available: {Array.isArray(availableVoices) ? availableVoices.length : 0}
             {voicesError ? <span className="text-error"> – {voicesError}</span> : null}
-            {!Array.isArray(voices) || voices.length === 0 ? (
+            {(!availableVoices || availableVoices.length === 0) && (
               <button
                 type="button"
                 className="btn btn-xs ml-2"
-                onClick={async () => {
-                  setLoadingVoices(true);
-                  setVoicesError(null);
-                  try {
-                    const accept = (list) => {
-                      if (Array.isArray(list) && list.length > 0) {
-                        const normalized = list.map(v => ({
-                          id: v.id,
-                          name: v.name || v.label || v.displayName || '',
-                          previewUrl: v.previewUrl || v.audio_url || v.preview_url || null,
-                        })).filter(v => v.id && v.name);
-                        if (normalized.length > 0) {
-                          setFallbackVoices(normalized);
-                          try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(normalized)); } catch {}
-                          return true;
-                        }
-                      }
-                      return false;
-                    };
-
-                    let ok = false;
-
-                    // Supabase first
-                    try {
-                      const url = SUPABASE_URL;
-                      const key = SUPABASE_ANON_KEY;
-                      if (url && key) {
-                        const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/speakers?select=id,name,audio_url&order=name.asc`;
-                        const resSb = await fetch(endpoint, { headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' } });
-                        if (resSb.ok) ok = accept(await resSb.json());
-                      }
-                    } catch {}
-
-                    // Static JSON
-                    if (!ok) {
-                      try {
-                        const resStatic = await fetch('/voices.json', { cache: 'no-store' });
-                        if (resStatic.ok) ok = accept(await resStatic.json());
-                      } catch {}
-                    }
-
-                    // API proxy
-                    if (!ok) {
-                      try {
-                        const res = await fetch('/api/voices');
-                        if (res.ok) ok = accept(await res.json());
-                      } catch {}
-                    }
-
-                    if (!ok) setVoicesError('Still no voices. Ensure Supabase or /public/voices.json is configured.');
-                  } catch {
-                    setVoicesError('Failed to load voices');
-                  } finally {
-                    setLoadingVoices(false);
-                  }
+                onClick={() => {
+                  // force reload bypassing cache
+                  try { localStorage.removeItem(VOICES_CACHE_KEY); } catch {}
+                  window.location.reload();
                 }}
-              >
-                Reload
-              </button>
-            ) : null}
+              >Reload</button>
+            )}
           </>
         )}
       </div>
@@ -230,11 +161,11 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         id="voiceSelect"
         className="input"
         style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
-        value={selectedId || ''}
+        value={selectedId}
         disabled={!availableVoices || availableVoices.length === 0}
         onChange={(e) => {
-          const id = e.target.value || '';
-          setSelectedId(id || null);
+          const id = e.target.value;
+          setSelectedId(id);
           setManualId(id);
           const v = (availableVoices || []).find(vv => vv.id === id) || null;
           if (v) {
@@ -258,6 +189,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
         ))}
       </select>
 
+      {/* Hidden manual ID field (collapsed) */}
       <details className="mt-2">
         <summary className="cursor-pointer text-sm muted">Can’t find your voice in the list? Paste an ID</summary>
         <input
@@ -268,7 +200,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
           onChange={(e) => {
             const id = e.target.value;
             setManualId(id);
-            setSelectedId(id || null);
+            setSelectedId(id);
             const v = (availableVoices || []).find(vv => vv.id === id) || null;
             if (v) {
               const gender = extractGenderFromVoiceName(v.name);
@@ -331,13 +263,3 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     </div>
   );
 }
-
-VoiceStep.propTypes = {
-  voices: PropTypes.arrayOf(
-    PropTypes.shape({ id: PropTypes.string.isRequired, name: PropTypes.string.isRequired, previewUrl: PropTypes.string })
-  ),
-  value: PropTypes.string,
-  onChange: PropTypes.func,
-  onBack: PropTypes.func,
-  onNext: PropTypes.func,
-};
