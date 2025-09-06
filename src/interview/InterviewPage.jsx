@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
-
+import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
 /**
  * InterviewPage.jsx
  *
@@ -72,6 +72,11 @@ function getDefaultAnswers() {
     title: "",
     // 12
     referenceText: "",
+    // Advanced settings
+    stylePreset: "Photorealistic",
+    musicVolume10: 1,     // 1..10 -> 0.1..1.0
+    voiceVolume10: 10,    // 1..10 -> 0.1..1.0
+    musicIncludeVocals: undefined, // shown only if wantsMusic === true
   };
 }
 
@@ -287,6 +292,14 @@ export default function InterviewPage({ onComplete }) {
       characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
+      // Advanced
+      style: req(answers.stylePreset) ? answers.stylePreset : "Photorealistic",
+      musicVolume: Number(((answers.musicVolume10 ?? 1) / 10).toFixed(2)),
+      voiceVolume: Number(((answers.voiceVolume10 ?? 10) / 10).toFixed(2)),
+      musicIncludeVocals:
+        answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
+          ? answers.musicIncludeVocals
+          : undefined,
     };
   }, [answers]);
 
@@ -297,7 +310,7 @@ export default function InterviewPage({ onComplete }) {
       key: "scene",
       label: "Tell me about the scene that you would like to create.",
       render: () => (
-        <FieldRow label="Describe your scene">
+        <FieldRow label="Describe your scene" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
             placeholder="e.g., Barcelona harbor and old city at golden hour."
             value={answers.scene}
@@ -357,7 +370,7 @@ export default function InterviewPage({ onComplete }) {
 
               <FieldRow
                 label="Please describe your character"
-                hint="Look, outfit, demeanor, age, vibe, etc."
+                hint="The more detail you provide, the better your results will match your intentions."
               >
                 <textarea
                   placeholder="e.g., Sarah, mid-30s, friendly travel host in casual linen, warm presence."
@@ -419,7 +432,7 @@ export default function InterviewPage({ onComplete }) {
       key: "setting",
       label: "Describe the scene’s setting.",
       render: () => (
-        <FieldRow label="Setting">
+        <FieldRow label="Setting" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
             placeholder="e.g., Wide establishing shots of harbor, aerials over rooftops, bustling alleys in warm evening light."
             value={answers.setting}
@@ -433,7 +446,7 @@ export default function InterviewPage({ onComplete }) {
       key: "action",
       label: "Describe the scene’s action.",
       render: () => (
-        <FieldRow label="Action">
+        <FieldRow label="Action" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
             placeholder="e.g., Cinematic montage only. Environmental B-roll: boats, rooftops, markets; no on-camera speaker."
             value={answers.action}
@@ -447,7 +460,7 @@ export default function InterviewPage({ onComplete }) {
       key: "directorsNotes",
       label: "Do you have any director’s notes?",
       render: () => (
-        <FieldRow label="Director’s notes (optional)">
+        <FieldRow label="Director’s notes (optional)" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
             placeholder="e.g., Prioritize variety and atmosphere. Avoid readable signage."
             value={answers.directorsNotes}
@@ -568,7 +581,7 @@ export default function InterviewPage({ onComplete }) {
       key: "referenceText",
       label: "For better script guidance, please enter reference text.",
       render: () => (
-        <FieldRow label="Reference text (optional)">
+        <FieldRow label="Reference text (optional)" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
             placeholder="Paste any relevant text for style or guidance."
             value={answers.referenceText}
@@ -577,6 +590,24 @@ export default function InterviewPage({ onComplete }) {
             }
           />
         </FieldRow>
+      ),
+      valid: () => true,
+    },
+    {
+      key: "advanced",
+      label: "Advanced settings",
+      render: () => (
+        <AdvancedSettingsStep
+          values={{
+            stylePreset: answers.stylePreset,
+            musicVolume10: answers.musicVolume10,
+            voiceVolume10: answers.voiceVolume10,
+            characterGender: answers.characterGender,
+            wantsMusic: answers.wantsMusic,
+            musicIncludeVocals: answers.musicIncludeVocals,
+          }}
+          onChange={(patch) => setAnswers((s) => ({ ...s, ...patch }))}
+        />
       ),
       valid: () => true,
     },
