@@ -3,51 +3,78 @@ import React from "react";
 /**
  * AdvancedSettingsStep
  *
- * A lightweight, collapsible panel of optional settings.
- * The parent may pass current values; we apply safe defaults so the UI
- * never shows NaN when a value is initially undefined.
+ * Collapsible, *controlled* advanced options.
+ * - If `enabled` is provided, the component is controlled by the parent.
+ *   Otherwise it will manage its own local `enabled` state (default false).
+ * - All outward changes are guarded so we never call an undefined callback.
  *
  * Props:
- * - styleValue: string
- * - onStyleChange: (style: string) => void
- * - music10: number (1..10)
- * - onMusic10Change: (n: number) => void
- * - voice10: number (1..10)
- * - onVoice10Change: (n: number) => void
+ *  - enabled?: boolean
+ *  - onEnabledChange?: (enabled: boolean) => void
+ *  - styleValue?: string
+ *  - onStyleChange?: (style: string) => void
+ *  - music10?: number (1..10)  [default 1]
+ *  - onMusic10Change?: (n: number) => void
+ *  - voice10?: number (1..10)  [default 10]
+ *  - onVoice10Change?: (n: number) => void
  */
 export default function AdvancedSettingsStep({
-  styleValue,
+  enabled,
+  onEnabledChange,
+  styleValue = "Photorealistic",
   onStyleChange,
   music10,
   onMusic10Change,
   voice10,
   onVoice10Change,
 }) {
-  // Should the advanced section be shown? Defaults to "No".
-  const [show, setShow] = React.useState(false);
+  // Fallback local state if parent doesn't control `enabled`
+  const isControlled = typeof enabled === "boolean";
+  const [localEnabled, setLocalEnabled] = React.useState(false);
+  const show = isControlled ? !!enabled : localEnabled;
 
-  // Safe slider values with defaults: music=1, voice=10
-  const clamp10 = (n) => {
+  // Helpers
+  const clamp10 = (n, fallback) => {
     const x = Number(n);
-    if (!Number.isFinite(x)) return 1;
+    if (!Number.isFinite(x)) return fallback;
     return Math.max(1, Math.min(10, Math.round(x)));
   };
-  const musicVal = clamp10(music10 ?? 1);
-  const voiceVal = clamp10(voice10 ?? 10);
+  const musicVal = clamp10(music10, 1);
+  const voiceVal = clamp10(voice10, 10);
 
-  const styles = [
-    { value: "photorealistic", label: "Photorealistic" },
-    { value: "cinematic", label: "Cinematic" },
-    { value: "anime", label: "Anime" },
-    { value: "pixar-style", label: "Pixar‑style" },
-    { value: "digital-illustration", label: "Digital Illustration" },
-    { value: "watercolor", label: "Watercolor" },
+  // Safe invokers
+  const emitEnabled = (b) => {
+    if (typeof onEnabledChange === "function") onEnabledChange(!!b);
+    if (!isControlled) setLocalEnabled(!!b);
+  };
+  const emitStyle = (v) => {
+    if (typeof onStyleChange === "function") onStyleChange(String(v));
+  };
+  const emitMusic = (n) => {
+    const clamped = clamp10(n, 1);
+    if (typeof onMusic10Change === "function") onMusic10Change(clamped);
+  };
+  const emitVoice = (n) => {
+    const clamped = clamp10(n, 10);
+    if (typeof onVoice10Change === "function") onVoice10Change(clamped);
+  };
+
+  const STYLE_OPTS = [
+    "Photorealistic",
+    "Cinematic",
+    "Documentary",
+    "Anime",
+    "Pixar-style",
+    "Watercolor",
+    "Comic-book",
+    "Noir",
   ];
 
   return (
     <div>
       {/* Toggle */}
       <div style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Advanced settings</div>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>Use advanced settings?</div>
         <div style={{ display: "flex", gap: 16 }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -56,7 +83,7 @@ export default function AdvancedSettingsStep({
               name="adv-toggle"
               value="yes"
               checked={show}
-              onChange={() => setShow(true)}
+              onChange={() => emitEnabled(true)}
             />
             Yes
           </label>
@@ -66,7 +93,7 @@ export default function AdvancedSettingsStep({
               name="adv-toggle"
               value="no"
               checked={!show}
-              onChange={() => setShow(false)}
+              onChange={() => emitEnabled(false)}
             />
             No
           </label>
@@ -81,12 +108,12 @@ export default function AdvancedSettingsStep({
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Visual style</div>
             <select
               value={styleValue}
-              onChange={(e) => onStyleChange(e.target.value)}
+              onChange={(e) => emitStyle(e.target.value)}
               style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
             >
-              {styles.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
+              {STYLE_OPTS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
@@ -101,7 +128,7 @@ export default function AdvancedSettingsStep({
               max={10}
               step={1}
               value={musicVal}
-              onChange={(e) => onMusic10Change(clamp10(e.target.value))}
+              onChange={(e) => emitMusic(e.target.value)}
               style={{ width: "100%" }}
             />
           </div>
@@ -115,7 +142,7 @@ export default function AdvancedSettingsStep({
               max={10}
               step={1}
               value={voiceVal}
-              onChange={(e) => onVoice10Change(clamp10(e.target.value))}
+              onChange={(e) => emitVoice(e.target.value)}
               style={{ width: "100%" }}
             />
           </div>

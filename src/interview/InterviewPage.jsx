@@ -74,7 +74,6 @@ function getDefaultAnswers() {
     referenceText: "",
     // Advanced settings
     advancedEnabled: false,
-    advancedGender: undefined,
     stylePreset: "Photorealistic",
     musicVolume10: 1,     // 1..10 -> 0.1..1.0
     voiceVolume10: 10,    // 1..10 -> 0.1..1.0
@@ -305,8 +304,6 @@ export default function InterviewPage({ onComplete }) {
           answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
             ? answers.musicIncludeVocals
             : undefined,
-        // allow an explicit override; otherwise use inferred
-        characterGender: answers.advancedGender || answers.characterGender,
       },
     };
   }, [answers]);
@@ -637,41 +634,26 @@ export default function InterviewPage({ onComplete }) {
       label: "Advanced settings",
       render: () => (
         <AdvancedSettingsStep
-          values={{
-            advancedEnabled: answers.advancedEnabled,
-            stylePreset: answers.stylePreset,
-            musicVolume10: answers.musicVolume10,
-            voiceVolume10: answers.voiceVolume10,
-            wantsMusic: answers.wantsMusic,
-            musicIncludeVocals: answers.musicIncludeVocals,
-          }}
-          /* Generic patch updater (for child components that call onChange({...})) */
-          onChange={(patch) => setAnswers((s) => ({ ...s, ...patch }))}
-
-          /* Field-specific fallbacks — if the child calls these, state still updates */
-          onToggleEnabled={(enabled) =>
+          enabled={Boolean(answers.advancedEnabled)}
+          onEnabledChange={(enabled) =>
             setAnswers((s) => ({ ...s, advancedEnabled: Boolean(enabled) }))
           }
-          onStylePreset={(style) =>
+          styleValue={answers.stylePreset || "Photorealistic"}
+          onStyleChange={(style) =>
             setAnswers((s) => ({ ...s, stylePreset: String(style || "Photorealistic") }))
           }
-          onMusicVolume={(v) =>
+          music10={answers.musicVolume10 ?? 1}
+          onMusic10Change={(v) =>
             setAnswers((s) => ({
               ...s,
               musicVolume10: Math.max(1, Math.min(10, Number(v) || 1)),
             }))
           }
-          onVoiceVolume={(v) =>
+          voice10={answers.voiceVolume10 ?? 10}
+          onVoice10Change={(v) =>
             setAnswers((s) => ({
               ...s,
               voiceVolume10: Math.max(1, Math.min(10, Number(v) || 10)),
-            }))
-          }
-          onIncludeVocals={(yn) =>
-            setAnswers((s) => ({
-              ...s,
-              musicIncludeVocals:
-                typeof yn === "boolean" ? yn : yn === "yes" ? true : yn === "no" ? false : s.musicIncludeVocals,
             }))
           }
         />
