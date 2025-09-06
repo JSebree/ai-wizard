@@ -11,9 +11,36 @@ import React from "react";
  *   onSubmit:   () => void
  *   onEditStep: (stepIndex: number) => void   // optional quick-jump
  */
-export default function ReviewStep({ ui, onSubmit, onEditStep }) {
+export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true, extraActions = null }) {
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "—");
   const safe = (v) => (v === undefined || v === null || v === "" ? "—" : String(v));
+
+  // JSON helpers for copy/download
+  const jsonString = React.useMemo(() => JSON.stringify({ ui }, null, 2), [ui]);
+
+  const handleCopyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(jsonString);
+    } catch (e) {
+      console.error("Copy failed", e);
+    }
+  };
+
+  const handleDownloadJson = () => {
+    try {
+      const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "interview.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Download failed", e);
+    }
+  };
 
   // helper for quick “Edit” links (optional)
   const EditLink = ({ to, label = "Edit" }) =>
@@ -70,10 +97,19 @@ export default function ReviewStep({ ui, onSubmit, onEditStep }) {
         </Section>
       </div>
 
-      <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
-        <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
-          Submit
+      <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+        <button type="button" className="btn" onClick={handleCopyJson}>
+          Copy JSON
         </button>
+        <button type="button" className="btn" onClick={handleDownloadJson}>
+          Download JSON
+        </button>
+        {extraActions}
+        {!hideSubmit && (
+          <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
+            Submit
+          </button>
+        )}
       </div>
     </div>
   );
@@ -101,3 +137,4 @@ function Field({ label, value, mono = false }) {
     </div>
   );
 }
+// Note: The .btn class is already defined elsewhere for consistent button styling.

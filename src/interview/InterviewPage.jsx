@@ -605,6 +605,41 @@ export default function InterviewPage({ onComplete }) {
 
   // --------------------------- navigation --------------------------------
 
+  // Helper to copy JSON to clipboard
+  function copyJson() {
+    try {
+      const jsonStr = JSON.stringify({ ui: uiPayload }, null, 2);
+      navigator.clipboard.writeText(jsonStr).then(
+        () => {
+          alert("Copied JSON to clipboard");
+        },
+        () => {
+          alert("Copy failed");
+        }
+      );
+    } catch {
+      alert("Copy failed");
+    }
+  }
+
+  // Helper to download JSON as file
+  function downloadJson() {
+    try {
+      const jsonStr = JSON.stringify({ ui: uiPayload }, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "interview_payload.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Download failed");
+    }
+  }
+
   function handleNext() {
     if (!step.valid()) return;
     if (stepIndex < total - 1) {
@@ -649,18 +684,30 @@ export default function InterviewPage({ onComplete }) {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
             ← Back
           </button>
-          <button
-            type="button"
-            onClick={stepIndex === total - 1 ? submitNow : handleNext}
-            disabled={!step.valid()}
-            className="btn btn-primary"
-          >
-            {stepIndex === total - 1 ? "Submit" : stepIndex === total - 2 ? "Review" : "Next →"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {stepIndex === total - 1 && (
+              <>
+                <button type="button" onClick={copyJson} className="btn">
+                  Copy JSON
+                </button>
+                <button type="button" onClick={downloadJson} className="btn">
+                  Download JSON
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={stepIndex === total - 1 ? submitNow : handleNext}
+              disabled={!step.valid()}
+              className="btn btn-primary"
+            >
+              {stepIndex === total - 1 ? "Submit" : stepIndex === total - 2 ? "Review" : "Next →"}
+            </button>
+          </div>
         </div>
       </div>
 
