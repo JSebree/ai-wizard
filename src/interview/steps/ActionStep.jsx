@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useMemo, useState } from "react";
 import StepShell from "../components/StepShell";
 import { useInterview } from "../InterviewContext";
@@ -17,19 +15,22 @@ export default function ActionStep() {
 
   const error = useMemo(() => {
     if (!touched) return null;
-    return value.trim().length === 0 ? "Please describe the scene’s action." : null;
+    return value.trim().length < 30 ? "Action description must be at least 30 characters." : null;
   }, [touched, value]);
 
   useEffect(() => {
     // Expose validator for global "Continue" keybinds, etc.
-    return registerValidator("action", () =>
-      value.trim().length === 0 ? "Please describe the scene’s action." : null
-    );
+    return registerValidator("action", () => {
+      const trimmed = value.trim();
+      if (trimmed.length < 30) {
+        return "Action description must be at least 30 characters.";
+      }
+      return null;
+    });
   }, [registerValidator, value]);
 
   const handleNext = () => {
     setTouched(true);
-    if (value.trim().length === 0) return;
     setUi((prev) => ({ ...prev, action: value.trim() }));
     goNext();
   };
@@ -50,7 +51,7 @@ export default function ActionStep() {
       subtitle="What happens on screen? Mention shot ideas, beats, and any key moments you want covered."
       onNext={handleNext}
       onBack={handleBack}
-      canNext={value.trim().length > 0}
+      canNext={error === null}
       error={error}
     >
       <div className="iw-field">

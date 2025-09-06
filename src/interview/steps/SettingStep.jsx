@@ -21,7 +21,7 @@ function SettingStep({ onNext, onBack }) {
         <button type="button" onClick={onBack}>
           Back
         </button>
-        <button type="button" onClick={onNext} disabled={setting.trim() === ''}>
+        <button type="button" onClick={onNext} disabled={setting.trim().length < 40}>
           Next
         </button>
       </div>

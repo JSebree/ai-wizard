@@ -57,7 +57,12 @@ export default function CharacterStep({ onNext, onBack }) {
   };
 
   const disabledNext =
-    driver === "character" && (wantsCutaways === null || wantsCutaways === undefined);
+    driver === "character" &&
+    (
+      wantsCutaways === null ||
+      wantsCutaways === undefined ||
+      characterDesc.trim().length < 40
+    );
 
   if (driver && driver !== "character") {
     // Render a minimal placeholder while auto-skipping to avoid layout jump

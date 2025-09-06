@@ -22,7 +22,7 @@ export default function SceneStep({ value = '', onChange, onNext, onBack, autoFo
   }, [value]);
 
   const charCount = local.trim().length;
-  const isValid = charCount >= 10; // require a little substance
+  const isValid = charCount >= 40; // require a little substance
 
   const helper = useMemo(
     () => (
@@ -89,7 +89,7 @@ export default function SceneStep({ value = '', onChange, onNext, onBack, autoFo
           className="iw-btn iw-btn-primary"
           onClick={handleNext}
           disabled={!isValid}
-          title={!isValid ? 'Add a bit more detail (min ~10 characters)' : 'Continue (⌘/Ctrl + Enter)'}
+          title={!isValid ? 'Add a bit more detail (min ~40 characters)' : 'Continue (⌘/Ctrl + Enter)'}
         >
           Next
         </button>
