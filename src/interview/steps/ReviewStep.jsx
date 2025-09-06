@@ -1,5 +1,50 @@
 import React from "react";
 
+/* ================= N8N STATUS CLIENT (legacy-style) ================= */
+function startAutoPoll({ statusUrl, onUpdate, onDone, onError }) {
+  let delay = 2000;
+  const maxDelay = 8000;
+  let alive = true;
+
+  async function tick() {
+    if (!alive) return;
+    try {
+      const res = await fetch(statusUrl, { method: 'GET' });
+      const j = await res.json();
+      if (j && j.ok === false) {
+        onError?.(j.error || 'Unknown status error');
+        alive = false;
+        return;
+      }
+      onUpdate?.(j);
+      const s = String(j?.status || '').toUpperCase();
+      if (s === 'DONE') {
+        onDone?.(j);
+        alive = false;
+        return;
+      }
+      if (s === 'FAILED' || s === 'ERROR') {
+        onError?.('Render failed');
+        alive = false;
+        return;
+      }
+      delay = Math.min(maxDelay, Math.round(delay * 1.25));
+      setTimeout(tick, delay);
+    } catch {
+      // transient errors -> keep polling
+      setTimeout(tick, delay);
+    }
+  }
+
+  tick();
+  return () => { alive = false; };
+}
+
+// Defaults match current prod test endpoints; can be overridden at runtime via window.N8N_WEBHOOK_URL
+const N8N_BASE = 'https://n8n.simplifies.click';
+const WEBHOOK_INTAKE_DEFAULT = `${N8N_BASE}/webhook-test/sceneme`;
+const STATUS_GET = `${N8N_BASE}/webhook/status`;
+
 /**
  * ReviewStep
  * - Presents a read-only summary of the user's selections
@@ -18,29 +63,85 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   // JSON helpers for copy/download
   const jsonString = React.useMemo(() => JSON.stringify({ ui }, null, 2), [ui]);
 
-  const handleCopyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(jsonString);
-    } catch (e) {
-      console.error("Copy failed", e);
-    }
-  };
+  // Submission + status UI (legacy-style inline feedback)
+  const [busy, setBusy] = React.useState(false);
+  const [jobId, setJobId] = React.useState('');
+  const [status, setStatus] = React.useState('');
+  const [finalUrl, setFinalUrl] = React.useState('');
+  const stopRef = React.useRef(null);
 
-  const handleDownloadJson = () => {
+  React.useEffect(() => () => { if (stopRef.current) stopRef.current(); }, []);
+
+  async function handleSendToN8N() {
+    if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+    setBusy(true);
+    setStatus('');
+    setFinalUrl('');
+
+    const n8nNoCors = (() => { try { return localStorage.getItem('n8nNoCors') === '1'; } catch { return false; } })();
+    const intakeUrl = (typeof window !== 'undefined' && window.N8N_WEBHOOK_URL) || WEBHOOK_INTAKE_DEFAULT;
+
+    const payload = {
+      ui,
+      meta: { source: 'interview-wizard', version: 'v1', ts: new Date().toISOString() },
+    };
+
     try {
-      const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "interview.json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const res = await fetch(intakeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify(payload),
+        mode: n8nNoCors ? 'no-cors' : 'cors',
+        credentials: 'omit',
+        cache: 'no-store',
+      });
+
+      if (n8nNoCors) {
+        setStatus('SUBMITTED');
+        setBusy(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        alert(`Intake failed (${res.status}): ${t}`);
+        setBusy(false);
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      const returnedJobId = data?.jobId || data?.jobID || data?.id || '';
+      const statusUrl = data?.statusUrl || `${STATUS_GET}?jobId=${encodeURIComponent(returnedJobId)}`;
+
+      if (returnedJobId) {
+        try { localStorage.setItem('last_job_id', String(returnedJobId)); } catch {}
+      }
+
+      setJobId(returnedJobId);
+      setStatus('QUEUED / PROCESSING');
+
+      stopRef.current = startAutoPoll({
+        statusUrl,
+        onUpdate: (rec) => { if (rec?.status) setStatus(String(rec.status).toUpperCase()); },
+        onDone: (rec) => {
+          setStatus('DONE');
+          if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
+          setBusy(false);
+          stopRef.current = null;
+        },
+        onError: (msg) => {
+          setStatus('ERROR');
+          alert(msg);
+          setBusy(false);
+          stopRef.current = null;
+        },
+      });
     } catch (e) {
-      console.error("Download failed", e);
+      console.error('Submit error:', e);
+      alert('Failed to process submission.');
+      setBusy(false);
     }
-  };
+  }
 
   // Map of step indices for quick Edit links (allows parent to override)
   const idx = {
@@ -69,6 +170,39 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       <p style={{ marginTop: 0, color: "#475569" }}>
         Please review your selections. If everything looks good, click <b>Submit</b>.
       </p>
+
+      {/* Inline submission/status controls (legacy-style) */}
+      <div style={{ marginBottom: 12, padding: 12, border: '1px solid #E5E7EB', borderRadius: 10 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={handleSendToN8N}
+            disabled={busy}
+            className="btn btn-primary"
+            title="Send to n8n and track status"
+          >
+            {busy ? 'Sending…' : 'Send to n8n'}
+          </button>
+          <div className="text-sm" style={{ fontSize: 12 }}>
+            <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
+            <strong>Status:</strong> {status || '—'}
+          </div>
+          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#7c3aed' }}>
+            Heads up: renders can take a few minutes. You can leave this tab open.
+          </div>
+        </div>
+
+        {finalUrl && (
+          <div className="mt-2" style={{ marginTop: 10 }}>
+            <a className="text-indigo-700 underline" href={finalUrl} target="_blank" rel="noreferrer">
+              Open final video
+            </a>
+            <div style={{ marginTop: 8 }}>
+              <video src={finalUrl} controls className="w-full" style={{ maxWidth: 720, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+            </div>
+          </div>
+        )}
+      </div>
 
       <div style={{ display: "grid", gap: 12 }}>
         <Section title="Scene" action={<EditLink to={idx.scene} />}>

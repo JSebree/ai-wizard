@@ -898,7 +898,6 @@ export default function InterviewPage({ onComplete }) {
       .then(async (res) => {
         if (n8nNoCors) {
           alert("Submitted! Your request was handed to n8n (no-cors mode).");
-          window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
           return;
         }
         const text = await res.text();
@@ -925,7 +924,6 @@ export default function InterviewPage({ onComplete }) {
 
         setSubmitResult(json || { ok: true });
         snapshotJobState({ submittedAt: Date.now(), jobId: jobId || null });
-        window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
       })
       .catch((err) => {
         console.error("Submit error:", err);
