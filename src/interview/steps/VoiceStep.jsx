@@ -37,6 +37,9 @@ export default function VoiceStep({ value, onChange, className = "" }) {
     );
   });
 
+  // Track initial emission so the parent gets a valid default selection
+  const hasEmittedInitial = React.useRef(false);
+
   const audioRef = React.useRef(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
 
@@ -76,6 +79,36 @@ export default function VoiceStep({ value, onChange, className = "" }) {
     };
   }, []);
 
+  // Ensure we have a concrete selection once voices are loaded.
+  // Prefer "Emma"; if not found, fall back to the first voice.
+  React.useEffect(() => {
+    if (!voices.length) return;
+
+    // If current selectedId is missing or not in the loaded list, choose a default.
+    let id = selectedId;
+    const hasSelected = id && voices.some(v => v.id === id);
+
+    if (!hasSelected) {
+      const emma =
+        voices.find(v => String(v.id).toLowerCase() === "emma") ||
+        voices.find(v => String(v.name).toLowerCase().startsWith("emma"));
+      id = emma ? emma.id : voices[0]?.id;
+      if (id && id !== selectedId) {
+        setSelectedId(id);
+      }
+    }
+
+    // Emit once on first load (or when voices first appear)
+    if (!hasEmittedInitial.current && id) {
+      const voice = voices.find(v => v.id === id) || null;
+      emitChange(voice);
+      // Persist immediately so validation passes without further interaction
+      window.localStorage.setItem("wizard.voiceId", id);
+      hasEmittedInitial.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voices]);
+
   // Keep selectedId in sync with external value changes
   React.useEffect(() => {
     if (!value) return;
@@ -86,6 +119,16 @@ export default function VoiceStep({ value, onChange, className = "" }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value?.voiceId, value?.voice_id, value?.voice?.id]);
+
+  // Emit on selectedId changes as well (covers programmatic updates)
+  React.useEffect(() => {
+    if (!voices.length || !selectedId) return;
+    const voice = voices.find(v => v.id === selectedId) || null;
+    if (voice) {
+      emitChange(voice);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const selectedVoice = React.useMemo(
     () => voices.find((v) => v.id === selectedId) || null,

@@ -159,10 +159,24 @@ function FieldRow({ label, children, hint }) {
   );
 }
 
-function NavBar({ stepIndex, total /* onPrev, onNext, canNext, isLast are intentionally unused */ }) {
+function NavBar({ stepIndex, total, onReset }) {
   const pct = Math.round(((stepIndex + 1) / total) * 100);
   return (
-    <div style={{ position: "sticky", top: 0, background: "#fff", padding: "12px 0 16px", zIndex: 5 }}>
+    <div style={{ position: "sticky", top: 0, background: "#fff", padding: "8px 0 14px", zIndex: 5 }}>
+      {/* Top row with Reset aligned right */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={onReset}
+          className="btn"
+          title="Clear all answers and start over"
+          style={{ padding: "6px 10px" }}
+        >
+          Reset all
+        </button>
+      </div>
+
+      {/* Progress bar */}
       <div style={{ height: 6, background: "#EEF2F7", borderRadius: 999 }}>
         <div
           style={{
@@ -174,6 +188,7 @@ function NavBar({ stepIndex, total /* onPrev, onNext, canNext, isLast are intent
           }}
         />
       </div>
+
       <style>{`
         .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #CBD5E1; background: #fff; cursor: pointer; }
         .btn[disabled] { opacity: .5; cursor: not-allowed; }
@@ -602,10 +617,7 @@ export default function InterviewPage({ onComplete }) {
       <NavBar
         stepIndex={stepIndex}
         total={total}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        canNext={step.valid()}
-        isLast={stepIndex === total - 1}
+        onReset={resetAll}
       />
 
       <div className="card">
@@ -617,9 +629,6 @@ export default function InterviewPage({ onComplete }) {
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
             ← Back
-          </button>
-          <button type="button" onClick={resetAll} className="btn" title="Clear all answers and start over" style={{ marginLeft: 12 }}>
-            Reset all
           </button>
           <button type="button" onClick={handleNext} disabled={!step.valid()} className="btn btn-primary">
             {stepIndex === total - 1 ? "Finish" : "Next →"}
