@@ -63,6 +63,30 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   // JSON helpers for copy/download
   const jsonString = React.useMemo(() => JSON.stringify({ ui }, null, 2), [ui]);
 
+  // Safe JSON utilities (fallbacks if parent didn't pass handlers)
+  function handleCopyJson() {
+    try {
+      const text = JSON.stringify({ ui }, null, 2);
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+    } catch (e) { console.error('Copy JSON failed:', e); }
+  }
+  function handleDownloadJson() {
+    try {
+      const blob = new Blob([JSON.stringify({ ui }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ui-payload.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+    } catch (e) { console.error('Download JSON failed:', e); }
+  }
+
   // Submission + status UI (legacy-style inline feedback)
   const [busy, setBusy] = React.useState(false);
   const [jobId, setJobId] = React.useState('');
@@ -70,7 +94,40 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   const [finalUrl, setFinalUrl] = React.useState('');
   const stopRef = React.useRef(null);
 
-  React.useEffect(() => () => { if (stopRef.current) stopRef.current(); }, []);
+  React.useEffect(() => {
+    // cleanup on unmount
+    return () => { if (stopRef.current) stopRef.current(); };
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const jid = url.searchParams.get('jobId') || (typeof localStorage !== 'undefined' ? localStorage.getItem('last_job_id') : '');
+      if (jid && !jobId) {
+        setJobId(jid);
+        setStatus('QUEUED / PROCESSING');
+        const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
+        if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+        stopRef.current = startAutoPoll({
+          statusUrl,
+          onUpdate: (rec) => { if (rec?.status) setStatus(String(rec.status).toUpperCase()); },
+          onDone: (rec) => {
+            setStatus('DONE');
+            if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
+            setBusy(false);
+            stopRef.current = null;
+          },
+          onError: (msg) => {
+            setStatus('ERROR');
+            console.error(msg);
+            setBusy(false);
+            stopRef.current = null;
+          },
+        });
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSendToN8N() {
     if (stopRef.current) { stopRef.current(); stopRef.current = null; }
@@ -115,6 +172,11 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
 
       if (returnedJobId) {
         try { localStorage.setItem('last_job_id', String(returnedJobId)); } catch {}
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('jobId', String(returnedJobId));
+          window.history.replaceState({}, '', url);
+        } catch {}
       }
 
       setJobId(returnedJobId);
@@ -248,8 +310,8 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           {ui?.advanced?.enabled ? (
             <>
               <Field label="Visual style" value={safe(ui?.advanced?.style)} />
-              <Field label="Music volume (1–10)" value={safe(ui?.advanced?.musicVolume)} />
-              <Field label="Voice volume (1–10)" value={safe(ui?.advanced?.voiceVolume)} />
+              <Field label="Music volume (0.1–1.0)" value={safe(ui?.advanced?.musicVolume)} />
+              <Field label="Voice volume (0.1–1.0)" value={safe(ui?.advanced?.voiceVolume)} />
             </>
           ) : null}
         </Section>

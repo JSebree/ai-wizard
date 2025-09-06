@@ -258,8 +258,16 @@ export default function InterviewPage({ onComplete }) {
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState(null);
+  useEffect(() => {
+    function onGoReview() {
+      const last = steps.length - 1;
+      if (last >= 0) setStepIndex(last);
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    }
+    window.addEventListener("interview:goReviewStep", onGoReview);
+    return () => window.removeEventListener("interview:goReviewStep", onGoReview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const N8N_WEBHOOK_URL =
     (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
@@ -854,12 +862,6 @@ export default function InterviewPage({ onComplete }) {
       render: () => (
         <ReviewStep
           ui={uiPayload}
-          hideSubmit
-          onSubmit={() => {
-            if (onComplete) {
-              onComplete({ ui: uiPayload });
-            }
-          }}
           onEditStep={(editStepKey) => {
             const editIdx = steps.findIndex((s) => s.key === editStepKey);
             if (editIdx >= 0) setStepIndex(editIdx);
@@ -873,84 +875,6 @@ export default function InterviewPage({ onComplete }) {
   const total = steps.length;
   const step = steps[stepIndex];
 
-  function submitNow() {
-    if (onComplete) {
-      onComplete({ ui: uiPayload });
-    }
-
-    const payload = {
-      ui: uiPayload,
-      meta: {
-        source: "interview-wizard",
-        version: "v1",
-        ts: new Date().toISOString(),
-      },
-    };
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "X-Requested-With": "XMLHttpRequest",
-    };
-    if (N8N_AUTH_TOKEN) {
-      headers["Authorization"] = `Bearer ${N8N_AUTH_TOKEN}`;
-    }
-
-    setSubmitting(true);
-    setSubmitResult(null);
-
-    fetch(N8N_WEBHOOK_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      mode: n8nNoCors ? "no-cors" : "cors",
-      credentials: "omit",
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        if (n8nNoCors) {
-          alert("Submitted! Your request was handed to n8n (no-cors mode).");
-          return;
-        }
-        const text = await res.text();
-        let json = null;
-        try { json = JSON.parse(text); } catch { /* plain text */ }
-
-        if (!res.ok) {
-          const message = (json && (json.error || json.message)) || text || "Request failed";
-          throw new Error(message);
-        }
-
-        const jobId = json?.jobId || json?.id || json?.data?.id;
-        if (jobId) {
-          setLastJobId(jobId);
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.set("jobId", String(jobId));
-            window.history.replaceState({}, "", url);
-          } catch {}
-          alert(`Submitted! Job ID: ${jobId}`);
-        } else {
-          alert("Submitted! Your request was received.");
-        }
-
-        setSubmitResult(json || { ok: true });
-        snapshotJobState({ submittedAt: Date.now(), jobId: jobId || null });
-      })
-      .catch((err) => {
-        console.error("Submit error:", err);
-        alert(`Submission failed: ${err.message || String(err)}`);
-      })
-      .finally(() => setSubmitting(false));
-  }
-
-  // Legacy helpers for job state (parity with old app)
-  function setLastJobId(id) {
-    try { localStorage.setItem("last_job_id", String(id)); } catch {}
-  }
-  function snapshotJobState(obj) {
-    try { localStorage.setItem("n8nJobState", JSON.stringify(obj || {})); } catch {}
-  }
   // --------------------------- navigation --------------------------------
 
   // Helper to copy JSON to clipboard
@@ -1029,15 +953,17 @@ export default function InterviewPage({ onComplete }) {
             ← Back
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              onClick={stepIndex === total - 1 ? submitNow : handleNext}
-              disabled={submitting || !step.valid()}
-              className="btn btn-primary"
-              title={stepIndex === total - 1 ? "Send to n8n" : "Next step"}
-            >
-              {stepIndex === total - 1 ? (submitting ? "Submitting…" : "Submit") : (stepIndex === total - 2 ? "Review" : "Next →")}
-            </button>
+            {stepIndex === total - 1 ? null : (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!step.valid()}
+                className="btn btn-primary"
+                title="Next step"
+              >
+                {stepIndex === total - 2 ? "Review" : "Next →"}
+              </button>
+            )}
           </div>
         </div>
       </div>
