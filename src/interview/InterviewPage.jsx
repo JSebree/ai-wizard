@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import VoiceStep from "./steps/VoiceStep.jsx";
 
 /**
  * InterviewPage.jsx
@@ -186,42 +187,6 @@ export default function InterviewPage({ onComplete }) {
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
-  // Voice options (dropdown). Populate from window/global or API if available.
-  const [voiceOptions, setVoiceOptions] = useState([]);
-
-  function normalizeVoices(list) {
-    // Accept shapes like [{id, label}] or [{id, name}] or [{voice_id, displayName}]
-    return (Array.isArray(list) ? list : []).map((v) => {
-      const id = v.id || v.voice_id || v.voiceId || v.value || "";
-      const label = v.label || v.name || v.displayName || v.title || String(id);
-      return { id: String(id), label: String(label) };
-    }).filter(v => v.id);
-  }
-
-  useEffect(() => {
-    const fromWindow = (typeof window !== "undefined" && (window.__VOICE_LIST__ || window.__VOICES__)) || null;
-    if (Array.isArray(fromWindow) && fromWindow.length) {
-      setVoiceOptions(normalizeVoices(fromWindow));
-      return;
-    }
-    // Try persisted list
-    const cached = readJSON("voice_list_cache_v1", null);
-    if (Array.isArray(cached) && cached.length) {
-      setVoiceOptions(cached);
-    }
-    // Try fetch from a conventional endpoint (optional)
-    fetch("/api/voices", { method: "GET" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
-        const norm = normalizeVoices(data);
-        if (norm.length) {
-          setVoiceOptions(norm);
-          writeJSON("voice_list_cache_v1", norm);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // Persist on change (refresh-proof)
   useEffect(() => {
@@ -335,49 +300,17 @@ export default function InterviewPage({ onComplete }) {
       key: "voiceId",
       label: "Pick your character or narrator’s voice.",
       render: () => (
-        <>
-          {voiceOptions.length > 0 && (
-            <FieldRow label="Choose a voice (dropdown)">
-              <select
-                value={answers.voiceId || ""}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const found = voiceOptions.find(v => v.id === id);
-                  setAnswers((s) => ({ ...s, voiceId: id, voiceLabel: found ? found.label : s.voiceLabel }));
-                }}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
-              >
-                <option value="">— Select a voice —</option>
-                {voiceOptions.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label} — {v.id}
-                  </option>
-                ))}
-              </select>
-            </FieldRow>
-          )}
-
-          <FieldRow label={voiceOptions.length ? "…or paste a specific voice ID" : "Voice (select or paste ID)"}>
-            <input
-              type="text"
-              placeholder="e.g., fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
-              value={answers.voiceId}
-              onChange={(e) => setAnswers((s) => ({ ...s, voiceId: e.target.value }))}
-            />
-          </FieldRow>
-
-          <FieldRow label="Voice label (optional, used for gender inference)">
-            <input
-              type="text"
-              placeholder="e.g., Ava (female)"
-              value={answers.voiceLabel}
-              onChange={(e) => setAnswers((s) => ({ ...s, voiceLabel: e.target.value }))}
-            />
-          </FieldRow>
-          <div style={{ color: "#667085", fontSize: 12 }}>
-            Inference preview: <b>{characterGender || "—"}</b>
-          </div>
-        </>
+        <VoiceStep
+          value={answers.voiceId}
+          labelValue={answers.voiceLabel}
+          onChange={(id, label) =>
+            setAnswers((s) => ({ ...s, voiceId: id, voiceLabel: label ?? s.voiceLabel }))
+          }
+          onLabelChange={(label) =>
+            setAnswers((s) => ({ ...s, voiceLabel: label }))
+          }
+          genderPreview={characterGender}
+        />
       ),
       valid: () => req(answers.voiceId),
     },
