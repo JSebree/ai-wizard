@@ -159,21 +159,20 @@ function FieldRow({ label, children, hint }) {
   );
 }
 
-function NavBar({ stepIndex, total, onPrev, onNext, canNext, isLast }) {
+function NavBar({ stepIndex, total /* onPrev, onNext, canNext, isLast are intentionally unused */ }) {
   const pct = Math.round(((stepIndex + 1) / total) * 100);
   return (
     <div style={{ position: "sticky", top: 0, background: "#fff", padding: "12px 0 16px", zIndex: 5 }}>
       <div style={{ height: 6, background: "#EEF2F7", borderRadius: 999 }}>
-        <div style={{ width: `${pct}%`, height: 6, background: "#3B82F6", borderRadius: 999, transition: "width .25s ease" }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
-        <button type="button" onClick={onPrev} disabled={stepIndex === 0} className="btn btn-secondary">
-          ← Back
-        </button>
-        {/* progress numbers removed */}
-        <button type="button" onClick={onNext} disabled={!canNext} className="btn btn-primary">
-          {isLast ? "Finish" : "Next →"}
-        </button>
+        <div
+          style={{
+            width: `${pct}%`,
+            height: 6,
+            background: "#3B82F6",
+            borderRadius: 999,
+            transition: "width .25s ease",
+          }}
+        />
       </div>
       <style>{`
         .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #CBD5E1; background: #fff; cursor: pointer; }
