@@ -11,7 +11,7 @@ import React from "react";
  *   onSubmit:   () => void
  *   onEditStep: (stepIndex: number) => void   // optional quick-jump
  */
-export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true, extraActions = null }) {
+export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true, extraActions = null, stepIndexMap = {} }) {
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "—");
   const safe = (v) => (v === undefined || v === null || v === "" ? "—" : String(v));
 
@@ -42,6 +42,16 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     }
   };
 
+  // Map of step indices for quick Edit links (allows parent to override)
+  const idx = {
+    scene: stepIndexMap.scene ?? 0,
+    voice: stepIndexMap.voice ?? 2,
+    settingAction: stepIndexMap.settingAction ?? 4,
+    audio: stepIndexMap.audio ?? 7,
+    output: stepIndexMap.output ?? 9, // duration/title/reference
+    advanced: stepIndexMap.advanced ?? 12, // adjust based on your actual steps
+  };
+
   // helper for quick “Edit” links (optional)
   const EditLink = ({ to, label = "Edit" }) =>
     typeof onEditStep === "function" ? (
@@ -61,7 +71,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       </p>
 
       <div style={{ display: "grid", gap: 12 }}>
-        <Section title="Scene" action={<EditLink to={0} />}>
+        <Section title="Scene" action={<EditLink to={idx.scene} />}>
           <Field label="Scene description" value={safe(ui.scene)} />
           <Field label="Driver" value={safe(ui.driver)} />
           {ui.driver === "character" && (
@@ -72,19 +82,19 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           )}
         </Section>
 
-        <Section title="Voice" action={<EditLink to={2} />}>
+        <Section title="Voice" action={<EditLink to={idx.voice} />}>
           <Field label="Voice ID" value={safe(ui.voiceId)} mono />
           <Field label="Character gender (inferred)" value={safe(ui.characterGender)} />
           <Field label="Character / narrator name" value={safe(ui.characterName)} />
         </Section>
 
-        <Section title="Setting & Action" action={<EditLink to={4} />}>
+        <Section title="Setting & Action" action={<EditLink to={idx.settingAction} />}>
           <Field label="Setting" value={safe(ui.setting)} />
           <Field label="Action" value={safe(ui.action)} />
           <Field label="Director’s notes" value={safe(ui.directorsNotes)} />
         </Section>
 
-        <Section title="Audio" action={<EditLink to={7} />}>
+        <Section title="Audio" action={<EditLink to={idx.audio} />}>
           <Field label="Wants music" value={yesNo(ui.wantsMusic)} />
           {ui.wantsMusic && <Field label="Music description" value={safe(ui.musicDesc)} />}
           {ui.wantsMusic && (
@@ -93,13 +103,13 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Wants captions" value={yesNo(ui.wantsCaptions)} />
         </Section>
 
-        <Section title="Output" action={<EditLink to={9} />}>
+        <Section title="Output" action={<EditLink to={idx.output} />}>
           <Field label="Duration (seconds)" value={safe(ui.durationSec)} />
           <Field label="Title" value={safe(ui.title)} />
           <Field label="Reference text" value={safe(ui.referenceText)} />
         </Section>
 
-        <Section title="Advanced settings" action={<EditLink to={10} />}> {/* adjust index if your step order differs */}
+        <Section title="Advanced settings" action={<EditLink to={idx.advanced} />}>
           <Field label="Enabled" value={yesNo(ui?.advanced?.enabled)} />
           {ui?.advanced?.enabled ? (
             <>
