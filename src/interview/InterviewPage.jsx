@@ -73,6 +73,8 @@ function getDefaultAnswers() {
     // 12
     referenceText: "",
     // Advanced settings
+    advancedEnabled: false,
+    advancedGender: undefined,
     stylePreset: "Photorealistic",
     musicVolume10: 1,     // 1..10 -> 0.1..1.0
     voiceVolume10: 10,    // 1..10 -> 0.1..1.0
@@ -292,14 +294,20 @@ export default function InterviewPage({ onComplete }) {
       characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
-      // Advanced
-      style: req(answers.stylePreset) ? answers.stylePreset : "Photorealistic",
-      musicVolume: Number(((answers.musicVolume10 ?? 1) / 10).toFixed(2)),
-      voiceVolume: Number(((answers.voiceVolume10 ?? 10) / 10).toFixed(2)),
-      musicIncludeVocals:
-        answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
-          ? answers.musicIncludeVocals
-          : undefined,
+      // Advanced (grouped)
+      advanced: {
+        enabled: Boolean(answers.advancedEnabled),
+        style: req(answers.stylePreset) ? answers.stylePreset : "Photorealistic",
+        // keep 1–10 in payload; mapping to 0.1–1.0 is internal only
+        musicVolume10: (answers.musicVolume10 ?? 1),
+        voiceVolume10: (answers.voiceVolume10 ?? 10),
+        includeVocals:
+          answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
+            ? answers.musicIncludeVocals
+            : undefined,
+        // allow an explicit override; otherwise use inferred
+        characterGender: answers.advancedGender || answers.characterGender,
+      },
     };
   }, [answers]);
 
@@ -506,19 +514,6 @@ export default function InterviewPage({ onComplete }) {
 
           {answers.wantsMusic && (
             <>
-              <FieldRow
-                label="Describe the music you want"
-                hint="The more detail you provide, the better your results will match your intentions."
-              >
-                <textarea
-                  placeholder="e.g., Warm Mediterranean acoustic with subtle strings and percussion."
-                  value={answers.musicDesc}
-                  onChange={(e) =>
-                    setAnswers((s) => ({ ...s, musicDesc: e.target.value }))
-                  }
-                />
-              </FieldRow>
-
               <FieldRow label="Include vocals in music?">
                 <RadioGroup
                   name="musicIncludeVocals"
@@ -540,6 +535,19 @@ export default function InterviewPage({ onComplete }) {
                     { value: "no", label: "No" },
                   ]}
                   inline
+                />
+              </FieldRow>
+
+              <FieldRow
+                label="Describe the music you want"
+                hint="The more detail you provide, the better your results will match your intentions."
+              >
+                <textarea
+                  placeholder="e.g., Warm Mediterranean acoustic with subtle strings and percussion."
+                  value={answers.musicDesc}
+                  onChange={(e) =>
+                    setAnswers((s) => ({ ...s, musicDesc: e.target.value }))
+                  }
                 />
               </FieldRow>
             </>
@@ -630,10 +638,12 @@ export default function InterviewPage({ onComplete }) {
       render: () => (
         <AdvancedSettingsStep
           values={{
+            advancedEnabled: answers.advancedEnabled,
             stylePreset: answers.stylePreset,
             musicVolume10: answers.musicVolume10,
             voiceVolume10: answers.voiceVolume10,
-            characterGender: answers.characterGender,
+            characterGender: answers.characterGender,   // inferred default
+            advancedGender: answers.advancedGender,     // optional override
             wantsMusic: answers.wantsMusic,
             musicIncludeVocals: answers.musicIncludeVocals,
           }}

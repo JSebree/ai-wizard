@@ -90,6 +90,18 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Wants captions" value={yesNo(ui.wantsCaptions)} />
         </Section>
 
+        <Section title="Advanced settings" action={<EditLink to={10} />}> {/* adjust index if your step order differs */}
+          <Field label="Enabled" value={yesNo(ui?.advanced?.enabled)} />
+          {ui?.advanced?.enabled ? (
+            <>
+              <Field label="Visual style" value={safe(ui?.advanced?.style)} />
+              <Field label="Music volume (1–10)" value={safe(ui?.advanced?.musicVolume)} />
+              <Field label="Voice volume (1–10)" value={safe(ui?.advanced?.voiceVolume)} />
+              <Field label="Character gender (final)" value={safe(ui?.advanced?.characterGender)} />
+            </>
+          ) : null}
+        </Section>
+
         <Section title="Output" action={<EditLink to={9} />}>
           <Field label="Duration (seconds)" value={safe(ui.durationSec)} />
           <Field label="Title" value={safe(ui.title)} />
