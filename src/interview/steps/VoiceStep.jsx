@@ -27,13 +27,13 @@ export default function VoiceStep({ value, onChange, className = "" }) {
 
   // Selected voice id
   const [selectedId, setSelectedId] = React.useState(() => {
-    // Seed from props or localStorage
+    // Seed from props or localStorage, default to Emma
     return (
       value?.voiceId ||
       value?.voice_id ||
       value?.voice?.id ||
       window.localStorage.getItem("wizard.voiceId") ||
-      ""
+      "Emma"
     );
   });
 
