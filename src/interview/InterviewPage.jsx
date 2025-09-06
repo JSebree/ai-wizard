@@ -39,6 +39,41 @@ function writeJSON(key, value) {
   } catch {}
 }
 
+// Reusable defaults for answers
+function getDefaultAnswers() {
+  return {
+    // 1
+    scene: "",
+    // 2
+    driver: "", // "character" | "narrator"
+    wantsCutaways: undefined, // boolean (only if character)
+    character: "", // description if character flow
+    // 3
+    voiceId: "", // store the selection id/string; display text can be same
+    voiceLabel: "", // optional: a human-friendly label including gender
+    characterGender: undefined, // persist derived gender
+    // 4
+    characterName: "",
+    // 5
+    setting: "",
+    // 6
+    action: "",
+    // 7
+    directorsNotes: "",
+    // 8
+    wantsMusic: undefined, // boolean
+    musicDesc: "",
+    // 9
+    wantsCaptions: undefined, // boolean
+    // 10
+    durationSec: 45,
+    // 11
+    title: "",
+    // 12
+    referenceText: "",
+  };
+}
+
 // ----------------------------- helpers ---------------------------------
 
 /** Extract gender from the voice display label. */
@@ -160,37 +195,7 @@ function NavBar({ stepIndex, total, onPrev, onNext, canNext, isLast }) {
 export default function InterviewPage({ onComplete }) {
   // Core answer state
   const [answers, setAnswers] = useState(() => {
-    const defaults = {
-      // 1
-      scene: "",
-      // 2
-      driver: "", // "character" | "narrator"
-      wantsCutaways: undefined, // boolean (only if character)
-      character: "", // description if character flow
-      // 3
-      voiceId: "", // store the selection id/string; display text can be same
-      voiceLabel: "", // optional: a human-friendly label including gender
-      characterGender: undefined, // <-- persist derived gender
-      // 4
-      characterName: "",
-      // 5
-      setting: "",
-      // 6
-      action: "",
-      // 7
-      directorsNotes: "",
-      // 8
-      wantsMusic: undefined, // boolean
-      musicDesc: "",
-      // 9
-      wantsCaptions: undefined, // boolean
-      // 10
-      durationSec: 45,
-      // 11
-      title: "",
-      // 12
-      referenceText: "",
-    };
+    const defaults = getDefaultAnswers();
     const saved = readJSON(LS_KEY_ANS, null);
     return saved ? { ...defaults, ...saved } : defaults;
   });
@@ -578,6 +583,17 @@ export default function InterviewPage({ onComplete }) {
     }
   }
 
+  function resetAll() {
+    try {
+      localStorage.removeItem(LS_KEY_ANS);
+      localStorage.removeItem(LS_KEY_STEP);
+    } catch {}
+    const defaults = getDefaultAnswers();
+    setAnswers(defaults);
+    setStepIndex(0);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const [showPreview, setShowPreview] = useState(false);
 
   // ------------------------------ render ---------------------------------
@@ -602,6 +618,9 @@ export default function InterviewPage({ onComplete }) {
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
             ← Back
+          </button>
+          <button type="button" onClick={resetAll} className="btn" title="Clear all answers and start over" style={{ marginLeft: 12 }}>
+            Reset all
           </button>
           <button type="button" onClick={handleNext} disabled={!step.valid()} className="btn btn-primary">
             {stepIndex === total - 1 ? "Finish" : "Next →"}
