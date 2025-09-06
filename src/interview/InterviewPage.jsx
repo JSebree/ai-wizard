@@ -574,6 +574,7 @@ export default function InterviewPage({ onComplete }) {
       render: () => (
         <ReviewStep
           ui={uiPayload}
+          hideSubmit
           onSubmit={() => {
             if (onComplete) {
               onComplete({ ui: uiPayload });
@@ -593,6 +594,14 @@ export default function InterviewPage({ onComplete }) {
 
   const total = steps.length;
   const step = steps[stepIndex];
+
+  function submitNow() {
+    if (onComplete) {
+      onComplete({ ui: uiPayload });
+    } else {
+      setShowPreview(true);
+    }
+  }
 
   // --------------------------- navigation --------------------------------
 
@@ -644,8 +653,13 @@ export default function InterviewPage({ onComplete }) {
           <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
             ← Back
           </button>
-          <button type="button" onClick={handleNext} disabled={!step.valid()} className="btn btn-primary">
-            {stepIndex === total - 1 ? "Review" : "Next →"}
+          <button
+            type="button"
+            onClick={stepIndex === total - 1 ? submitNow : handleNext}
+            disabled={!step.valid()}
+            className="btn btn-primary"
+          >
+            {stepIndex === total - 1 ? "Submit" : stepIndex === total - 2 ? "Review" : "Next →"}
           </button>
         </div>
       </div>
