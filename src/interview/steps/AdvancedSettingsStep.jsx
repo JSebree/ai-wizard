@@ -14,9 +14,6 @@ import React from "react";
  * - onMusic10Change: (n: number) => void
  * - voice10: number (1..10)
  * - onVoice10Change: (n: number) => void
- * - genderValue: string | ""   (expects "female" | "male"; we’ll coerce)
- * - onGenderChange: (g: string) => void
- * - inferredGender: string | undefined  (from prior voice selection)
  */
 export default function AdvancedSettingsStep({
   styleValue,
@@ -25,9 +22,6 @@ export default function AdvancedSettingsStep({
   onMusic10Change,
   voice10,
   onVoice10Change,
-  genderValue,
-  onGenderChange,
-  inferredGender,
 }) {
   // Should the advanced section be shown? Defaults to "No".
   const [show, setShow] = React.useState(false);
@@ -40,17 +34,6 @@ export default function AdvancedSettingsStep({
   };
   const musicVal = clamp10(music10 ?? 1);
   const voiceVal = clamp10(voice10 ?? 10);
-
-  // Map any inferred value to "female" | "male" (fallback "female")
-  const inferredSimple = React.useMemo(() => {
-    const s = String(inferredGender || "").toLowerCase();
-    if (s.includes("male") && !s.includes("fe")) return "male";
-    return "female";
-  }, [inferredGender]);
-
-  const effGender = (genderValue === "male" || genderValue === "female")
-    ? genderValue
-    : inferredSimple;
 
   const styles = [
     { value: "photorealistic", label: "Photorealistic" },
@@ -71,21 +54,21 @@ export default function AdvancedSettingsStep({
             <input
               type="radio"
               name="adv-toggle"
-              value="no"
-              checked={!show}
-              onChange={() => setShow(false)}
-            />
-            No
-          </label>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="radio"
-              name="adv-toggle"
               value="yes"
               checked={show}
               onChange={() => setShow(true)}
             />
             Yes
+          </label>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="radio"
+              name="adv-toggle"
+              value="no"
+              checked={!show}
+              onChange={() => setShow(false)}
+            />
+            No
           </label>
         </div>
       </div>
@@ -135,19 +118,6 @@ export default function AdvancedSettingsStep({
               onChange={(e) => onVoice10Change(clamp10(e.target.value))}
               style={{ width: "100%" }}
             />
-          </div>
-
-          {/* Character gender */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Character gender</div>
-            <select
-              value={effGender}
-              onChange={(e) => onGenderChange(e.target.value === "male" ? "male" : "female")}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
-            >
-              <option value="female">Female</option>
-              <option value="male">Male</option>
-            </select>
           </div>
         </div>
       )}
