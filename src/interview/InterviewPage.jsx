@@ -170,7 +170,7 @@ function NavBar({ stepIndex, total, onPrev, onNext, canNext, isLast }) {
         <button type="button" onClick={onPrev} disabled={stepIndex === 0} className="btn btn-secondary">
           ← Back
         </button>
-        <div style={{ color: "#667085", fontSize: 12 }}>{stepIndex + 1} / {total}</div>
+        {/* progress numbers removed */}
         <button type="button" onClick={onNext} disabled={!canNext} className="btn btn-primary">
           {isLast ? "Finish" : "Next →"}
         </button>
