@@ -92,6 +92,54 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   const [jobId, setJobId] = React.useState('');
   const [status, setStatus] = React.useState('');
   const [finalUrl, setFinalUrl] = React.useState('');
+  const [showBanner, setShowBanner] = React.useState(false);
+  // Show success banner only after a fresh submit signal and when we have a jobId/status
+  React.useEffect(() => {
+    try {
+      const just = sessionStorage.getItem('just_submitted') === '1';
+      if (just && (jobId || status)) {
+        setShowBanner(true);
+        sessionStorage.removeItem('just_submitted');
+      }
+    } catch {}
+  }, [jobId, status]);
+
+  // Listen for footer-driven submits and begin polling immediately
+  React.useEffect(() => {
+    function onNewJobId(e) {
+      const jid = e?.detail?.jobId;
+      const providedStatusUrl = e?.detail?.statusUrl;
+      if (!jid) return;
+      setJobId(jid);
+      setStatus('QUEUED / PROCESSING');
+      try {
+        if (sessionStorage.getItem('just_submitted') === '1') {
+          setShowBanner(true);
+          sessionStorage.removeItem('just_submitted');
+        }
+      } catch {}
+      if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+      const statusUrl = providedStatusUrl || `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
+      stopRef.current = startAutoPoll({
+        statusUrl,
+        onUpdate: (rec) => { if (rec?.status) setStatus(String(rec.status).toUpperCase()); },
+        onDone: (rec) => {
+          setStatus('DONE');
+          if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
+          setBusy(false);
+          stopRef.current = null;
+        },
+        onError: (msg) => {
+          setStatus('ERROR');
+          console.error(msg);
+          setBusy(false);
+          stopRef.current = null;
+        },
+      });
+    }
+    window.addEventListener('interview:newJobId', onNewJobId);
+    return () => window.removeEventListener('interview:newJobId', onNewJobId);
+  }, []);
   const stopRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -217,6 +265,15 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           url.searchParams.set('jobId', String(returnedJobId));
           window.history.replaceState({}, '', url);
         } catch {}
+        try { sessionStorage.setItem('just_submitted', '1'); } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent('interview:newJobId', {
+            detail: {
+              jobId: returnedJobId,
+              statusUrl: typeof statusUrl !== 'undefined' ? statusUrl : undefined,
+            }
+          }));
+        } catch {}
       }
 
       setJobId(returnedJobId);
@@ -275,20 +332,22 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
 
       {/* Inline submission/status controls (legacy-style) */}
       <div style={{ marginBottom: 12, padding: 12, border: '1px solid #E5E7EB', borderRadius: 10 }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '8px 10px',
-          background: '#ECFDF5',
-          border: '1px solid #A7F3D0',
-          color: '#065F46',
-          borderRadius: 8,
-          fontSize: 13,
-        }}>
-          <span style={{ fontWeight: 600 }}>Submission received.</span>
-          <span style={{ opacity: 0.9 }}>We’re processing your video now.</span>
-        </div>
+        {showBanner && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 10px',
+            background: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            color: '#065F46',
+            borderRadius: 8,
+            fontSize: 13,
+          }}>
+            <span style={{ fontWeight: 600 }}>Submission received.</span>
+            <span style={{ opacity: 0.9 }}>We’re processing your video now.</span>
+          </div>
+        )}
 
         {finalUrl && (
           <div className="mt-2" style={{ marginTop: 10 }}>
