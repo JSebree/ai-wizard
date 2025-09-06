@@ -3,12 +3,7 @@ import React from "react";
 /**
  * AdvancedSettingsStep
  *
- * Collapsible, *controlled* advanced options.
- * - If `enabled` is provided, the component is controlled by the parent.
- *   Otherwise it will manage its own local `enabled` state (default false).
- * - All outward changes are guarded so we never call an undefined callback.
- *
- * Props:
+ * Controlled advanced options:
  *  - enabled?: boolean
  *  - onEnabledChange?: (enabled: boolean) => void
  *  - styleValue?: string
@@ -17,6 +12,8 @@ import React from "react";
  *  - onMusic10Change?: (n: number) => void
  *  - voice10?: number (1..10)  [default 10]
  *  - onVoice10Change?: (n: number) => void
+ *
+ * If `enabled` is not provided, the component falls back to local state.
  */
 export default function AdvancedSettingsStep({
   enabled,
@@ -73,16 +70,16 @@ export default function AdvancedSettingsStep({
   return (
     <div>
       {/* Toggle */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Advanced settings</div>
+      <div style={{ marginBottom: 16 }}>
+        {/* NOTE: Outer step title comes from InterviewPage; do not repeat it here */}
         <div style={{ fontWeight: 600, marginBottom: 6 }}>Use advanced settings?</div>
-        <div style={{ display: "flex", gap: 16 }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <input
               type="radio"
-              name="adv-toggle"
+              name="advancedEnabled"
               value="yes"
-              checked={show}
+              checked={show === true}
               onChange={() => emitEnabled(true)}
             />
             Yes
@@ -90,9 +87,9 @@ export default function AdvancedSettingsStep({
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <input
               type="radio"
-              name="adv-toggle"
+              name="advancedEnabled"
               value="no"
-              checked={!show}
+              checked={show === false}
               onChange={() => emitEnabled(false)}
             />
             No
@@ -102,9 +99,9 @@ export default function AdvancedSettingsStep({
 
       {/* Collapsible content */}
       {show && (
-        <div>
+        <div style={{ display: "grid", gap: 18 }}>
           {/* Visual style */}
-          <div style={{ marginBottom: 18 }}>
+          <div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Visual style</div>
             <select
               value={styleValue}
@@ -120,7 +117,7 @@ export default function AdvancedSettingsStep({
           </div>
 
           {/* Music volume */}
-          <div style={{ marginBottom: 18 }}>
+          <div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Music volume</div>
             <input
               type="range"
@@ -134,7 +131,7 @@ export default function AdvancedSettingsStep({
           </div>
 
           {/* Voice volume */}
-          <div style={{ marginBottom: 18 }}>
+          <div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Voice volume</div>
             <input
               type="range"
