@@ -1,34 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 
 const VOICES_CACHE_KEY = 'voices:list';
 
-/**
- * VoiceStep
- * ------------------------------------------------------------
- * Step 3 of the interview: pick a voice for the character/narrator.
- *
- * Props
- *  - voices: Array<{ id: string, name: string, previewUrl?: string }>
- *  - value:  string | null (selected voiceId, label optional via onChange payload)
- *  - onChange: (next: { voiceId: string, characterGender?: string | null, voiceLabel?: string }) => void
- *  - onBack: () => void
- *  - onNext: () => void
- */
-
 // --- Gender parsing helper ----------------------------------------------------
-// The product guarantees gender is embedded in the voice *name* string.
-// We parse it robustly without relying on first-letter heuristics.
-// Example names we expect to work:
-//   "Sophia [Female] — Warm conversational"
-//   "Marcus [Male]"
-//   "Avery [Nonbinary]"
-//   "Jamie (female)"
-//   "Kai - male"
-//   "Noa · non-binary"
-//   "Maya | FEMALE"
-//   "Sam – masc" (maps to male)
-//   "Riley – fem" (maps to female)
 const normalize = (s) => (s || '').toLowerCase();
 const GENDER_TOKENS = [
   { re: /\bnon[-\s]?binary\b|\bnb\b|\benby\b/gi, out: 'nonbinary' },
@@ -38,21 +13,17 @@ const GENDER_TOKENS = [
 
 function extractGenderFromVoiceName(name) {
   if (!name) return null;
-  // Try bracket/paren/pipe notations first
   const bracketMatch = name.match(/[\[(|\-·–—]\s*(male|female|non\s*binary|nonbinary|masc(?:uline)?|fem(?:ale)?|femme)\s*[\])|\-·–—]?/i);
   if (bracketMatch && bracketMatch[1]) {
     const raw = normalize(bracketMatch[1]).replace(/\s+/g, '');
-    if (raw.startsWith('nonbinary') || raw === 'nonbinary' || raw === 'nonbinary') return 'nonbinary';
     if (raw.startsWith('non') && raw.includes('binary')) return 'nonbinary';
-    if (raw.startsWith('fem')) return 'female';
-    if (raw === 'femme') return 'female';
+    if (raw.startsWith('fem') || raw === 'femme') return 'female';
     if (raw.startsWith('masc') || raw === 'male') return 'male';
   }
-  // Token scan fallback
   for (const { re, out } of GENDER_TOKENS) {
     if (re.test(name)) return out;
   }
-  return null; // allow UI to proceed; downstream can validate
+  return null;
 }
 
 export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
@@ -71,10 +42,8 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
   }, [value]);
 
   useEffect(() => {
-    // If voices prop is provided and non-empty, keep using it.
     if (Array.isArray(voices) && voices.length > 0) return;
 
-    // Helper to stash successfully loaded voices
     const accept = (list) => {
       if (Array.isArray(list) && list.length > 0) {
         setFallbackVoices(list);
@@ -84,13 +53,11 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       return false;
     };
 
-    // 1) Try cache first
     try {
       const cached = JSON.parse(localStorage.getItem(VOICES_CACHE_KEY) || 'null');
       if (accept(cached)) return;
     } catch {}
 
-    // 2) NEW: Try static file at /voices.json first
     const tryStaticVoices = async () => {
       try {
         const res = await fetch('/voices.json', { cache: 'no-store' });
@@ -102,7 +69,6 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       return false;
     };
 
-    // 3) Try conventional endpoint if the app provides one
     const tryApiVoices = async () => {
       try {
         const res = await fetch('/api/voices', { method: 'GET' });
@@ -114,14 +80,10 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       return false;
     };
 
-    // 4) Try Supabase REST if env is present (no client SDK required)
-    // Expose these through Vite env (build-time): VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
     const trySupabaseDirect = async () => {
       const url = import.meta.env?.VITE_SUPABASE_URL;
       const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
       if (!url || !key) return false;
-
-      // Adjust table/column names to your schema if different.
       const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/voices?select=id,name,previewUrl`;
       try {
         const res = await fetch(endpoint, {
@@ -195,7 +157,6 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                 type="button"
                 className="btn btn-xs ml-2"
                 onClick={async () => {
-                  // manual reload
                   const accept = (list) => {
                     if (Array.isArray(list) && list.length > 0) {
                       setFallbackVoices(list);
@@ -208,43 +169,28 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                   setLoadingVoices(true);
                   setVoicesError(null);
                   try {
-                    // Try /voices.json first
                     let ok = false;
                     try {
                       const resStatic = await fetch('/voices.json', { cache: 'no-store' });
-                      if (resStatic.ok) {
-                        ok = accept(await resStatic.json());
-                      }
+                      if (resStatic.ok) ok = accept(await resStatic.json());
                     } catch {}
-
-                    // Then /api/voices
                     if (!ok) {
                       try {
                         const res = await fetch('/api/voices');
-                        if (res.ok) {
-                          const data = await res.json();
-                          ok = accept(data);
-                        }
+                        if (res.ok) ok = accept(await res.json());
                       } catch {}
                     }
-
-                    // Then Supabase REST via env, if necessary
                     if (!ok) {
                       const url = import.meta.env?.VITE_SUPABASE_URL;
                       const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
                       if (url && key) {
                         const endpoint = `${url.replace(/\/+$/,'')}/rest/v1/voices?select=id,name,previewUrl`;
                         const res2 = await fetch(endpoint, {
-                          headers: {
-                            apikey: key,
-                            authorization: `Bearer ${key}`,
-                            accept: 'application/json',
-                          },
+                          headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' },
                         });
                         if (res2.ok) ok = accept(await res2.json());
                       }
                     }
-
                     if (!ok) setVoicesError('Still no voices. Add /public/voices.json or configure /api/voices / VITE_SUPABASE_*.');
                   } catch {
                     setVoicesError('Failed to load voices');
