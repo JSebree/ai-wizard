@@ -10,7 +10,7 @@ function AppShell({ children }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <Link
             to="/"
             onClick={(e) => {
@@ -26,9 +26,16 @@ function AppShell({ children }) {
           >
             SceneMe
           </Link>
-          <div className="ml-auto flex items-center gap-3">
-            {/* <HeaderResetButton /> */}
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
+            }}
+            className="text-sm px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+            title="Go to Review step"
+          >
+            Review
+          </button>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>

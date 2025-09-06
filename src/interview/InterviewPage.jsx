@@ -104,6 +104,16 @@ function getDefaultAnswers() {
 
 // ----------------------------- helpers ---------------------------------
 
+function limitChars(s, n) {
+  const str = String(s ?? "");
+  return n && n > 0 ? str.slice(0, n) : str;
+}
+
+function meetsMin(s, n) {
+  const str = String(s ?? "").trim();
+  return typeof n === "number" && n > 0 ? str.length >= n : req(str);
+}
+
 /** Extract gender from the voice display label. */
 function inferGenderFromVoiceName(label = "") {
   const s = String(label || "").toLowerCase().trim();
@@ -473,9 +483,9 @@ export default function InterviewPage({ onComplete }) {
       advanced: {
         enabled: Boolean(answers.advancedEnabled),
         style: req(answers.stylePreset) ? answers.stylePreset : "Photorealistic",
-        // keep 1–10 in payload; mapping to 0.1–1.0 is internal only
-        musicVolume10: (answers.musicVolume10 ?? 1),
-        voiceVolume10: (answers.voiceVolume10 ?? 10),
+        // export ffmpeg-scale volumes (0.1–1.0)
+        musicVolume: Math.max(1, Math.min(10, answers.musicVolume10 ?? 1)) / 10,
+        voiceVolume: Math.max(1, Math.min(10, answers.voiceVolume10 ?? 10)) / 10,
         includeVocals:
           answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
             ? answers.musicIncludeVocals
@@ -499,7 +509,7 @@ export default function InterviewPage({ onComplete }) {
           />
         </FieldRow>
       ),
-      valid: () => req(answers.scene),
+      valid: () => meetsMin(answers.scene, 40),
     },
     {
       key: "driver",
@@ -566,9 +576,11 @@ export default function InterviewPage({ onComplete }) {
         </>
       ),
       valid: () =>
-        req(answers.driver) &&
-        (answers.driver !== "character" ||
-          typeof answers.wantsCutaways === "boolean"),
+        req(answers.driver) && (
+          answers.driver !== "character" || (
+            typeof answers.wantsCutaways === "boolean" && meetsMin(answers.character, 40)
+          )
+        ),
     },
     {
       key: "voiceId",
@@ -621,7 +633,7 @@ export default function InterviewPage({ onComplete }) {
           />
         </FieldRow>
       ),
-      valid: () => req(answers.setting),
+      valid: () => meetsMin(answers.setting, 40),
     },
     {
       key: "action",
@@ -635,7 +647,7 @@ export default function InterviewPage({ onComplete }) {
           />
         </FieldRow>
       ),
-      valid: () => req(answers.action),
+      valid: () => meetsMin(answers.action, 30),
     },
     {
       key: "directorsNotes",
