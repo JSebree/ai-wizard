@@ -245,13 +245,6 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           >
             {busy ? 'Sending…' : 'Send to n8n'}
           </button>
-          <div className="text-sm" style={{ fontSize: 12 }}>
-            <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
-            <strong>Status:</strong> {status || '—'}
-          </div>
-          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#7c3aed' }}>
-            Heads up: renders can take a few minutes. You can leave this tab open.
-          </div>
         </div>
 
         {finalUrl && (
@@ -317,19 +310,30 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         </Section>
       </div>
 
-      <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
-        <button type="button" className="btn" onClick={handleCopyJson}>
-          Copy JSON
-        </button>
-        <button type="button" className="btn" onClick={handleDownloadJson}>
-          Download JSON
-        </button>
-        {extraActions}
-        {!hideSubmit && (
-          <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
-            Submit
+      <div style={{ marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="text-sm" style={{ fontSize: 12 }}>
+            <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
+            <strong>Status:</strong> {status || '—'}
+          </div>
+          <div style={{ fontSize: 12, color: '#7c3aed' }}>
+            Heads up: renders can take a few minutes. You can leave this tab open.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button type="button" className="btn" onClick={handleCopyJson}>
+            Copy JSON
           </button>
-        )}
+          <button type="button" className="btn" onClick={handleDownloadJson}>
+            Download JSON
+          </button>
+          {extraActions}
+          {!hideSubmit && (
+            <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
+              Submit
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
