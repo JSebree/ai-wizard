@@ -642,12 +642,38 @@ export default function InterviewPage({ onComplete }) {
             stylePreset: answers.stylePreset,
             musicVolume10: answers.musicVolume10,
             voiceVolume10: answers.voiceVolume10,
-            characterGender: answers.characterGender,   // inferred default
-            advancedGender: answers.advancedGender,     // optional override
             wantsMusic: answers.wantsMusic,
             musicIncludeVocals: answers.musicIncludeVocals,
           }}
+          /* Generic patch updater (for child components that call onChange({...})) */
           onChange={(patch) => setAnswers((s) => ({ ...s, ...patch }))}
+
+          /* Field-specific fallbacks — if the child calls these, state still updates */
+          onToggleEnabled={(enabled) =>
+            setAnswers((s) => ({ ...s, advancedEnabled: Boolean(enabled) }))
+          }
+          onStylePreset={(style) =>
+            setAnswers((s) => ({ ...s, stylePreset: String(style || "Photorealistic") }))
+          }
+          onMusicVolume={(v) =>
+            setAnswers((s) => ({
+              ...s,
+              musicVolume10: Math.max(1, Math.min(10, Number(v) || 1)),
+            }))
+          }
+          onVoiceVolume={(v) =>
+            setAnswers((s) => ({
+              ...s,
+              voiceVolume10: Math.max(1, Math.min(10, Number(v) || 10)),
+            }))
+          }
+          onIncludeVocals={(yn) =>
+            setAnswers((s) => ({
+              ...s,
+              musicIncludeVocals:
+                typeof yn === "boolean" ? yn : yn === "yes" ? true : yn === "no" ? false : s.musicIncludeVocals,
+            }))
+          }
         />
       ),
       valid: () => true,
