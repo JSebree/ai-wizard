@@ -129,6 +129,46 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Detect jobId changes after submit (footer writes to URL/localStorage)
+  React.useEffect(() => {
+    let tries = 0;
+    let timer = null;
+    function check() {
+      if (jobId) return; // already set
+      try {
+        const url = new URL(window.location.href);
+        const jid = url.searchParams.get('jobId') || (typeof localStorage !== 'undefined' ? localStorage.getItem('last_job_id') : '');
+        if (jid) {
+          setJobId(jid);
+          setStatus('QUEUED / PROCESSING');
+          const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
+          if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+          stopRef.current = startAutoPoll({
+            statusUrl,
+            onUpdate: (rec) => { if (rec?.status) setStatus(String(rec.status).toUpperCase()); },
+            onDone: (rec) => {
+              setStatus('DONE');
+              if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
+              setBusy(false);
+              stopRef.current = null;
+            },
+            onError: (msg) => {
+              setStatus('ERROR');
+              console.error(msg);
+              setBusy(false);
+              stopRef.current = null;
+            },
+          });
+          return; // stop checking
+        }
+      } catch {}
+      if (++tries < 15) timer = setTimeout(check, 800);
+    }
+    // Start short polling only if we have nothing yet
+    if (!jobId && !status) check();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [jobId, status]);
+
   async function handleSendToN8N() {
     if (stopRef.current) { stopRef.current(); stopRef.current = null; }
     setBusy(true);
@@ -235,16 +275,19 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
 
       {/* Inline submission/status controls (legacy-style) */}
       <div style={{ marginBottom: 12, padding: 12, border: '1px solid #E5E7EB', borderRadius: 10 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={handleSendToN8N}
-            disabled={busy}
-            className="btn btn-primary"
-            title="Send to n8n and track status"
-          >
-            {busy ? 'Sending…' : 'Send to n8n'}
-          </button>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '8px 10px',
+          background: '#ECFDF5',
+          border: '1px solid #A7F3D0',
+          color: '#065F46',
+          borderRadius: 8,
+          fontSize: 13,
+        }}>
+          <span style={{ fontWeight: 600 }}>Submission received.</span>
+          <span style={{ opacity: 0.9 }}>We’re processing your video now.</span>
         </div>
 
         {finalUrl && (
