@@ -1,55 +1,80 @@
-// src/App.jsx
-import React from "react";
-import { Routes, Route, Link } from "react-router-dom";
-import InterviewPage from "./interview/InterviewPage.jsx";
+// src/interview/steps/ReviewStep.jsx
+import React, { useState, useMemo } from "react";
 
-// If you created a global reset button component, import it; otherwise you can delete the usage below.
-// import HeaderResetButton from "./components/ui/HeaderResetButton.jsx";
+export default function ReviewStep(props) {
+  const { ui } = props;
+  // existing useState/useMemo declarations here
 
-function AppShell({ children }) {
+  // Safe JSON utilities (fallbacks if not provided by parent)
+  function handleCopyJson() {
+    try {
+      const text = JSON.stringify(ui, null, 2);
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      // optional: toast/alert removed to avoid blocking UI
+    } catch (e) { console.error('Copy JSON failed:', e); }
+  }
+  function handleDownloadJson() {
+    try {
+      const blob = new Blob([JSON.stringify(ui, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ui-payload.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+    } catch (e) { console.error('Download JSON failed:', e); }
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <Link
-            to="/"
-            onClick={(e) => {
-              if (window.location.pathname === "/") {
-                e.preventDefault();
-                window.scrollTo({ top: 0, behavior: "smooth" });
-                // Dispatch event to return to first step without clearing answers
-                window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
-              }
-            }}
-            className="font-semibold tracking-tight cursor-pointer select-none"
-            title="Start a new interview"
-          >
-            SceneMe
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
-            }}
-            className="text-sm px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
-            title="Go to Review step"
-          >
-            Review
-          </button>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+    // existing JSX here
+    <div>
+      {/* existing content */}
     </div>
   );
 }
 
-export default function App() {
+
+// src/interview/InterviewPage.jsx
+import React, { useState, useEffect, useMemo } from "react";
+import ReviewStep from "./steps/ReviewStep.jsx";
+// other imports
+
+export default function InterviewPage() {
+  const steps = useMemo(() => [
+    // your steps here
+  ], []);
+
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    function onGoFirstStep() {
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+      setStepIndex(0);
+    }
+    window.addEventListener("interview:goFirstStep", onGoFirstStep);
+    return () => window.removeEventListener("interview:goFirstStep", onGoFirstStep);
+  }, []);
+
+  useEffect(() => {
+    function onGoReview() {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+      const last = steps.length - 1;
+      setStepIndex((idx) => (last >= 0 ? last : idx));
+    }
+    window.addEventListener('interview:goReviewStep', onGoReview);
+    return () => window.removeEventListener('interview:goReviewStep', onGoReview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<InterviewPage />} />
-        <Route path="*" element={<InterviewPage />} />
-      </Routes>
-    </AppShell>
+    // existing JSX here
+    <div>
+      {/* your component content */}
+    </div>
   );
 }
