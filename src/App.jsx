@@ -11,7 +11,25 @@ function AppShell({ children }) {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
-          <Link to="/" className="font-semibold tracking-tight">
+          <Link
+            to="/"
+            onClick={(e) => {
+              // Always reset interview state when clicking the brand
+              try {
+                window.localStorage.removeItem("interview_answers_v1");
+                window.localStorage.removeItem("interview_step_v1");
+              } catch {}
+              // If we're already on the same route, force a soft reload to remount
+              if (window.location.pathname === "/") {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                // small timeout to allow scroll before reload
+                setTimeout(() => window.location.reload(), 50);
+              }
+            }}
+            className="font-semibold tracking-tight cursor-pointer select-none"
+            title="Start a new interview"
+          >
             SceneMe
           </Link>
           <div className="ml-auto flex items-center gap-3">
