@@ -154,6 +154,12 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       if (jid && !jobId) {
         setJobId(jid);
         setStatus('QUEUED / PROCESSING');
+        try {
+          if (sessionStorage.getItem('just_submitted') === '1') {
+            setShowBanner(true);
+            sessionStorage.removeItem('just_submitted');
+          }
+        } catch {}
         const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
         if (stopRef.current) { stopRef.current(); stopRef.current = null; }
         stopRef.current = startAutoPoll({
@@ -189,6 +195,12 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         if (jid) {
           setJobId(jid);
           setStatus('QUEUED / PROCESSING');
+          try {
+            if (sessionStorage.getItem('just_submitted') === '1') {
+              setShowBanner(true);
+              sessionStorage.removeItem('just_submitted');
+            }
+          } catch {}
           const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
           if (stopRef.current) { stopRef.current(); stopRef.current = null; }
           stopRef.current = startAutoPoll({
