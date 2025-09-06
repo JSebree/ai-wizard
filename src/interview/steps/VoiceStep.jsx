@@ -1,296 +1,205 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+// src/interview/steps/VoiceStep.jsx
+import React from "react";
 
-// VoiceStep — loads voices from /public/voices.json and renders a polished dropdown
-// with search, optional manual ID fallback, and a working audio preview.
-// No external libs.
-
-const VOICES_CACHE_KEY = 'voices_cache_v1';
-const VOICE_SRC_URL = '/voices.json'; // served from public/voices.json
-
-// --- helpers ---------------------------------------------------------------
-const normalize = (s) => (s || '').toLowerCase();
-const GENDER_TOKENS = [
-  { re: /\bnon[-\s]?binary\b|\bnb\b|\benby\b/gi, out: 'nonbinary' },
-  { re: /\bfem(ale)?\b|\bfemme\b/gi, out: 'female' },
-  { re: /\bmasc(uline)?\b|\bmale\b/gi, out: 'male' },
-];
-
-function extractGenderFromVoiceName(name) {
-  if (!name) return null;
-  const bracketMatch = name.match(/[\[(|\-·–—]\s*(male|female|non\s*binary|nonbinary|masc(?:uline)?|fem(?:ale)?|femme)\s*[\])|\-·–—]?/i);
-  if (bracketMatch && bracketMatch[1]) {
-    const raw = normalize(bracketMatch[1]).replace(/\s+/g, '');
-    if (raw.startsWith('non') && raw.includes('binary')) return 'nonbinary';
-    if (raw.startsWith('fem') || raw === 'femme') return 'female';
-    if (raw.startsWith('masc') || raw === 'male') return 'male';
-  }
-  for (const { re, out } of GENDER_TOKENS) {
-    if (re.test(name)) return out;
-  }
-  return null;
-}
-
+// Normalize a voice record from voices.json (or any shape)
 function normalizeVoice(v) {
   return {
-    id: v?.id || v?.tts_id || v?.name || '',
-    name: v?.name || v?.label || v?.displayName || v?.tts_id || 'Untitled',
-    // accept several common preview keys
+    id: v?.tts_id || v?.uuid || v?.id || v?.name || "",
+    name: v?.name || v?.label || v?.displayName || v?.tts_id || "Untitled",
+    // Prefer your Supabase/DigitalOcean field
     previewUrl:
-      v?.previewUrl ||
       v?.audio_url ||
       v?.preview_url ||
-      v?.preview ||
+      v?.previewUrl ||
       v?.sample ||
       v?.demo ||
       v?.url ||
       v?.audio ||
       null,
+    _raw: v,
   };
 }
 
-export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
-  const [selectedId, setSelectedId] = useState(value || '');
-  const [manualId, setManualId] = useState(value || '');
-  const [inferred, setInferred] = useState(null);
+export default function VoiceStep({ value, onChange, className = "" }) {
+  const [voices, setVoices] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
 
-  const [fallbackVoices, setFallbackVoices] = useState([]);
-  const [loadingVoices, setLoadingVoices] = useState(false);
-  const [voicesError, setVoicesError] = useState(null);
+  // Selected voice id
+  const [selectedId, setSelectedId] = React.useState(() => {
+    // Seed from props or localStorage
+    return (
+      value?.voiceId ||
+      value?.voice_id ||
+      value?.voice?.id ||
+      window.localStorage.getItem("wizard.voiceId") ||
+      ""
+    );
+  });
 
-  const [query, setQuery] = useState('');
-  const audioRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = React.useRef(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
 
-  useEffect(() => {
-    setSelectedId(value || '');
-    setManualId(value || '');
-  }, [value]);
-
-  // Load voices from cache, then fetch /voices.json, then cache
-  useEffect(() => {
-    let cancelled = false;
-
-    const safeGetCache = () => {
-      try { return localStorage.getItem(VOICES_CACHE_KEY); } catch { return null; }
-    };
-    const safeSetCache = (list) => {
-      try { localStorage.setItem(VOICES_CACHE_KEY, JSON.stringify(list)); } catch {}
-    };
-
-    const accept = (list) => {
-      if (Array.isArray(list) && list.length > 0) {
-        const normalized = list.map(normalizeVoice).filter(v => v.id && v.name);
-        if (normalized.length > 0) {
-          setFallbackVoices(normalized);
-          safeSetCache(normalized);
-          return true;
-        }
-      }
-      return false;
-    };
-
-    const load = async () => {
+  // Load voices from /voices.json (no-store to avoid stale cache)
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
       try {
-        setVoicesError(null);
-        setLoadingVoices(true);
+        setLoading(true);
+        setError(null);
+        const res = await fetch("/voices.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed to load voices.json (${res.status})`);
+        const arr = await res.json();
 
-        // 1) cached
-        const cached = safeGetCache();
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (!cancelled) accept(parsed);
-          } catch {}
+        // Normalize → de-dupe by id → sort by name
+        const normalized = (Array.isArray(arr) ? arr : []).map(normalizeVoice);
+        const seen = new Set();
+        const deduped = [];
+        for (const v of normalized) {
+          if (!v.id) continue;
+          if (!seen.has(v.id)) {
+            seen.add(v.id);
+            deduped.push(v);
+          }
         }
-        // 2) fetch fresh
-        const res = await fetch(VOICE_SRC_URL, { cache: 'no-cache' });
-        if (!res.ok) throw new Error(`Failed to fetch voices.json (${res.status})`);
-        const data = await res.json();
-        if (!cancelled) accept(data);
+        deduped.sort((a, b) => a.name.localeCompare(b.name));
+
+        if (alive) setVoices(deduped);
       } catch (e) {
-        if (!cancelled) setVoicesError(e?.message || 'Failed to load voices.');
+        if (alive) setError(e?.message || "Failed to load voices.");
       } finally {
-        if (!cancelled) setLoadingVoices(false);
+        if (alive) setLoading(false);
       }
+    })();
+    return () => {
+      alive = false;
     };
+  }, []);
 
-    // If parent passed voices, prefer those; else load
-    if (!Array.isArray(voices) || voices.length === 0) load();
-    else setFallbackVoices([]);
+  // Keep selectedId in sync with external value changes
+  React.useEffect(() => {
+    if (!value) return;
+    const incoming =
+      value.voiceId || value.voice_id || value.voice?.id || selectedId;
+    if (incoming && incoming !== selectedId) {
+      setSelectedId(incoming);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.voiceId, value?.voice_id, value?.voice?.id]);
 
-    return () => { cancelled = true; };
-  }, [voices]);
-
-  const availableVoices = useMemo(() => {
-    if (Array.isArray(voices) && voices.length > 0) return voices.map(normalizeVoice);
-    return fallbackVoices;
-  }, [voices, fallbackVoices]);
-
-  const filteredVoices = useMemo(() => {
-    const q = normalize(query);
-    if (!q) return availableVoices;
-    return (availableVoices || []).filter(v => normalize(v.name).includes(q));
-  }, [availableVoices, query]);
-
-  const selectedVoice = useMemo(
-    () => (availableVoices || []).find(v => v.id === selectedId) || null,
-    [availableVoices, selectedId]
+  const selectedVoice = React.useMemo(
+    () => voices.find((v) => v.id === selectedId) || null,
+    [voices, selectedId]
   );
 
-  // Update inferred gender when selection changes
-  useEffect(() => {
-    if (selectedVoice) {
-      setInferred(extractGenderFromVoiceName(selectedVoice.name));
-      // reset preview state
-      if (audioRef.current) {
-        try { audioRef.current.pause(); } catch {}
-        try { audioRef.current.currentTime = 0; } catch {}
-        setIsPlaying(false);
-      }
+  // Persist selection
+  React.useEffect(() => {
+    if (selectedId) {
+      window.localStorage.setItem("wizard.voiceId", selectedId);
     }
-  }, [selectedVoice]);
+  }, [selectedId]);
 
-  const canNext = Boolean(selectedId || manualId);
+  // Notify parent when selection changes
+  const emitChange = React.useCallback(
+    (voice) => {
+      if (!onChange) return;
+      try {
+        onChange({
+          voiceId: voice?.id || "",
+          voice_id: voice?.id || "",
+          voice_name: voice?.name || "",
+          voice: voice?._raw || voice || null,
+        });
+      } catch {
+        // no-op
+      }
+    },
+    [onChange]
+  );
 
-  const handleNext = () => {
-    const id = selectedId || manualId || '';
-    if (!id) return;
-    onNext?.();
+  const handleSelect = (e) => {
+    const id = e.target.value;
+    setSelectedId(id);
+    const voice = voices.find((v) => v.id === id) || null;
+    emitChange(voice);
+    // Stop any ongoing preview when switching
+    stopPreview();
   };
 
-  const applySelection = (id) => {
-    setSelectedId(id);
-    setManualId(id);
-    const v = (availableVoices || []).find(vv => vv.id === id) || null;
-    if (v) {
-      const gender = extractGenderFromVoiceName(v.name);
-      setInferred(gender);
-      onChange?.({ voiceId: v.id, characterGender: gender, voiceLabel: v.name });
-    } else {
-      onChange?.({ voiceId: id || null, characterGender: null });
+  const playPreview = async () => {
+    const url = selectedVoice?.previewUrl;
+    if (!url || !audioRef.current) return;
+    try {
+      audioRef.current.src = url;
+      await audioRef.current.play();
+      setIsPlaying(true);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("Preview failed:", err);
     }
+  };
+
+  const stopPreview = () => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setIsPlaying(false);
   };
 
   return (
-    <div className="step">
-      <h2 className="step-title">Pick your character or narrator’s voice.</h2>
-
-      <div className="muted mb-2">
-        {loadingVoices ? 'Loading voices…' : (
-          <>
-            Voices available: {Array.isArray(availableVoices) ? availableVoices.length : 0}
-            {voicesError ? <span className="text-error"> – {voicesError}</span> : null}
-            {(!availableVoices || availableVoices.length === 0) && (
-              <button
-                type="button"
-                className="btn btn-xs ml-2"
-                onClick={() => {
-                  try { localStorage.removeItem(VOICES_CACHE_KEY); } catch {}
-                  window.location.reload();
-                }}
-              >Reload</button>
-            )}
-          </>
-        )}
+    <div className={`w-full ${className}`}>
+      {/* Title row */}
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-medium text-slate-200">Choose a voice</h3>
+        {loading ? (
+          <span className="text-xs text-slate-400">Loading…</span>
+        ) : error ? (
+          <span className="text-xs text-rose-400">{error}</span>
+        ) : null}
       </div>
 
-      {/* Search + Select */}
-      <label htmlFor="voiceSelect" className="block text-sm font-medium mb-1">
-        Pick your character or narrator’s voice.
-      </label>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <input
-          type="text"
-          className="input flex-1"
-          placeholder="Search voices…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search voices"
-        />
+      {/* Dropdown */}
+      <div className="flex items-center gap-2">
         <select
-          id="voiceSelect"
-          className="input w-full sm:w-1/2 rounded-md border border-slate-300 bg-white"
-          style={{ WebkitAppearance: 'menulist', appearance: 'menulist' }}
           value={selectedId}
-          disabled={!filteredVoices || filteredVoices.length === 0}
-          onChange={(e) => applySelection(e.target.value)}
-          aria-label="Select a voice from list"
+          onChange={handleSelect}
+          className="w-full rounded-md border border-slate-700 bg-slate-800/70 px-3 py-2 text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
         >
-          <option value="" disabled>
-            {filteredVoices && filteredVoices.length ? `Choose a voice… (${filteredVoices.length})` : 'No voices match filter'}
-          </option>
-          {(filteredVoices || []).map(v => (
+          <option value="">Select a voice…</option>
+          {voices.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}
             </option>
           ))}
         </select>
+
+        {/* Preview button */}
+        <button
+          type="button"
+          onClick={isPlaying ? stopPreview : playPreview}
+          disabled={!selectedVoice?.previewUrl}
+          title={selectedVoice?.previewUrl ? "Preview voice" : "No preview"}
+          className={`shrink-0 rounded-md px-3 py-2 text-sm font-medium ${
+            selectedVoice?.previewUrl
+              ? isPlaying
+                ? "bg-rose-600 text-white hover:bg-rose-500"
+                : "bg-indigo-600 text-white hover:bg-indigo-500"
+              : "bg-slate-700 text-slate-400 cursor-not-allowed"
+          }`}
+        >
+          {isPlaying ? "Stop" : "Preview"}
+        </button>
       </div>
 
-      <details className="mt-2">
-        <summary className="cursor-pointer text-sm muted">
-          Can’t find the voice in the list? Paste a specific ID
-        </summary>
-        <input
-          type="text"
-          className="input mt-2"
-          placeholder="e.g., fe3b2cea-969a-4b5d-bc90-fde8578f1dd5"
-          value={manualId}
-          onChange={(e) => applySelection(e.target.value)}
-          aria-label="Paste a specific voice ID"
-        />
-      </details>
+      {/* Hidden audio element */}
+      <audio ref={audioRef} preload="none" onEnded={() => setIsPlaying(false)} />
 
-      {inferred ? (
-        <div className="muted mt-2">Inference preview: {inferred}</div>
+      {/* Optional tiny helper row */}
+      {!selectedVoice?.previewUrl && selectedId ? (
+        <p className="mt-2 text-xs text-slate-400">
+          This voice doesn’t have a preview URL.
+        </p>
       ) : null}
-
-      {/* Preview Controls */}
-      <div className="voice-preview mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        {selectedVoice?.previewUrl ? (
-          <>
-            <audio
-              ref={audioRef}
-              src={selectedVoice.previewUrl ? `${selectedVoice.previewUrl}${selectedVoice.previewUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : ''}
-              preload="metadata"
-              controls
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
-            />
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => {
-                const el = audioRef.current;
-                if (!el) return;
-                if (isPlaying) el.pause();
-                else {
-                  try { el.currentTime = 0; } catch {}
-                  el.play();
-                }
-              }}
-            >
-              {isPlaying ? 'Pause preview' : 'Preview'}
-            </button>
-            <span className="muted text-xs">Preview: {selectedVoice.name}</span>
-          </>
-        ) : (
-          <>
-            <button type="button" className="btn btn-sm" disabled>Preview</button>
-            <span className="muted text-xs">No preview available</span>
-          </>
-        )}
-      </div>
-
-      <div className="nav-row">
-        <button type="button" className="btn btn-secondary" onClick={onBack}>
-          Back
-        </button>
-        <button type="button" className="btn btn-primary" onClick={handleNext} disabled={!canNext}>
-          Next
-        </button>
-      </div>
     </div>
   );
 }
