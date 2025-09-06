@@ -42,7 +42,7 @@ function startAutoPoll({ statusUrl, onUpdate, onDone, onError }) {
 
 // Defaults match current prod test endpoints; can be overridden at runtime via window.N8N_WEBHOOK_URL
 const N8N_BASE = 'https://n8n.simplifies.click';
-const WEBHOOK_INTAKE_DEFAULT = `${N8N_BASE}/webhook-test/sceneme`;
+const WEBHOOK_INTAKE_DEFAULT = `${N8N_BASE}/webhook/sceneme`;
 const STATUS_GET = `${N8N_BASE}/webhook/status`;
 
 /**
