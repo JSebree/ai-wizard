@@ -578,8 +578,6 @@ export default function InterviewPage({ onComplete }) {
           onSubmit={() => {
             if (onComplete) {
               onComplete({ ui: uiPayload });
-            } else {
-              setShowPreview(true);
             }
           }}
           onEditStep={(editStepKey) => {
@@ -598,8 +596,6 @@ export default function InterviewPage({ onComplete }) {
   function submitNow() {
     if (onComplete) {
       onComplete({ ui: uiPayload });
-    } else {
-      setShowPreview(true);
     }
   }
 
@@ -666,7 +662,6 @@ export default function InterviewPage({ onComplete }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const [showPreview, setShowPreview] = useState(false);
 
   // ------------------------------ render ---------------------------------
 
@@ -689,16 +684,6 @@ export default function InterviewPage({ onComplete }) {
             ← Back
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {stepIndex === total - 1 && (
-              <>
-                <button type="button" onClick={copyJson} className="btn">
-                  Copy JSON
-                </button>
-                <button type="button" onClick={downloadJson} className="btn">
-                  Download JSON
-                </button>
-              </>
-            )}
             <button
               type="button"
               onClick={stepIndex === total - 1 ? submitNow : handleNext}
@@ -709,18 +694,6 @@ export default function InterviewPage({ onComplete }) {
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Live payload preview */}
-      <div style={{ marginTop: 28 }}>
-        <details open={showPreview}>
-          <summary style={{ cursor: "pointer", fontWeight: 600, marginBottom: 8 }}>
-            {showPreview ? "Submission Preview" : "Open Preview"}
-          </summary>
-          <pre style={{ background: "#0B1220", color: "#DAE1F5", padding: 16, borderRadius: 8, overflowX: "auto" }}>
-{JSON.stringify({ ui: uiPayload }, null, 2)}
-          </pre>
-        </details>
       </div>
     </div>
   );
