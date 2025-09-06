@@ -112,6 +112,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       if (!jid) return;
       setJobId(jid);
       setStatus('QUEUED / PROCESSING');
+      setShowBanner(true);
       try {
         if (sessionStorage.getItem('just_submitted') === '1') {
           setShowBanner(true);
