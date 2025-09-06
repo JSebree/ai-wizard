@@ -90,7 +90,19 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       if (accept(cached)) return;
     } catch {}
 
-    // 2) Try conventional endpoint if the app provides one
+    // 2) NEW: Try static file at /voices.json first
+    const tryStaticVoices = async () => {
+      try {
+        const res = await fetch('/voices.json', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (accept(data)) return true;
+        }
+      } catch {}
+      return false;
+    };
+
+    // 3) Try conventional endpoint if the app provides one
     const tryApiVoices = async () => {
       try {
         const res = await fetch('/api/voices', { method: 'GET' });
@@ -102,7 +114,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
       return false;
     };
 
-    // 3) Try Supabase REST if env is present (no client SDK required)
+    // 4) Try Supabase REST if env is present (no client SDK required)
     // Expose these through Vite env (build-time): VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
     const trySupabaseDirect = async () => {
       const url = import.meta.env?.VITE_SUPABASE_URL;
@@ -130,6 +142,9 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
     (async () => {
       setLoadingVoices(true);
       setVoicesError(null);
+
+      const okFromStatic = await tryStaticVoices();
+      if (okFromStatic) { setLoadingVoices(false); return; }
 
       const okFromApi = await tryApiVoices();
       if (okFromApi) { setLoadingVoices(false); return; }
@@ -193,15 +208,25 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                   setLoadingVoices(true);
                   setVoicesError(null);
                   try {
-                    // Try /api/voices first
+                    // Try /voices.json first
                     let ok = false;
                     try {
-                      const res = await fetch('/api/voices');
-                      if (res.ok) {
-                        const data = await res.json();
-                        ok = accept(data);
+                      const resStatic = await fetch('/voices.json', { cache: 'no-store' });
+                      if (resStatic.ok) {
+                        ok = accept(await resStatic.json());
                       }
                     } catch {}
+
+                    // Then /api/voices
+                    if (!ok) {
+                      try {
+                        const res = await fetch('/api/voices');
+                        if (res.ok) {
+                          const data = await res.json();
+                          ok = accept(data);
+                        }
+                      } catch {}
+                    }
 
                     // Then Supabase REST via env, if necessary
                     if (!ok) {
@@ -220,7 +245,7 @@ export default function VoiceStep({ voices, value, onChange, onBack, onNext }) {
                       }
                     }
 
-                    if (!ok) setVoicesError('Still no voices. Configure /api/voices or VITE_SUPABASE_* env.');
+                    if (!ok) setVoicesError('Still no voices. Add /public/voices.json or configure /api/voices / VITE_SUPABASE_*.');
                   } catch {
                     setVoicesError('Failed to load voices');
                   } finally {
