@@ -208,7 +208,14 @@ export default function InterviewPage({ onComplete }) {
 
   // Keep characterGender in answers whenever the voice changes
   useEffect(() => {
-    const g = inferGenderFromVoiceName(answers.voiceLabel || answers.voiceId);
+    const labelFromObject =
+      (answers.voiceId && typeof answers.voiceId === "object"
+        ? (answers.voiceId.voice_name || answers.voiceId.name || "")
+        : "");
+
+    const labelForGender = answers.voiceLabel || labelFromObject || String(answers.voiceId || "");
+    const g = inferGenderFromVoiceName(labelForGender);
+
     setAnswers((s) => (s.characterGender === g ? s : { ...s, characterGender: g }));
   }, [answers.voiceId, answers.voiceLabel]);
 
@@ -226,6 +233,11 @@ export default function InterviewPage({ onComplete }) {
       voiceId, characterName, title,
     } = answers;
 
+    const normalizedVoiceId =
+      typeof voiceId === "object"
+        ? (voiceId.id || voiceId.voice_id || voiceId.tts_id || "")
+        : voiceId;
+
     return {
       scene: req(scene) ? scene : undefined,
       driver: req(driver) ? driver : undefined,
@@ -239,7 +251,7 @@ export default function InterviewPage({ onComplete }) {
       wantsCaptions: typeof wantsCaptions === "boolean" ? wantsCaptions : undefined,
       durationSec: Number(durationSec) || 0,
       referenceText: req(referenceText) ? referenceText : undefined,
-      voiceId: req(voiceId) ? voiceId : undefined,
+      voiceId: req(normalizedVoiceId) ? normalizedVoiceId : undefined,
       characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
