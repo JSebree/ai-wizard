@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 
 /**
@@ -53,10 +51,13 @@ export default function MusicStep(props) {
   // derive initial state from incoming ui
   const initialWants = typeof ui?.wantsMusic === "boolean" ? ui.wantsMusic : false;
   const initialDesc = typeof ui?.musicDesc === "string" ? ui.musicDesc : "";
-
   const [wantsMusic, setWantsMusic] = useState(initialWants);
   const [musicDesc, setMusicDesc] = useState(initialDesc);
   const [touched, setTouched] = useState(false);
+
+  // NEW: include vocals (only relevant when wantsMusic === true)
+  const initialVocals = typeof ui?.musicVocals === "boolean" ? ui.musicVocals : false;
+  const [musicVocals, setMusicVocals] = useState(initialVocals);
 
   // keep parent state in sync as user changes local state
   useEffect(() => {
@@ -65,13 +66,19 @@ export default function MusicStep(props) {
       base.wantsMusic = wantsMusic;
       // Clear desc if user selects "No"
       base.musicDesc = wantsMusic ? musicDesc : "";
+      // Only persist vocals toggle when music is enabled
+      base.musicVocals = wantsMusic ? Boolean(musicVocals) : null;
       return base;
     });
-  }, [wantsMusic, musicDesc, setUi]);
+  }, [wantsMusic, musicDesc, musicVocals, setUi]);
 
   const onSelect = useCallback((val) => {
     setTouched(true);
     setWantsMusic(val);
+    if (!val) {
+      // Reset vocals when music disabled
+      setMusicVocals(false);
+    }
   }, []);
 
   const onNext = useCallback(() => {
@@ -149,6 +156,37 @@ export default function MusicStep(props) {
           The more detail you provide, the better your results will match your intentions.
         </div>
       </div>
+
+      {wantsMusic && (
+        <div className="field-group">
+          <fieldset className="radio-group" aria-label="Include vocals">
+            <legend className="field-label">Include vocals?</legend>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="musicVocals"
+                value="yes"
+                checked={musicVocals === true}
+                onChange={() => setMusicVocals(true)}
+              />
+              <span>Yes, allow vocals in the music</span>
+            </label>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="musicVocals"
+                value="no"
+                checked={musicVocals === false}
+                onChange={() => setMusicVocals(false)}
+              />
+              <span>No vocals (instrumental only)</span>
+            </label>
+          </fieldset>
+          <div className="field-hint">
+            <span className="muted">Vocals can add energy; instrumental beds keep narration clear.</span>
+          </div>
+        </div>
+      )}
 
       <footer className="step-actions">
         <button type="button" className="btn secondary" onClick={back}>
