@@ -254,7 +254,7 @@ export default function InterviewPage({ onComplete }) {
   const N8N_WEBHOOK_URL =
     (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
     (typeof window !== "undefined" ? window.N8N_WEBHOOK_URL : undefined) ||
-    "https://n8n.simplifies.click/webhook-test/sceneme" ||
+    "https://n8n.simplifies.click/webhook/sceneme" ||
     "/api/interview"; // final local dev/proxy fallback
 
   const N8N_AUTH_TOKEN =
