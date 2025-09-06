@@ -226,6 +226,18 @@ export default function InterviewPage({ onComplete }) {
     writeJSON(LS_KEY_STEP, stepIndex);
   }, [stepIndex]);
 
+  // Listen for app-level request to jump to first step without clearing answers
+  useEffect(() => {
+    function handleGoFirstStep() {
+      setStepIndex(0);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    window.addEventListener("interview:goFirstStep", handleGoFirstStep);
+    return () => {
+      window.removeEventListener("interview:goFirstStep", handleGoFirstStep);
+    };
+  }, []);
+
   // Keep characterGender in answers whenever the voice changes
   useEffect(() => {
     const labelFromObject =

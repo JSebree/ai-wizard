@@ -14,12 +14,11 @@ function AppShell({ children }) {
           <Link
             to="/"
             onClick={(e) => {
-              // If we're already on the same route, force a soft reload to remount
               if (window.location.pathname === "/") {
                 e.preventDefault();
                 window.scrollTo({ top: 0, behavior: "smooth" });
-                // small timeout to allow scroll before reload
-                setTimeout(() => window.location.reload(), 50);
+                // Dispatch event to return to first step without clearing answers
+                window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
               }
             }}
             className="font-semibold tracking-tight cursor-pointer select-none"
