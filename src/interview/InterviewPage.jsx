@@ -2,6 +2,27 @@ import React, { useMemo, useState, useEffect } from "react";
 import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
 import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
+// ---- Global Reset Helper (legacy-compatible) ----
+export function resetWizardFormGlobal() {
+  try {
+    // Current wizard keys
+    localStorage.removeItem("interview_answers_v1");
+    localStorage.removeItem("interview_step_v1");
+    // Legacy/compat keys
+    localStorage.removeItem("ai-wizard-ui");
+    localStorage.removeItem("n8nJobState");
+    localStorage.removeItem("ai-wizard-activeStep");
+    localStorage.removeItem("ai-wizard-state");
+    localStorage.removeItem("n8nNoCors");
+    localStorage.removeItem("last_job_id");
+  } catch {}
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("jobId");
+    window.history.replaceState({}, "", url);
+  } catch {}
+  window.location.reload();
+}
 /**
  * InterviewPage.jsx
  *
@@ -199,6 +220,7 @@ function NavBar({ stepIndex, total, onReset }) {
       <style>{`
         .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #CBD5E1; background: #fff; cursor: pointer; }
         .btn[disabled] { opacity: .5; cursor: not-allowed; }
+        .btn-primary[disabled] { opacity: .6; }
         .btn-primary { background: #111827; color: white; border-color: #111827; }
         .btn-secondary { background: #fff; color: #111827; }
         textarea { width: 100%; min-height: 120px; padding: 10px; border-radius: 8px; border: 1px solid #CBD5E1; }
@@ -226,6 +248,116 @@ export default function InterviewPage({ onComplete }) {
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
+
+  const N8N_WEBHOOK_URL =
+    (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
+    (typeof window !== "undefined" ? window.N8N_WEBHOOK_URL : undefined) ||
+    "/api/interview"; // local dev/proxy fallback
+
+  const N8N_AUTH_TOKEN =
+    (typeof window !== "undefined" ? window.N8N_TOKEN : undefined) ||
+    (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_TOKEN : undefined) ||
+    undefined;
+
+  // Legacy toggle to bypass CORS preflight via proxy/worker if needed
+  const n8nNoCors = (() => {
+    try { return localStorage.getItem("n8nNoCors") === "1"; } catch { return false; }
+  })();
+
+  // Supabase (read-only) envs
+  const SUPABASE_URL =
+    (typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_URL : undefined) ||
+    (typeof window !== "undefined" ? window.SUPABASE_URL : undefined) || "";
+
+  const SUPABASE_ANON =
+    (typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_ANON_KEY : undefined) ||
+    (typeof window !== "undefined" ? window.SUPABASE_ANON_KEY : undefined) || "";
+
+  // Voices cache config (legacy-ish)
+  const VOICES_CACHE_KEY = "voices_cache_v1";
+  const VOICES_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+  // Voices cache: local state + helpers (legacy-parity)
+  const [voices, setVoices] = useState(() => {
+    try {
+      const raw = localStorage.getItem(VOICES_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.data || !parsed.ts) return null;
+      if (Date.now() - parsed.ts > VOICES_CACHE_TTL_MS) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  });
+
+  function cacheVoices(list) {
+    try {
+      localStorage.setItem(
+        VOICES_CACHE_KEY,
+        JSON.stringify({ ts: Date.now(), data: Array.isArray(list) ? list : [] })
+      );
+    } catch {}
+  }
+
+  function normalizeVoices(list = []) {
+    return list
+      .map((v) => {
+        const id = v.id ?? v.voice_id ?? v.tts_id ?? "";
+        const name = v.voice_name ?? v.name ?? v.label ?? "";
+        const audio_url = v.audio_url ?? v.preview ?? v.sample ?? "";
+        return { id, name, audio_url };
+      })
+      .filter((v) => v.id && v.name);
+  }
+
+  async function loadVoices() {
+    // 1) Try static file
+    try {
+      const res = await fetch("/voices.json", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        const list = normalizeVoices(Array.isArray(json) ? json : json?.voices || []);
+        if (list.length) {
+          cacheVoices(list);
+          setVoices(list);
+          return list;
+        }
+      }
+    } catch {}
+
+    // 2) Fallback to Supabase REST (read-only)
+    if (!SUPABASE_URL || !SUPABASE_ANON) return null;
+    try {
+      const url = new URL("/rest/v1/voices_public", SUPABASE_URL);
+      url.searchParams.set("select", "id,voice_name,name,audio_url,active");
+      url.searchParams.set("active", "eq.true");
+      const res = await fetch(url.toString(), {
+        headers: {
+          apikey: SUPABASE_ANON,
+          Authorization: `Bearer ${SUPABASE_ANON}`,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        cache: "no-store",
+        mode: "cors",
+        credentials: "omit",
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        const list = normalizeVoices(rows);
+        if (list.length) {
+          cacheVoices(list);
+          setVoices(list);
+          return list;
+        }
+      }
+    } catch {}
+
+    return null;
+  }
+
   // Persist on change (refresh-proof)
   useEffect(() => {
     writeJSON(LS_KEY_ANS, answers);
@@ -245,6 +377,46 @@ export default function InterviewPage({ onComplete }) {
     return () => {
       window.removeEventListener("interview:goFirstStep", handleGoFirstStep);
     };
+  }, []);
+
+  // Load voices on mount and gently default to Emma if no voice is chosen
+  useEffect(() => {
+    let cancelled = false;
+
+    async function ensureVoices() {
+      if (!voices) {
+        const list = await loadVoices();
+        if (cancelled) return;
+
+        // If user hasn’t picked a voice yet, gently set Emma (or first entry)
+        if (list && (!answers.voiceId || String(answers.voiceId).trim() === "")) {
+          const emma = list.find((v) => /emma/i.test(v.name)) || list[0];
+          if (emma) {
+            setAnswers((s) => ({
+              ...s,
+              voiceId: emma.id,
+              voiceLabel: emma.name,
+            }));
+          }
+        }
+      } else {
+        // Voices restored from cache; also ensure default if needed
+        if (!answers.voiceId || String(answers.voiceId).trim() === "") {
+          const emma = voices.find((v) => /emma/i.test(v.name)) || voices[0];
+          if (emma) {
+            setAnswers((s) => ({
+              ...s,
+              voiceId: emma.id,
+              voiceLabel: emma.name,
+            }));
+          }
+        }
+      }
+    }
+
+    ensureVoices();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep characterGender in answers whenever the voice changes
@@ -692,8 +864,82 @@ export default function InterviewPage({ onComplete }) {
     if (onComplete) {
       onComplete({ ui: uiPayload });
     }
+
+    const payload = {
+      ui: uiPayload,
+      meta: {
+        source: "interview-wizard",
+        version: "v1",
+        ts: new Date().toISOString(),
+      },
+    };
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    };
+    if (N8N_AUTH_TOKEN) {
+      headers["Authorization"] = `Bearer ${N8N_AUTH_TOKEN}`;
+    }
+
+    setSubmitting(true);
+    setSubmitResult(null);
+
+    fetch(N8N_WEBHOOK_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      mode: n8nNoCors ? "no-cors" : "cors",
+      credentials: "omit",
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (n8nNoCors) {
+          alert("Submitted! Your request was handed to n8n (no-cors mode).");
+          window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
+          return;
+        }
+        const text = await res.text();
+        let json = null;
+        try { json = JSON.parse(text); } catch { /* plain text */ }
+
+        if (!res.ok) {
+          const message = (json && (json.error || json.message)) || text || "Request failed";
+          throw new Error(message);
+        }
+
+        const jobId = json?.jobId || json?.id || json?.data?.id;
+        if (jobId) {
+          setLastJobId(jobId);
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set("jobId", String(jobId));
+            window.history.replaceState({}, "", url);
+          } catch {}
+          alert(`Submitted! Job ID: ${jobId}`);
+        } else {
+          alert("Submitted! Your request was received.");
+        }
+
+        setSubmitResult(json || { ok: true });
+        snapshotJobState({ submittedAt: Date.now(), jobId: jobId || null });
+        window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
+      })
+      .catch((err) => {
+        console.error("Submit error:", err);
+        alert(`Submission failed: ${err.message || String(err)}`);
+      })
+      .finally(() => setSubmitting(false));
   }
 
+  // Legacy helpers for job state (parity with old app)
+  function setLastJobId(id) {
+    try { localStorage.setItem("last_job_id", String(id)); } catch {}
+  }
+  function snapshotJobState(obj) {
+    try { localStorage.setItem("n8nJobState", JSON.stringify(obj || {})); } catch {}
+  }
   // --------------------------- navigation --------------------------------
 
   // Helper to copy JSON to clipboard
@@ -747,14 +993,7 @@ export default function InterviewPage({ onComplete }) {
   }
 
   function resetAll() {
-    try {
-      localStorage.removeItem(LS_KEY_ANS);
-      localStorage.removeItem(LS_KEY_STEP);
-    } catch {}
-    const defaults = getDefaultAnswers();
-    setAnswers(defaults);
-    setStepIndex(0);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    resetWizardFormGlobal();
   }
 
 
@@ -782,10 +1021,11 @@ export default function InterviewPage({ onComplete }) {
             <button
               type="button"
               onClick={stepIndex === total - 1 ? submitNow : handleNext}
-              disabled={!step.valid()}
+              disabled={submitting || !step.valid()}
               className="btn btn-primary"
+              title={stepIndex === total - 1 ? "Send to n8n" : "Next step"}
             >
-              {stepIndex === total - 1 ? "Submit" : stepIndex === total - 2 ? "Review" : "Next →"}
+              {stepIndex === total - 1 ? (submitting ? "Submitting…" : "Submit") : (stepIndex === total - 2 ? "Review" : "Next →")}
             </button>
           </div>
         </div>
