@@ -73,7 +73,7 @@ function getDefaultAnswers() {
     // 12
     referenceText: "",
     // Advanced settings
-    advancedEnabled: false,
+    advancedEnabled: true,
     stylePreset: "Photorealistic",
     musicVolume10: 1,     // 1..10 -> 0.1..1.0
     voiceVolume10: 10,    // 1..10 -> 0.1..1.0
@@ -218,6 +218,9 @@ export default function InterviewPage({ onComplete }) {
   const [answers, setAnswers] = useState(() => {
     const defaults = getDefaultAnswers();
     const saved = readJSON(LS_KEY_ANS, null);
+    if (saved && saved.advancedEnabled === undefined) {
+      saved.advancedEnabled = true;
+  }
     return saved ? { ...defaults, ...saved } : defaults;
   });
 
