@@ -41,43 +41,52 @@ function writeJSON(key, value) {
 
 // ----------------------------- helpers ---------------------------------
 
-/** Extract gender from the voice display label.
- *  We are told every voice name embeds gender text somewhere inside the name.
- *  The matcher is careful not to depend on first-letter heuristics.
- */
+/** Extract gender from the voice display label. */
 function inferGenderFromVoiceName(label = "") {
-  const s = String(label).toLowerCase();
+  const s = String(label || "").toLowerCase().trim();
 
-  // direct tokens
-  const tokens = [
+  // direct tokens and synonyms
+  const direct = [
     "female",
     "male",
     "woman",
     "man",
     "nonbinary",
     "non-binary",
+    "gender neutral",
     "neutral",
     "masculine",
     "feminine",
   ];
-
-  for (const t of tokens) {
+  for (const t of direct) {
     if (s.includes(t)) {
-      // map synonyms to canonical
       if (t === "woman" || t === "feminine") return "female";
       if (t === "man" || t === "masculine") return "male";
+      if (t === "gender neutral" || t === "neutral") return "nonbinary";
       if (t === "non-binary") return "nonbinary";
-      return t;
+      return t; // "female" | "male" | "nonbinary"
     }
   }
 
-  // bracketed hints like "Ava [Female]" or "(Male)"
-  const bracket = s.match(/[\(\[\{]\s*(male|female|nonbinary|non-binary|neutral|man|woman|masculine|feminine)\s*[\)\]\}]/i);
-  if (bracket) {
-    return inferGenderFromVoiceName(bracket[1]);
+  // bracketed short codes like "(F)", "[M]", "{NB}"
+  const short = s.match(/[\(\[\{]\s*(f|m|nb|nonbinary|non-binary)\s*[\)\]\}]/i);
+  if (short) {
+    const code = short[1].toLowerCase();
+    if (code === "f") return "female";
+    if (code === "m") return "male";
+    return "nonbinary";
   }
 
-  // no match → leave undefined; upstream can decide a default
+  // trailing or leading short codes like "- F", "F -", " NB "
+  const edge = s.match(/(?:^|\s|-|\/)(f|m|nb)(?:\s|$)/i);
+  if (edge) {
+    const code = edge[1].toLowerCase();
+    if (code === "f") return "female";
+    if (code === "m") return "male";
+    return "nonbinary";
+  }
+
+  // no match → undefined; upstream can choose a default
   return undefined;
 }
 
@@ -161,6 +170,7 @@ export default function InterviewPage({ onComplete }) {
       // 3
       voiceId: "", // store the selection id/string; display text can be same
       voiceLabel: "", // optional: a human-friendly label including gender
+      characterGender: undefined, // <-- persist derived gender
       // 4
       characterName: "",
       // 5
@@ -187,7 +197,6 @@ export default function InterviewPage({ onComplete }) {
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
-
   // Persist on change (refresh-proof)
   useEffect(() => {
     writeJSON(LS_KEY_ANS, answers);
@@ -197,7 +206,13 @@ export default function InterviewPage({ onComplete }) {
     writeJSON(LS_KEY_STEP, stepIndex);
   }, [stepIndex]);
 
-  // Derived fields
+  // Keep characterGender in answers whenever the voice changes
+  useEffect(() => {
+    const g = inferGenderFromVoiceName(answers.voiceLabel || answers.voiceId);
+    setAnswers((s) => (s.characterGender === g ? s : { ...s, characterGender: g }));
+  }, [answers.voiceId, answers.voiceLabel]);
+
+  // Derived fields (kept for quick display if you want)
   const characterGender = useMemo(
     () => inferGenderFromVoiceName(answers.voiceLabel || answers.voiceId),
     [answers.voiceId, answers.voiceLabel]
@@ -225,11 +240,11 @@ export default function InterviewPage({ onComplete }) {
       durationSec: Number(durationSec) || 0,
       referenceText: req(referenceText) ? referenceText : undefined,
       voiceId: req(voiceId) ? voiceId : undefined,
-      characterGender: characterGender,
+      characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
     };
-  }, [answers, characterGender]);
+  }, [answers]);
 
   // --------------------------- Steps definition -------------------------
 
@@ -257,9 +272,14 @@ export default function InterviewPage({ onComplete }) {
             <RadioGroup
               name="driver"
               value={answers.driver}
-              onChange={(v) => setAnswers((s) => ({ ...s, driver: v, // reset dependent fields when switching
-                wantsCutaways: v === "character" ? s.wantsCutaways : undefined,
-                character: v === "character" ? s.character : "" }))}
+              onChange={(v) =>
+                setAnswers((s) => ({
+                  ...s,
+                  driver: v, // reset dependent fields when switching
+                  wantsCutaways: v === "character" ? s.wantsCutaways : undefined,
+                  character: v === "character" ? s.character : "",
+                }))
+              }
               options={[
                 { value: "character", label: "Character-driven" },
                 { value: "narrator", label: "Narrator-driven" },
@@ -273,8 +293,16 @@ export default function InterviewPage({ onComplete }) {
               <FieldRow label="Do you want cut-away shots?">
                 <RadioGroup
                   name="cutaways"
-                  value={answers.wantsCutaways === true ? "yes" : answers.wantsCutaways === false ? "no" : ""}
-                  onChange={(v) => setAnswers((s) => ({ ...s, wantsCutaways: v === "yes" }))}
+                  value={
+                    answers.wantsCutaways === true
+                      ? "yes"
+                      : answers.wantsCutaways === false
+                      ? "no"
+                      : ""
+                  }
+                  onChange={(v) =>
+                    setAnswers((s) => ({ ...s, wantsCutaways: v === "yes" }))
+                  }
                   options={[
                     { value: "yes", label: "Yes" },
                     { value: "no", label: "No" },
@@ -283,18 +311,26 @@ export default function InterviewPage({ onComplete }) {
                 />
               </FieldRow>
 
-              <FieldRow label="Please describe your character" hint="Look, outfit, demeanor, age, vibe, etc.">
+              <FieldRow
+                label="Please describe your character"
+                hint="Look, outfit, demeanor, age, vibe, etc."
+              >
                 <textarea
                   placeholder="e.g., Sarah, mid-30s, friendly travel host in casual linen, warm presence."
                   value={answers.character}
-                  onChange={(e) => setAnswers((s) => ({ ...s, character: e.target.value }))}
+                  onChange={(e) =>
+                    setAnswers((s) => ({ ...s, character: e.target.value }))
+                  }
                 />
               </FieldRow>
             </>
           )}
         </>
       ),
-      valid: () => req(answers.driver) && (answers.driver !== "character" || typeof answers.wantsCutaways === "boolean"),
+      valid: () =>
+        req(answers.driver) &&
+        (answers.driver !== "character" ||
+          typeof answers.wantsCutaways === "boolean"),
     },
     {
       key: "voiceId",
@@ -304,7 +340,11 @@ export default function InterviewPage({ onComplete }) {
           value={answers.voiceId}
           labelValue={answers.voiceLabel}
           onChange={(id, label) =>
-            setAnswers((s) => ({ ...s, voiceId: id, voiceLabel: label ?? s.voiceLabel }))
+            setAnswers((s) => ({
+              ...s,
+              voiceId: id,
+              voiceLabel: label ?? s.voiceLabel,
+            }))
           }
           onLabelChange={(label) =>
             setAnswers((s) => ({ ...s, voiceLabel: label }))
@@ -323,7 +363,9 @@ export default function InterviewPage({ onComplete }) {
             type="text"
             placeholder="e.g., Sarah"
             value={answers.characterName}
-            onChange={(e) => setAnswers((s) => ({ ...s, characterName: e.target.value }))}
+            onChange={(e) =>
+              setAnswers((s) => ({ ...s, characterName: e.target.value }))
+            }
           />
         </FieldRow>
       ),
@@ -365,7 +407,9 @@ export default function InterviewPage({ onComplete }) {
           <textarea
             placeholder="e.g., Prioritize variety and atmosphere. Avoid readable signage."
             value={answers.directorsNotes}
-            onChange={(e) => setAnswers((s) => ({ ...s, directorsNotes: e.target.value }))}
+            onChange={(e) =>
+              setAnswers((s) => ({ ...s, directorsNotes: e.target.value }))
+            }
           />
         </FieldRow>
       ),
@@ -379,8 +423,20 @@ export default function InterviewPage({ onComplete }) {
           <FieldRow label="Background music?">
             <RadioGroup
               name="wantsMusic"
-              value={answers.wantsMusic === true ? "yes" : answers.wantsMusic === false ? "no" : ""}
-              onChange={(v) => setAnswers((s) => ({ ...s, wantsMusic: v === "yes", musicDesc: v === "yes" ? s.musicDesc : "" }))}
+              value={
+                answers.wantsMusic === true
+                  ? "yes"
+                  : answers.wantsMusic === false
+                  ? "no"
+                  : ""
+              }
+              onChange={(v) =>
+                setAnswers((s) => ({
+                  ...s,
+                  wantsMusic: v === "yes",
+                  musicDesc: v === "yes" ? s.musicDesc : "",
+                }))
+              }
               options={[
                 { value: "yes", label: "Yes" },
                 { value: "no", label: "No" },
@@ -394,7 +450,9 @@ export default function InterviewPage({ onComplete }) {
               <textarea
                 placeholder="e.g., Warm Mediterranean acoustic with subtle strings and percussion."
                 value={answers.musicDesc}
-                onChange={(e) => setAnswers((s) => ({ ...s, musicDesc: e.target.value }))}
+                onChange={(e) =>
+                  setAnswers((s) => ({ ...s, musicDesc: e.target.value }))
+                }
               />
             </FieldRow>
           )}
@@ -409,8 +467,16 @@ export default function InterviewPage({ onComplete }) {
         <FieldRow label="Captions?">
           <RadioGroup
             name="wantsCaptions"
-            value={answers.wantsCaptions === true ? "yes" : answers.wantsCaptions === false ? "no" : ""}
-            onChange={(v) => setAnswers((s) => ({ ...s, wantsCaptions: v === "yes" }))}
+            value={
+              answers.wantsCaptions === true
+                ? "yes"
+                : answers.wantsCaptions === false
+                ? "no"
+                : ""
+            }
+            onChange={(v) =>
+              setAnswers((s) => ({ ...s, wantsCaptions: v === "yes" }))
+            }
             options={[
               { value: "yes", label: "Yes" },
               { value: "no", label: "No" },
@@ -431,7 +497,9 @@ export default function InterviewPage({ onComplete }) {
             min={3}
             step={1}
             value={answers.durationSec}
-            onChange={(e) => setAnswers((s) => ({ ...s, durationSec: Number(e.target.value) }))}
+            onChange={(e) =>
+              setAnswers((s) => ({ ...s, durationSec: Number(e.target.value) }))
+            }
           />
         </FieldRow>
       ),
@@ -460,7 +528,9 @@ export default function InterviewPage({ onComplete }) {
           <textarea
             placeholder="Paste any relevant text for style or guidance."
             value={answers.referenceText}
-            onChange={(e) => setAnswers((s) => ({ ...s, referenceText: e.target.value }))}
+            onChange={(e) =>
+              setAnswers((s) => ({ ...s, referenceText: e.target.value }))
+            }
           />
         </FieldRow>
       ),
