@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link } from "react-router-dom";
 import InterviewPage from "./interview/InterviewPage.jsx";
 
 function AppHeader() {
@@ -49,9 +49,5 @@ function AppShell() {
 }
 
 export default function App() {
-  return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
-  );
+  return <AppShell />;
 }
