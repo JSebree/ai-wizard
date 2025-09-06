@@ -150,7 +150,6 @@ export default function VoiceStep({ value, onChange, className = "" }) {
     <div className={`w-full ${className}`}>
       {/* Title row */}
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-200">Choose a voice</h3>
         {loading ? (
           <span className="text-xs text-slate-400">Loading…</span>
         ) : error ? (
