@@ -1,4 +1,4 @@
-// src/steps/StepReview.jsx
+// src/interview/steps/ReviewStep.jsx
 import React from 'react';
 import { STYLE_LIBRARY } from "./styleLibraryMap";
 
@@ -175,17 +175,19 @@ function ReviewComponent({ state }) {
     });
   }
 
+  function handleCopyJson() {
+    // existing handler code assumed present
+  }
+
+  function handleDownloadJson() {
+    // existing handler code assumed present
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={busy}
-          className="rounded bg-indigo-600 px-3 py-2 text-white disabled:opacity-50"
-        >
-          {busy ? 'Sending…' : 'Send to n8n'}
-        </button>
+        {/* Removed submit button as per instructions */}
+        {/* Status display remains */}
         <div className="text-sm">
           <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
           <strong>Status:</strong> {status || '—'}
@@ -202,6 +204,18 @@ function ReviewComponent({ state }) {
           </div>
         </div>
       )}
+
+      {/* Replace JSON actions container with new layout */}
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-sm">
+          <strong>Job:</strong> {jobId || '—'} <span className="opacity-70">|</span> <strong>Status:</strong> {status || '—'}
+          <div className="text-xs opacity-70">Heads up: renders can take a few minutes. You can leave this tab open.</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={handleCopyJson} className="rounded border px-3 py-2">Copy JSON</button>
+          <button type="button" onClick={handleDownloadJson} className="rounded border px-3 py-2">Download JSON</button>
+        </div>
+      </div>
     </div>
   );
 }

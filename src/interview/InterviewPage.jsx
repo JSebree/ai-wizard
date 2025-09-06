@@ -875,6 +875,57 @@ export default function InterviewPage({ onComplete }) {
   const total = steps.length;
   const step = steps[stepIndex];
 
+  // Submit state (for footer submit on Review step)
+  const [submitting, setSubmitting] = useState(false);
+
+  // Legacy-compatible submit handler (for Review step footer button)
+  async function submitNowLegacy() {
+    if (submitting) return;
+    setSubmitting(true);
+
+    // Build the payload (wrap under { ui } for intake; adjust here if your n8n expects a different shape)
+    const payload = { ui: uiPayload };
+
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (N8N_AUTH_TOKEN) headers['Authorization'] = `Bearer ${N8N_AUTH_TOKEN}`;
+
+      const res = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        credentials: 'omit',
+        mode: 'cors',
+      });
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        alert(`Submit failed (${res.status}): ${t}`);
+        setSubmitting(false);
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      const returnedJobId = data.jobId || data.jobID || data.id || '';
+
+      // Persist jobId for the Review step auto-poller
+      try { localStorage.setItem('last_job_id', String(returnedJobId || '')); } catch {}
+      try {
+        const url = new URL(window.location.href);
+        if (returnedJobId) url.searchParams.set('jobId', String(returnedJobId));
+        window.history.replaceState({}, '', url);
+      } catch {}
+
+      // Stay on Review step (we're already there); ensure top-of-page
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+    } catch (err) {
+      console.error(err);
+      alert('Network error while submitting.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   // --------------------------- navigation --------------------------------
 
   // Helper to copy JSON to clipboard
@@ -948,12 +999,23 @@ export default function InterviewPage({ onComplete }) {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
             ← Back
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {stepIndex === total - 1 ? null : (
+
+          {stepIndex === total - 1 ? (
+            <button
+              type="button"
+              onClick={submitNowLegacy}
+              disabled={submitting}
+              className="btn btn-primary"
+              title="Submit"
+            >
+              {submitting ? 'Submitting…' : 'Submit'}
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 type="button"
                 onClick={handleNext}
@@ -961,10 +1023,10 @@ export default function InterviewPage({ onComplete }) {
                 className="btn btn-primary"
                 title="Next step"
               >
-                {stepIndex === total - 2 ? "Review" : "Next →"}
+                {stepIndex === total - 2 ? 'Review' : 'Next →'}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
