@@ -49,7 +49,8 @@ const LS_KEY_STEP = "interview_step_v1";
 function readJSON(key, fallback) {
   try {
     const s = localStorage.getItem(key);
-    return s ? JSON.parse(s) : fallback;
+    if (!s) return fallback;
+    try { return JSON.parse(s); } catch { return s; }
   } catch {
     return fallback;
   }
@@ -117,6 +118,11 @@ function meetsMin(s, n) {
 /** Extract gender from the voice display label. */
 function inferGenderFromVoiceName(label = "") {
   const s = String(label || "").toLowerCase().trim();
+  // Normalize underscores/hyphens and detect obvious gender tokens
+  const norm = (" " + s.replace(/[_-]/g, " ") + " ").replace(/\s+/g, " ");
+  if (/(^|\s)(female|woman|feminine)(\s|$)/.test(norm)) return "female";
+  if (/(^|\s)(male|man|masculine)(\s|$)/.test(norm)) return "male";
+  if (/(^|\s)(nonbinary|non\s*binary|neutral)(\s|$)/.test(norm)) return "nonbinary";
 
   // direct tokens and synonyms
   const direct = [
@@ -468,11 +474,22 @@ export default function InterviewPage({ onComplete }) {
         ? (answers.voiceId.voice_name || answers.voiceId.name || "")
         : "");
 
+    // If we have an id but no label yet, try to backfill from voices[]
+    if ((!answers.voiceLabel || !String(answers.voiceLabel).trim())
+        && Array.isArray(voices)
+        && answers.voiceId
+        && typeof answers.voiceId !== 'object') {
+      const m = voices.find(v => v.id === answers.voiceId);
+      if (m && m.name) {
+        setAnswers((s) => ({ ...s, voiceLabel: m.name }));
+      }
+    }
+
     const labelForGender = answers.voiceLabel || labelFromObject || String(answers.voiceId || "");
     const g = inferGenderFromVoiceName(labelForGender);
 
     setAnswers((s) => (s.characterGender === g ? s : { ...s, characterGender: g }));
-  }, [answers.voiceId, answers.voiceLabel]);
+  }, [answers.voiceId, answers.voiceLabel, voices]);
 
   // Derived fields (kept for quick display if you want)
   const characterGender = useMemo(
@@ -620,13 +637,15 @@ export default function InterviewPage({ onComplete }) {
         <VoiceStep
           value={answers.voiceId}
           labelValue={answers.voiceLabel}
-          onChange={(id, label) =>
-            setAnswers((s) => ({
-              ...s,
-              voiceId: id,
-              voiceLabel: label ?? s.voiceLabel,
-            }))
-          }
+          onChange={(a, b) => {
+            if (a && typeof a === 'object') {
+              const id = a.voiceId ?? a.voice_id ?? a.id ?? '';
+              const label = a.voiceLabel ?? a.voice_name ?? a.name ?? b ?? '';
+              setAnswers((s) => ({ ...s, voiceId: id, voiceLabel: label || s.voiceLabel }));
+            } else {
+              setAnswers((s) => ({ ...s, voiceId: a, voiceLabel: b ?? s.voiceLabel }));
+            }
+          }}
           onLabelChange={(label) =>
             setAnswers((s) => ({ ...s, voiceLabel: label }))
           }
@@ -885,9 +904,22 @@ export default function InterviewPage({ onComplete }) {
       render: () => (
         <ReviewStep
           ui={uiPayload}
-          onEditStep={(editStepKey) => {
-            const editIdx = steps.findIndex((s) => s.key === editStepKey);
-            if (editIdx >= 0) setStepIndex(editIdx);
+          onEditStep={(target) => {
+            let idx = -1;
+            if (typeof target === 'number') {
+              idx = target;
+            } else if (typeof target === 'string') {
+              idx = steps.findIndex((s) => s.key === target);
+            } else if (target && typeof target === 'object') {
+              const key = target.key ?? target.stepKey ?? target.targetKey ?? null;
+              const i = target.index ?? target.stepIndex ?? null;
+              if (Number.isInteger(i)) idx = i;
+              else if (typeof key === 'string') idx = steps.findIndex((s) => s.key === key);
+            }
+            if (idx >= 0 && idx < steps.length) {
+              setStepIndex(idx);
+              try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+            }
           }}
         />
       ),
