@@ -337,6 +337,22 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       </button>
     ) : null;
 
+  // Clear job handler
+  function clearCurrentJob() {
+    if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+    try { localStorage.removeItem('last_job_id'); } catch {}
+    try { sessionStorage.removeItem('just_submitted'); } catch {}
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('jobId');
+      window.history.replaceState({}, '', url);
+    } catch {}
+    setJobId('');
+    setStatus('');
+    setFinalUrl('');
+    setShowBanner(false);
+  }
+
   return (
     <div>
       <p style={{ marginTop: 0, color: "#475569" }}>
@@ -442,6 +458,11 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <button type="button" className="btn" onClick={handleDownloadJson}>
             Download JSON
           </button>
+          {(jobId || status) && (
+            <button type="button" className="btn btn-ghost" onClick={clearCurrentJob}>
+              Clear job
+            </button>
+          )}
           {extraActions}
           {!hideSubmit && (
             <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
