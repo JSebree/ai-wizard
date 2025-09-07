@@ -410,6 +410,17 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     check();
   }
 
+  // Listen for a generic footer submit signal as a fallback (covers the case when InterviewPage.jsx dispatches interview:submit)
+  React.useEffect(() => {
+    function onSubmitSignal() {
+      // show banner immediately and start a short watch for jobId written by the footer handler
+      setShowBanner(true);
+      startJobIdWatchOnce();
+    }
+    window.addEventListener('interview:submit', onSubmitSignal);
+    return () => window.removeEventListener('interview:submit', onSubmitSignal);
+  }, []);
+
   return (
     <div>
       <p style={{ marginTop: 0, color: "#475569" }}>
@@ -565,14 +576,3 @@ function Field({ label, value, mono = false }) {
     </div>
   );
 }
-// Note: The .btn class is already defined elsewhere for consistent button styling.
-  // Listen for a generic footer submit signal as a fallback (covers the case when InterviewPage.jsx dispatches interview:submit)
-  React.useEffect(() => {
-    function onSubmitSignal() {
-      // show banner immediately and start a short watch for jobId written by the footer handler
-      setShowBanner(true);
-      startJobIdWatchOnce();
-    }
-    window.addEventListener('interview:submit', onSubmitSignal);
-    return () => window.removeEventListener('interview:submit', onSubmitSignal);
-  }, []);
