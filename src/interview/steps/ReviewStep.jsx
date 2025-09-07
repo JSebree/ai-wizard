@@ -443,9 +443,25 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
 
       <div style={{ marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <div className="text-sm" style={{ fontSize: 12 }}>
-            <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
-            <strong>Status:</strong> {status || '—'}
+          <div
+            className="text-sm"
+            style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+          >
+            <span>
+              <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
+              <strong>Status:</strong> {status || '—'}
+            </span>
+            {(jobId || status) && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={clearCurrentJob}
+                style={{ padding: '2px 6px', fontSize: 11 }}
+                title="Clear current job"
+              >
+                Clear
+              </button>
+            )}
           </div>
           <div style={{ fontSize: 12, color: '#7c3aed' }}>
             Heads up: renders can take a few minutes. You can leave this tab open.
@@ -458,11 +474,6 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <button type="button" className="btn" onClick={handleDownloadJson}>
             Download JSON
           </button>
-          {(jobId || status) && (
-            <button type="button" className="btn btn-ghost" onClick={clearCurrentJob}>
-              Clear job
-            </button>
-          )}
           {extraActions}
           {!hideSubmit && (
             <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
