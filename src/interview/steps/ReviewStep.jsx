@@ -142,10 +142,14 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     return () => window.removeEventListener('interview:newJobId', onNewJobId);
   }, []);
   const stopRef = React.useRef(null);
+  const watchRef = React.useRef(null);
 
   React.useEffect(() => {
     // cleanup on unmount
-    return () => { if (stopRef.current) stopRef.current(); };
+    return () => {
+      if (stopRef.current) stopRef.current();
+      if (watchRef.current) { clearTimeout(watchRef.current); watchRef.current = null; }
+    };
   }, []);
 
   React.useEffect(() => {
@@ -326,20 +330,29 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   };
 
   // helper for quick “Edit” links (optional)
-  const EditLink = ({ to, label = "Edit" }) =>
-    typeof onEditStep === "function" ? (
+  const EditLink = ({ to, label = "Edit" }) => {
+    const click = () => {
+      if (typeof onEditStep === 'function') {
+        onEditStep(to);
+      } else {
+        try { window.dispatchEvent(new CustomEvent('interview:gotoStep', { detail: { stepIndex: to } })); } catch {}
+      }
+    };
+    return (
       <button
         type="button"
-        onClick={() => onEditStep(to)}
+        onClick={click}
         style={{ fontSize: 12, color: "#3B82F6", background: "transparent", border: "none", cursor: "pointer" }}
       >
         {label}
       </button>
-    ) : null;
+    );
+  };
 
   // Clear job handler
   function clearCurrentJob() {
     if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+    if (watchRef.current) { clearTimeout(watchRef.current); watchRef.current = null; }
     try { localStorage.removeItem('last_job_id'); } catch {}
     try { sessionStorage.removeItem('just_submitted'); } catch {}
     try {
@@ -351,6 +364,50 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     setStatus('');
     setFinalUrl('');
     setShowBanner(false);
+  }
+
+  // Helper to start a short watch for a newly written jobId (used when we only get a generic submit signal)
+  function startJobIdWatchOnce() {
+    // avoid multiple watchers
+    if (watchRef.current) return;
+    let tries = 0;
+    function check() {
+      try {
+        const url = new URL(window.location.href);
+        const jid = url.searchParams.get('jobId') || (typeof localStorage !== 'undefined' ? localStorage.getItem('last_job_id') : '');
+        if (jid) {
+          watchRef.current = null;
+          setJobId(jid);
+          setStatus('QUEUED / PROCESSING');
+          setShowBanner(true);
+          const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
+          if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+          stopRef.current = startAutoPoll({
+            statusUrl,
+            onUpdate: (rec) => { if (rec?.status) setStatus(String(rec.status).toUpperCase()); },
+            onDone: (rec) => {
+              setStatus('DONE');
+              if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
+              setBusy(false);
+              stopRef.current = null;
+            },
+            onError: (msg) => {
+              setStatus('ERROR');
+              console.error(msg);
+              setBusy(false);
+              stopRef.current = null;
+            },
+          });
+          return;
+        }
+      } catch {}
+      if (++tries <= 12) {
+        watchRef.current = setTimeout(check, 250);
+      } else {
+        watchRef.current = null;
+      }
+    }
+    check();
   }
 
   return (
@@ -509,3 +566,13 @@ function Field({ label, value, mono = false }) {
   );
 }
 // Note: The .btn class is already defined elsewhere for consistent button styling.
+  // Listen for a generic footer submit signal as a fallback (covers the case when InterviewPage.jsx dispatches interview:submit)
+  React.useEffect(() => {
+    function onSubmitSignal() {
+      // show banner immediately and start a short watch for jobId written by the footer handler
+      setShowBanner(true);
+      startJobIdWatchOnce();
+    }
+    window.addEventListener('interview:submit', onSubmitSignal);
+    return () => window.removeEventListener('interview:submit', onSubmitSignal);
+  }, []);
