@@ -938,6 +938,10 @@ export default function InterviewPage({ onComplete }) {
     if (submitting) return;
     setSubmitting(true);
 
+    // Signal submit immediately so ReviewStep can show the banner
+    try { sessionStorage.setItem('just_submitted', '1'); } catch {}
+    try { window.dispatchEvent(new Event('interview:submit')); } catch {}
+
     // Build the payload (wrap under { ui } for intake; adjust here if your n8n expects a different shape)
     const payload = { ui: uiPayload };
 
@@ -963,12 +967,26 @@ export default function InterviewPage({ onComplete }) {
       const data = await res.json().catch(() => ({}));
       const returnedJobId = data.jobId || data.jobID || data.id || '';
 
-      // Persist jobId for the Review step auto-poller
+      const statusUrl = data.statusUrl || undefined;
+
+      // Persist jobId for the Review step auto-poller (existing code follows)
       try { localStorage.setItem('last_job_id', String(returnedJobId || '')); } catch {}
       try {
         const url = new URL(window.location.href);
         if (returnedJobId) url.searchParams.set('jobId', String(returnedJobId));
         window.history.replaceState({}, '', url);
+      } catch {}
+
+      // Notify listeners (ReviewStep) that a new job has been created
+      try {
+        window.dispatchEvent(new CustomEvent('interview:submitted', {
+          detail: { jobId: String(returnedJobId || ''), statusUrl }
+        }));
+      } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('interview:newJobId', {
+          detail: { jobId: String(returnedJobId || ''), statusUrl }
+        }));
       } catch {}
 
       // Stay on Review step (we're already there); ensure top-of-page

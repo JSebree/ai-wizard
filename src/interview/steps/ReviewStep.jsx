@@ -98,7 +98,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   React.useEffect(() => {
     try {
       const just = sessionStorage.getItem('just_submitted') === '1';
-      if (just && (jobId || status)) {
+      if (just) {
         setShowBanner(true);
         sessionStorage.removeItem('just_submitted');
       }
@@ -406,8 +406,8 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           return;
         }
       } catch {}
-      if (++tries <= 12) {
-        watchRef.current = setTimeout(check, 250);
+      if (++tries <= 60) {
+        watchRef.current = setTimeout(check, 500);
       } else {
         watchRef.current = null;
       }
@@ -415,7 +415,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     check();
   }
 
-  // Listen for a generic footer submit signal as a fallback (covers the case when InterviewPage.jsx dispatches interview:submit)
+  // Listen for a generic footer submit signal as a fallback (covers the case when InterviewPage.jsx dispatches interview:submit or interview:submitted)
   React.useEffect(() => {
     function onSubmitSignal() {
       // show banner immediately and start a short watch for jobId written by the footer handler
@@ -423,7 +423,11 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       startJobIdWatchOnce();
     }
     window.addEventListener('interview:submit', onSubmitSignal);
-    return () => window.removeEventListener('interview:submit', onSubmitSignal);
+    window.addEventListener('interview:submitted', onSubmitSignal);
+    return () => {
+      window.removeEventListener('interview:submit', onSubmitSignal);
+      window.removeEventListener('interview:submitted', onSubmitSignal);
+    };
   }, []);
 
   return (
