@@ -151,6 +151,7 @@ export default function VoiceStep({ value, onChange, className = "" }) {
           voiceId: voice?.id || "",
           voice_id: voice?.id || "",
           voice_name: voice?.name || "",
+          voiceLabel: voice?.name || "",
           voice: voice?._raw || voice || null,
         });
       } catch {

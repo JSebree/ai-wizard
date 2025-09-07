@@ -44,6 +44,7 @@ function startAutoPoll({ statusUrl, onUpdate, onDone, onError }) {
 const N8N_BASE = 'https://n8n.simplifies.click';
 const WEBHOOK_INTAKE_DEFAULT = `${N8N_BASE}/webhook/sceneme`;
 const STATUS_GET = `${N8N_BASE}/webhook/status`;
+const LS_KEY_STEP = 'interview_step_v1';
 
 /**
  * ReviewStep
@@ -334,9 +335,13 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     const click = () => {
       if (typeof onEditStep === 'function') {
         onEditStep(to);
-      } else {
-        try { window.dispatchEvent(new CustomEvent('interview:gotoStep', { detail: { stepIndex: to } })); } catch {}
+        return;
       }
+      // Fallback: persist target step and hard-reload so the wizard
+      // re-initializes on the correct step from localStorage.
+      try { localStorage.setItem(LS_KEY_STEP, String(to)); } catch {}
+      try { window.scrollTo({ top: 0 }); } catch {}
+      window.location.reload();
     };
     return (
       <button

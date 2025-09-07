@@ -269,6 +269,29 @@ export default function InterviewPage({ onComplete }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Allow external components (e.g., ReviewStep) to jump to a specific step by key
+  useEffect(() => {
+    function onGoSpecificStep(e) {
+      const d = e?.detail;
+      const key = (d && (d.key || d.stepKey || d.targetKey || d)) || null;
+      if (!key) return;
+      const idx = steps.findIndex((s) => s.key === key);
+      if (idx >= 0) {
+        setStepIndex(idx);
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+      }
+    }
+
+    window.addEventListener("interview:goStep", onGoSpecificStep);
+    window.addEventListener("interview:editStep", onGoSpecificStep);
+
+    return () => {
+      window.removeEventListener("interview:goStep", onGoSpecificStep);
+      window.removeEventListener("interview:editStep", onGoSpecificStep);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const N8N_WEBHOOK_URL =
     (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
     (typeof window !== "undefined" ? window.N8N_WEBHOOK_URL : undefined) ||
