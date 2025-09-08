@@ -9,25 +9,68 @@ function startAutoPoll({ statusUrl, onUpdate, onDone, onError }) {
   async function tick() {
     if (!alive) return;
     try {
-      const res = await fetch(statusUrl, { method: 'GET' });
-      const j = await res.json();
-      if (j && j.ok === false) {
-        onError?.(j.error || 'Unknown status error');
+      const res = await fetch(statusUrl, { method: 'GET', cache: 'no-store' });
+
+      // Try JSON first, then fall back to text+parse
+      let raw = null;
+      let j;
+      try {
+        j = await res.json();
+      } catch {
+        raw = await res.text().catch(() => '');
+        try { j = JSON.parse(raw || '{}'); } catch { j = raw; }
+      }
+
+      // Normalize common wrapper shapes & string bodies
+      let obj = j;
+      if (typeof obj === 'string') {
+        try { obj = JSON.parse(obj); } catch { obj = { raw: obj }; }
+      }
+      if (obj && typeof obj === 'object') {
+        if (obj['object Object'] && typeof obj['object Object'] === 'object') {
+          obj = obj['object Object'];
+        } else if (obj.data && typeof obj.data === 'object') {
+          obj = obj.data;
+        } else if (obj.result && typeof obj.result === 'object') {
+          obj = obj.result;
+        }
+      }
+
+      // If server signals an error explicitly
+      if (obj && obj.ok === false) {
+        onError?.(obj.error || 'Unknown status error');
         alive = false;
         return;
       }
-      onUpdate?.(j);
-      const s = String(j?.status || '').toUpperCase();
-      if (s === 'DONE') {
-        onDone?.(j);
+
+      // Read status/URL defensively (support a few alternative keys)
+      const statusValue = String(
+        (obj?.status ?? obj?.Status ?? obj?.state ?? obj?.stage ?? '')
+      ).toUpperCase();
+
+      const finalUrl =
+        obj?.finalVideoUrl ??
+        obj?.finalVideoURL ??
+        obj?.final_url ??
+        obj?.finalUrl ??
+        obj?.videoUrl ??
+        obj?.url ??
+        null;
+
+      // Reflect the normalized item upward for UI
+      onUpdate?.({ ...obj, status: statusValue, finalVideoUrl: finalUrl });
+
+      if (statusValue === 'DONE') {
+        onDone?.({ ...obj, status: 'DONE', finalVideoUrl: finalUrl });
         alive = false;
         return;
       }
-      if (s === 'FAILED' || s === 'ERROR') {
+      if (statusValue === 'FAILED' || statusValue === 'ERROR') {
         onError?.('Render failed');
         alive = false;
         return;
       }
+
       delay = Math.min(maxDelay, Math.round(delay * 1.25));
       setTimeout(tick, delay);
     } catch {
