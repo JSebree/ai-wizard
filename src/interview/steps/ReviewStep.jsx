@@ -498,16 +498,6 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           </div>
         )}
 
-        {finalUrl && (
-          <div className="mt-2" style={{ marginTop: 10 }}>
-            <a className="text-indigo-700 underline" href={finalUrl} target="_blank" rel="noreferrer">
-              Open final video
-            </a>
-            <div style={{ marginTop: 8 }}>
-              <video src={finalUrl} controls className="w-full" style={{ maxWidth: 720, borderRadius: 8, border: '1px solid #E5E7EB' }} />
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
@@ -560,6 +550,17 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           ) : null}
         </Section>
       </div>
+
+      {finalUrl && (
+        <div className="mt-4" style={{ marginTop: 12 }}>
+          <a className="text-indigo-700 underline" href={finalUrl} target="_blank" rel="noreferrer">
+            Open final video
+          </a>
+          <div style={{ marginTop: 8 }}>
+            <video src={finalUrl} controls className="w-full" style={{ maxWidth: 720, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
