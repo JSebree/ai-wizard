@@ -376,6 +376,11 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   // helper for quick “Edit” links (optional)
   const EditLink = ({ to, label = "Edit" }) => {
     const click = () => {
+      if (to === 'landing') {
+        try { window.scrollTo({ top: 0 }); } catch {}
+        window.location.href = '/';
+        return;
+      }
       if (typeof onEditStep === 'function') {
         onEditStep(to);
         return;
@@ -501,6 +506,10 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
+        <Section title="User" action={<EditLink to="landing" />}>
+          <Field label="Email" value={safe(ui.userEmail)} />
+        </Section>
+
         <Section title="Scene" action={<EditLink to={idx.scene} />}>
           <Field label="Scene description" value={safe(ui.scene)} />
           <Field label="Driver" value={safe(ui.driver)} />
@@ -585,7 +594,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
             )}
           </div>
           <div style={{ fontSize: 12, color: '#7c3aed' }}>
-            Heads up: renders can take a few minutes. You can leave this tab open.
+            Heads up: renders generally take 2-3 mins per sec of video.
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

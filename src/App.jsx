@@ -1,18 +1,24 @@
 import React from "react";
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import InterviewPage from "./interview/InterviewPage.jsx";
+import LandingPage from "./landing/LandingPage.jsx";
 
 function AppHeader() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   return (
     <header>
       <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3 min-h-[56px]">
         <Link
           to="/"
           onClick={(e) => {
-            if (window.location.pathname === "/") {
+            if (location.pathname === "/") {
               e.preventDefault();
               try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-              window.dispatchEvent(new CustomEvent("interview:goFirstStep"));
+            } else {
+              e.preventDefault();
+              navigate("/");
             }
           }}
           className="font-semibold tracking-tight cursor-pointer select-none"
@@ -23,7 +29,15 @@ function AppHeader() {
         <button
           type="button"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
+            if (location.pathname !== "/interview") {
+              navigate("/interview");
+              // Give InterviewPage a moment to mount before dispatching
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
+              }, 250);
+            } else {
+              window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
+            }
           }}
           className="text-sm px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
           title="Go to Review step"
@@ -41,7 +55,8 @@ function AppShell() {
       <AppHeader />
       <main className="flex-1">
         <Routes>
-          <Route path="/" element={<InterviewPage />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/interview" element={<InterviewPage />} />
         </Routes>
       </main>
     </div>

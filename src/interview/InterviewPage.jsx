@@ -45,6 +45,11 @@ export function resetWizardFormGlobal() {
 const LS_KEY_ANS = "interview_answers_v1";
 const LS_KEY_STEP = "interview_step_v1";
 
+const EMAIL_KEY = "interview_email_v1";
+function readEmail() {
+  try { return String(localStorage.getItem(EMAIL_KEY) || "").trim(); } catch { return ""; }
+}
+
 // Attempt to read JSON safely
 function readJSON(key, fallback) {
   try {
@@ -509,6 +514,7 @@ export default function InterviewPage({ onComplete }) {
       typeof voiceId === "object"
         ? (voiceId.id || voiceId.voice_id || voiceId.tts_id || "")
         : voiceId;
+    const userEmail = readEmail();
 
     return {
       scene: req(scene) ? scene : undefined,
@@ -527,6 +533,7 @@ export default function InterviewPage({ onComplete }) {
       characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
+      userEmail: userEmail || undefined,
       // Advanced (grouped)
       advanced: {
         enabled: Boolean(answers.advancedEnabled),
