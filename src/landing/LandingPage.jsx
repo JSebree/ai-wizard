@@ -29,6 +29,7 @@ export default function LandingPage() {
       return;
     }
     try { localStorage.setItem(EMAIL_KEY, v); } catch {}
+    try { localStorage.setItem("interview_step_v1", "scene"); } catch {}
     nav("/interview");
   }
 
@@ -58,7 +59,7 @@ export default function LandingPage() {
 
         <div style={{ marginTop: 16 }}>
           <button type="submit" className="btn btn-primary" style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff" }}>
-            Start Interview →
+            Start
           </button>
         </div>
       </form>
