@@ -49,6 +49,14 @@ const EMAIL_KEY = "interview_email_v1";
 function readEmail() {
   try { return String(localStorage.getItem(EMAIL_KEY) || "").trim(); } catch { return ""; }
 }
+const FIRSTNAME_KEY = "interview_firstname_v1";
+const LASTNAME_KEY = "interview_lastname_v1";
+function readFirstName() {
+  try { return String(localStorage.getItem(FIRSTNAME_KEY) || "").trim(); } catch { return ""; }
+}
+function readLastName() {
+  try { return String(localStorage.getItem(LASTNAME_KEY) || "").trim(); } catch { return ""; }
+}
 
 // Attempt to read JSON safely
 function readJSON(key, fallback) {
@@ -515,6 +523,8 @@ export default function InterviewPage({ onComplete }) {
         ? (voiceId.id || voiceId.voice_id || voiceId.tts_id || "")
         : voiceId;
     const userEmail = readEmail();
+    const userFirstName = readFirstName();
+    const userLastName = readLastName();
 
     return {
       scene: req(scene) ? scene : undefined,
@@ -534,6 +544,8 @@ export default function InterviewPage({ onComplete }) {
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
       userEmail: userEmail || undefined,
+      userFirstName: userFirstName || undefined,
+      userLastName: userLastName || undefined,
       // Advanced (grouped)
       advanced: {
         enabled: Boolean(answers.advancedEnabled),

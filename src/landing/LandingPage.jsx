@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const EMAIL_KEY = "interview_email_v1";
+const FIRSTNAME_KEY = "interview_firstname_v1";
+const LASTNAME_KEY = "interview_lastname_v1";
 
 function isValidEmail(s) {
   const v = String(s || "").trim();
@@ -11,23 +13,41 @@ function isValidEmail(s) {
 
 export default function LandingPage() {
   const nav = useNavigate();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
 
   // Prefill if user has already visited
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(EMAIL_KEY);
-      if (saved) setEmail(saved);
+      const savedEmail = localStorage.getItem(EMAIL_KEY);
+      const savedFirstName = localStorage.getItem(FIRSTNAME_KEY);
+      const savedLastName = localStorage.getItem(LASTNAME_KEY);
+      if (savedEmail) setEmail(savedEmail);
+      if (savedFirstName) setFirstName(savedFirstName);
+      if (savedLastName) setLastName(savedLastName);
     } catch {}
   }, []);
 
   function handleStart(e) {
     e.preventDefault();
+    const fName = String(firstName || "").trim();
+    const lName = String(lastName || "").trim();
     const v = String(email || "").trim();
+    if (!fName) {
+      alert("Please enter your first name.");
+      return;
+    }
+    if (!lName) {
+      alert("Please enter your last name.");
+      return;
+    }
     if (!isValidEmail(v)) {
       alert("Please enter a valid email.");
       return;
     }
+    try { localStorage.setItem(FIRSTNAME_KEY, fName); } catch {}
+    try { localStorage.setItem(LASTNAME_KEY, lName); } catch {}
     try { localStorage.setItem(EMAIL_KEY, v); } catch {}
     try { localStorage.setItem("interview_step_v1", "scene"); } catch {}
     nav("/interview");
@@ -43,6 +63,26 @@ export default function LandingPage() {
       </header>
 
       <form onSubmit={handleStart} className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff" }}>
+        <label htmlFor="firstName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>First name</label>
+        <input
+          id="firstName"
+          type="text"
+          placeholder="First name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
+          required
+        />
+        <label htmlFor="lastName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Last name</label>
+        <input
+          id="lastName"
+          type="text"
+          placeholder="Last name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
+          required
+        />
         <label htmlFor="email" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your email</label>
         <input
           id="email"

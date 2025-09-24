@@ -507,6 +507,8 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
 
       <div style={{ display: "grid", gap: 12 }}>
         <Section title="User" action={<EditLink to="landing" />}>
+          <Field label="First name" value={safe(ui.userFirstName)} />
+          <Field label="Last name" value={safe(ui.userLastName)} />
           <Field label="Email" value={safe(ui.userEmail)} />
         </Section>
 
