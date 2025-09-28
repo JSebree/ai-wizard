@@ -99,6 +99,8 @@ function getDefaultAnswers() {
     // 8
     wantsMusic: undefined, // boolean
     musicDesc: "",
+    musicCategoryLabel: "",
+    musicSeed: "",
     // 9
     wantsCaptions: undefined, // boolean
     // 10
@@ -185,6 +187,30 @@ function inferGenderFromVoiceName(label = "") {
 /** Tiny required check */
 const req = (v) => (v !== undefined && v !== null && String(v).trim().length > 0);
 
+
+// --------------------------- Music categories (labels only) ---------------------------
+const MUSIC_CATEGORIES = [
+  "Rock Instrumental",
+  "Jazz Instrumental",
+  "Hip-Hop / Trap Beat",
+  "Orchestral / Cinematic",
+  "Lo-Fi / Chillhop",
+  "EDM / House",
+  "Ambient / Soundscape",
+  "Reggae / Dub",
+  "Funk / Groove",
+  "Country / Folk",
+  "Blues",
+  "Metal",
+  "Techno",
+  "Latin / Salsa",
+  "R&B / Soul",
+  "Gospel",
+  "Indian Classical / Sitar",
+  "African Percussion",
+  "Celtic / Folk",
+  "Synthwave / Retro",
+];
 // --------------------------- UI primitives ------------------------------
 
 function RadioGroup({ name, value, onChange, options, inline = false }) {
@@ -536,6 +562,7 @@ export default function InterviewPage({ onComplete }) {
       directorsNotes: req(directorsNotes) ? directorsNotes : undefined,
       wantsMusic: typeof wantsMusic === "boolean" ? wantsMusic : undefined,
       musicDesc: wantsMusic ? (req(musicDesc) ? musicDesc : undefined) : undefined,
+      musicCategoryLabel: req(answers.musicCategoryLabel) ? answers.musicCategoryLabel : undefined,
       wantsCaptions: typeof wantsCaptions === "boolean" ? wantsCaptions : undefined,
       durationSec: Number(durationSec) || 0,
       referenceText: req(referenceText) ? referenceText : undefined,
@@ -557,6 +584,16 @@ export default function InterviewPage({ onComplete }) {
           answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
             ? answers.musicIncludeVocals
             : undefined,
+        seed: (function() {
+          const raw = answers.musicSeed;
+          const s = (raw === undefined || raw === null) ? "" : String(raw).trim();
+          if (s) {
+            const n = Number(s);
+            return Number.isFinite(n) ? Math.trunc(n) : undefined;
+          }
+          // No seed provided → pick a random one so it shows up in the JSON output
+          return Math.floor(Math.random() * 999_999_999) + 1;
+        })(),
       },
     };
   }, [answers]);
@@ -750,13 +787,17 @@ export default function InterviewPage({ onComplete }) {
                   : ""
               }
               onChange={(v) =>
-                setAnswers((s) => ({
-                  ...s,
-                  wantsMusic: v === "yes",
-                  musicDesc: v === "yes" ? s.musicDesc : "",
-                  // Reset/include vocals only relevant if user wants music
-                  musicIncludeVocals: v === "yes" ? (s.musicIncludeVocals ?? undefined) : undefined,
-                }))
+                setAnswers((s) => {
+                  const enable = v === "yes";
+                  const shouldInit = enable && !s.musicCategoryLabel && MUSIC_CATEGORIES.length > 0;
+                  return {
+                    ...s,
+                    wantsMusic: enable,
+                    musicDesc: enable ? s.musicDesc : "",
+                    musicIncludeVocals: enable ? (s.musicIncludeVocals ?? undefined) : undefined,
+                    musicCategoryLabel: shouldInit ? MUSIC_CATEGORIES[0] : (enable ? s.musicCategoryLabel : ""),
+                  };
+                })
               }
               options={[
                 { value: "yes", label: "Yes" },
@@ -792,17 +833,19 @@ export default function InterviewPage({ onComplete }) {
                 />
               </FieldRow>
 
-              <FieldRow
-                label="Describe the music you want"
-                hint="The more detail you provide, the better your results will match your intentions."
-              >
-                <textarea
-                  placeholder="e.g., Warm Mediterranean acoustic with subtle strings and percussion."
-                  value={answers.musicDesc}
+              <FieldRow label="Choose a music style" hint="Pick from curated presets. Tags are mapped in n8n by label.">
+                <select
+                  value={answers.musicCategoryLabel || ""}
                   onChange={(e) =>
-                    setAnswers((s) => ({ ...s, musicDesc: e.target.value }))
+                    setAnswers((s) => ({ ...s, musicCategoryLabel: e.target.value }))
                   }
-                />
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
+                >
+                  <option value="" disabled>— Select a preset —</option>
+                  {MUSIC_CATEGORIES.map((label) => (
+                    <option key={label} value={label}>{label}</option>
+                  ))}
+                </select>
               </FieldRow>
             </>
           )}
@@ -913,6 +956,8 @@ export default function InterviewPage({ onComplete }) {
               voiceVolume10: Math.max(1, Math.min(10, Number(v) || 10)),
             }))
           }
+          musicSeed={answers.musicSeed ?? ""}
+          onMusicSeedChange={(v) => setAnswers((s) => ({ ...s, musicSeed: v }))}
         />
       ),
       valid: () => true,
