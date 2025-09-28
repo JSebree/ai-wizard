@@ -98,9 +98,9 @@ function getDefaultAnswers() {
     directorsNotes: "",
     // 8
     wantsMusic: undefined, // boolean
-    musicDesc: "",
     musicCategoryLabel: "",
     musicSeed: "",
+    musicLyrics: "",
     // 9
     wantsCaptions: undefined, // boolean
     // 10
@@ -540,7 +540,7 @@ export default function InterviewPage({ onComplete }) {
   const uiPayload = useMemo(() => {
     const {
       scene, driver, wantsCutaways, character, setting, action, directorsNotes,
-      wantsMusic, musicDesc, wantsCaptions, durationSec, referenceText,
+      wantsMusic, wantsCaptions, durationSec, referenceText,
       voiceId, characterName, title,
     } = answers;
 
@@ -561,11 +561,14 @@ export default function InterviewPage({ onComplete }) {
       action: req(action) ? action : undefined,
       directorsNotes: req(directorsNotes) ? directorsNotes : undefined,
       wantsMusic: typeof wantsMusic === "boolean" ? wantsMusic : undefined,
-      musicDesc: wantsMusic ? (req(musicDesc) ? musicDesc : undefined) : undefined,
       musicCategoryLabel: req(answers.musicCategoryLabel) ? answers.musicCategoryLabel : undefined,
       wantsCaptions: typeof wantsCaptions === "boolean" ? wantsCaptions : undefined,
       durationSec: Number(durationSec) || 0,
       referenceText: req(referenceText) ? referenceText : undefined,
+      lyrics:
+        answers.wantsMusic && answers.musicIncludeVocals && req(answers.musicLyrics)
+          ? answers.musicLyrics
+          : undefined,
       voiceId: req(normalizedVoiceId) ? normalizedVoiceId : undefined,
       characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
@@ -793,7 +796,6 @@ export default function InterviewPage({ onComplete }) {
                   return {
                     ...s,
                     wantsMusic: enable,
-                    musicDesc: enable ? s.musicDesc : "",
                     musicIncludeVocals: enable ? (s.musicIncludeVocals ?? undefined) : undefined,
                     musicCategoryLabel: shouldInit ? MUSIC_CATEGORIES[0] : (enable ? s.musicCategoryLabel : ""),
                   };
@@ -847,6 +849,17 @@ export default function InterviewPage({ onComplete }) {
                   ))}
                 </select>
               </FieldRow>
+              {answers.musicIncludeVocals && (
+                <FieldRow label="Lyrics (optional)" hint="Paste or type your lyrics. You can include [verse], [chorus], [bridge] markers if you like.">
+                  <textarea
+                    placeholder="[verse]\nWalking down the city lights at midnight...\n\n[chorus]\nYou and me, under neon skies..."
+                    value={answers.musicLyrics}
+                    onChange={(e) =>
+                      setAnswers((s) => ({ ...s, musicLyrics: e.target.value }))
+                    }
+                  />
+                </FieldRow>
+              )}
             </>
           )}
         </>

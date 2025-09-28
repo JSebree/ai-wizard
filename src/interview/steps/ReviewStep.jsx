@@ -103,6 +103,7 @@ const LS_KEY_STEP = 'interview_step_v1';
 export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true, extraActions = null, stepIndexMap = {} }) {
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "—");
   const safe = (v) => (v === undefined || v === null || v === "" ? "—" : String(v));
+  const includeVocals = ui?.advanced?.includeVocals ?? ui?.musicIncludeVocals;
 
   // JSON helpers for copy/download
   const jsonString = React.useMemo(() => JSON.stringify({ ui }, null, 2), [ui]);
@@ -537,9 +538,14 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
 
         <Section title="Audio" action={<EditLink to={idx.audio} />}>
           <Field label="Wants music" value={yesNo(ui.wantsMusic)} />
-          {ui.wantsMusic && <Field label="Music description" value={safe(ui.musicDesc)} />}
+          {ui.wantsMusic && ui.musicCategoryLabel && (
+            <Field label="Music category" value={safe(ui.musicCategoryLabel)} />
+          )}
           {ui.wantsMusic && (
-            <Field label="Include vocals" value={yesNo(ui.musicIncludeVocals)} />
+            <Field label="Include vocals" value={yesNo(includeVocals)} />
+          )}
+          {ui.wantsMusic && ui.lyrics && (
+            <Field label="Lyrics" value={safe(ui.lyrics)} />
           )}
           <Field label="Wants captions" value={yesNo(ui.wantsCaptions)} />
         </Section>
@@ -557,6 +563,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
               <Field label="Visual style" value={safe(ui?.advanced?.style)} />
               <Field label="Music volume (0.1–1.0)" value={safe(ui?.advanced?.musicVolume)} />
               <Field label="Voice volume (0.1–1.0)" value={safe(ui?.advanced?.voiceVolume)} />
+              <Field label="Music seed" value={safe(ui?.advanced?.seed)} mono />
             </>
           ) : null}
         </Section>
