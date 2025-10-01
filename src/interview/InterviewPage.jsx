@@ -111,7 +111,7 @@ function mapTemplateToAnswers(ui, defaults) {
       typeof adv.includeVocals === "boolean"
         ? adv.includeVocals
         : ((ui.lyrics || ui.musicLyrics) ? true : defaults.musicIncludeVocals),
-    musicLyrics: defaults.musicLyrics,
+    musicLyrics: (ui.lyrics ?? ui.musicLyrics ?? defaults.musicLyrics),
     // Captions & duration
     wantsCaptions:
       typeof ui.wantsCaptions === "boolean" ? ui.wantsCaptions : defaults.wantsCaptions,
@@ -357,25 +357,6 @@ export default function InterviewPage({ onComplete }) {
     }
     return saved ? { ...defaults, ...saved } : defaults;
   });
-
-  useEffect(() => {
-    // If a landing-page template was selected, hydrate the interview with it.
-    try {
-      const raw = localStorage.getItem(TEMPLATE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const defaults = getDefaultAnswers();
-        const ui = parsed?.ui || parsed; // support either {ui:{...}} or direct ui object
-        const mapped = mapTemplateToAnswers(ui, defaults);
-        if (mapped) {
-          setAnswers(mapped);
-          writeJSON(LS_KEY_ANS, mapped);
-        }
-      }
-    } catch {}
-    // Clear the template so refreshes don't re-apply it
-    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
-  }, []);
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
@@ -680,6 +661,30 @@ export default function InterviewPage({ onComplete }) {
   // --------------------------- Steps definition -------------------------
 
   const steps = [
+  useEffect(() => {
+    // Hydrate from landing-page template and jump to Review
+    try {
+      const raw = localStorage.getItem(TEMPLATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const defaults = getDefaultAnswers();
+        const ui = parsed?.ui || parsed; // support either {ui:{...}} or direct ui object
+        const mapped = mapTemplateToAnswers(ui, defaults);
+        if (mapped) {
+          setAnswers(mapped);
+          writeJSON(LS_KEY_ANS, mapped);
+          const last = steps.length - 1;
+          if (last >= 0) {
+            setStepIndex(last);
+            writeJSON(LS_KEY_STEP, last);
+            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+          }
+        }
+      }
+    } catch {}
+    // Clear the template so refreshes don't re-apply it
+    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
+  }, [steps.length]);
     {
       key: "scene",
       label: "Tell me about the scene that you would like to create.",

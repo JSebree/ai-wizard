@@ -7,6 +7,7 @@ const templates = [
   {
     id: "tokyo-vlog-1",
     title: "Tokyo Vlog — Jackie",
+    kind: "Vlog",
     description: "Travel vlog in Tokyo with A‑roll narration, cinematic style, 30s.",
     // Preview video users can watch
     videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/376082a1-bf47-4ae1-9737-27914a352f8d_output_0.mp4",
@@ -142,30 +143,29 @@ export default function LandingPage() {
       <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
             <h2 style={{ marginTop: 0, marginBottom: 12 }}>See what you can make</h2>
             <p style={{ marginTop: 0, color: "#475569" }}>
-              Browse a few ready‑made examples. Watch the preview, then start from a template and customize anything in the wizard.
+              Quick examples you can start from.
             </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
               {templates.map((tpl) => (
-                <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12 }}>
-                  <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-                    <video
-                      src={tpl.videoUrl}
-                      controls
-                      style={{ width: 360, maxWidth: "100%", borderRadius: 8, background: "#000" }}
-                    />
-                    <div style={{ flex: 1, minWidth: 220 }}>
-                      <h3 style={{ marginTop: 0, marginBottom: 6 }}>{tpl.title}</h3>
-                      <p style={{ marginTop: 0, marginBottom: 12, color: "#475569" }}>{tpl.description}</p>
-                      <button
-                        type="button"
-                        onClick={() => handleUseTemplate(tpl)}
-                        className="btn btn-secondary"
-                        style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827" }}
-                      >
-                        Start with this template
-                      </button>
-                    </div>
+                <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
+                  <video
+                    src={tpl.videoUrl}
+                    controls
+                    style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }}
+                  />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 8px", border: "1px solid #E5E7EB", borderRadius: 999, color: "#334155" }}>
+                      {tpl.kind || "Template"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleUseTemplate(tpl)}
+                      className="btn btn-secondary"
+                      style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600 }}
+                    >
+                      Use as template
+                    </button>
                   </div>
                 </div>
               ))}
