@@ -661,30 +661,6 @@ export default function InterviewPage({ onComplete }) {
   // --------------------------- Steps definition -------------------------
 
   const steps = [
-  useEffect(() => {
-    // Hydrate from landing-page template and jump to Review
-    try {
-      const raw = localStorage.getItem(TEMPLATE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const defaults = getDefaultAnswers();
-        const ui = parsed?.ui || parsed; // support either {ui:{...}} or direct ui object
-        const mapped = mapTemplateToAnswers(ui, defaults);
-        if (mapped) {
-          setAnswers(mapped);
-          writeJSON(LS_KEY_ANS, mapped);
-          const last = steps.length - 1;
-          if (last >= 0) {
-            setStepIndex(last);
-            writeJSON(LS_KEY_STEP, last);
-            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-          }
-        }
-      }
-    } catch {}
-    // Clear the template so refreshes don't re-apply it
-    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
-  }, [steps.length]);
     {
       key: "scene",
       label: "Tell me about the scene that you would like to create.",
@@ -1084,6 +1060,31 @@ export default function InterviewPage({ onComplete }) {
       valid: () => true,
     },
   ];
+
+  useEffect(() => {
+    // Hydrate from landing-page template and jump to Review
+    try {
+      const raw = localStorage.getItem(TEMPLATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const defaults = getDefaultAnswers();
+        const ui = parsed?.ui || parsed; // support either {ui:{...}} or direct ui object
+        const mapped = mapTemplateToAnswers(ui, defaults);
+        if (mapped) {
+          setAnswers(mapped);
+          writeJSON(LS_KEY_ANS, mapped);
+          const last = steps.length - 1;
+          if (last >= 0) {
+            setStepIndex(last);
+            writeJSON(LS_KEY_STEP, last);
+            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+          }
+        }
+      }
+    } catch {}
+    // Clear the template so refreshes don't re-apply it
+    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
+  }, [steps.length]);
 
   const total = steps.length;
   const step = steps[stepIndex];
