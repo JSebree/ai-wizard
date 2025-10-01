@@ -44,6 +44,7 @@ export function resetWizardFormGlobal() {
 // Local storage keys for refresh-proof persistence
 const LS_KEY_ANS = "interview_answers_v1";
 const LS_KEY_STEP = "interview_step_v1";
+const TEMPLATE_KEY = "interview_template_v1";
 
 const EMAIL_KEY = "interview_email_v1";
 function readEmail() {
@@ -73,6 +74,62 @@ function writeJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {}
+}
+
+function coerceVolume10(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 1;
+  // v is 0.1..1.0 → scale to 1..10
+  return Math.max(1, Math.min(10, Math.round(n * 10)));
+}
+
+function mapTemplateToAnswers(ui, defaults) {
+  if (!ui || typeof ui !== "object") return null;
+  const adv = ui.advanced || {};
+  return {
+    ...defaults,
+    // Core prompts
+    scene: ui.scene ?? defaults.scene,
+    driver: ui.driver ?? defaults.driver,
+    wantsCutaways:
+      typeof ui.wantsCutaways === "boolean" ? ui.wantsCutaways : defaults.wantsCutaways,
+    character: ui.character ?? defaults.character,
+    // Voice
+    voiceId: ui.voiceId ?? defaults.voiceId,
+    voiceLabel: defaults.voiceLabel, // keep empty; will be derived by voices loader
+    characterGender: ui.characterGender ?? defaults.characterGender,
+    characterName: ui.characterName ?? defaults.characterName,
+    // Setting / action
+    setting: ui.setting ?? defaults.setting,
+    action: ui.action ?? defaults.action,
+    directorsNotes: ui.directorsNotes ?? defaults.directorsNotes,
+    // Music
+    wantsMusic:
+      typeof ui.wantsMusic === "boolean" ? ui.wantsMusic : defaults.wantsMusic,
+    musicCategoryLabel: ui.musicCategoryLabel ?? defaults.musicCategoryLabel,
+    musicIncludeVocals:
+      typeof adv.includeVocals === "boolean"
+        ? adv.includeVocals
+        : ((ui.lyrics || ui.musicLyrics) ? true : defaults.musicIncludeVocals),
+    musicLyrics: defaults.musicLyrics,
+    // Captions & duration
+    wantsCaptions:
+      typeof ui.wantsCaptions === "boolean" ? ui.wantsCaptions : defaults.wantsCaptions,
+    durationSec: Number(ui.durationSec ?? defaults.durationSec),
+    // Title & references
+    title: ui.title ?? defaults.title,
+    referenceText: ui.referenceText ?? defaults.referenceText,
+    // Advanced
+    advancedEnabled:
+      typeof adv.enabled === "boolean" ? adv.enabled : defaults.advancedEnabled,
+    stylePreset: adv.style ?? defaults.stylePreset,
+    musicVolume10:
+      adv.musicVolume !== undefined ? coerceVolume10(adv.musicVolume) : defaults.musicVolume10,
+    voiceVolume10:
+      adv.voiceVolume !== undefined ? coerceVolume10(adv.voiceVolume) : defaults.voiceVolume10,
+    musicSeed:
+      adv.seed !== undefined && adv.seed !== null ? String(adv.seed) : defaults.musicSeed,
+  };
 }
 
 // Reusable defaults for answers
@@ -297,9 +354,28 @@ export default function InterviewPage({ onComplete }) {
     const saved = readJSON(LS_KEY_ANS, null);
     if (saved && saved.advancedEnabled === undefined) {
       saved.advancedEnabled = true;
-  }
+    }
     return saved ? { ...defaults, ...saved } : defaults;
   });
+
+  useEffect(() => {
+    // If a landing-page template was selected, hydrate the interview with it.
+    try {
+      const raw = localStorage.getItem(TEMPLATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const defaults = getDefaultAnswers();
+        const ui = parsed?.ui || parsed; // support either {ui:{...}} or direct ui object
+        const mapped = mapTemplateToAnswers(ui, defaults);
+        if (mapped) {
+          setAnswers(mapped);
+          writeJSON(LS_KEY_ANS, mapped);
+        }
+      }
+    } catch {}
+    // Clear the template so refreshes don't re-apply it
+    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
+  }, []);
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
