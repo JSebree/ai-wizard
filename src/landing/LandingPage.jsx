@@ -79,6 +79,43 @@ const templates = [
         }
       }
     }
+  },
+  {
+    id: "newscast-baby-zuck-1",
+    title: "Newscast — Baby Zuck",
+    kind: "Newscast",
+    description: "AI newscast with A‑roll+B‑roll cutaways, 45s.",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/22d17095-c11d-4ec2-9f32-24a5bcb1ded6_output_0.mp4",
+    json: {
+      "ui": {
+        "scene": "A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic baby. Cutaway scenes of AI hardware and robotics in line with the topics of the day",
+        "driver": "character",
+        "wantsCutaways": true,
+        "character": "Mark Zuckerberg as a cute cherubic baby sitting in a newsroom table and dressed like a news reporter",
+        "setting": "Baby Mark Zuckerberg sits at a newsroom desk in a naturally lit room as he discusses the AI topics of the day. B-Roll cutaways featuring AI tech and robotics that are in line with the covered topics of the day",
+        "action": "the baby is sitting at the newsroom desk, moving naturally as if in a live conversation. ",
+        "wantsMusic": true,
+        "musicCategoryLabel": "Lo-Fi / Chillhop",
+        "wantsCaptions": true,
+        "durationSec": 45,
+        "referenceText": "Today's top AI news includes a lawsuit against Apple by authors for using copyrighted books in AI training, a settlement by Anthropic for a similar issue, the launch of a national AI infrastructure program by the U.S. National Science Foundation, concerns over \\\"AI psychosis\\\" from heavy chatbot use, and the ongoing competition to dominate the AI landscape with new hardware and applications like Google's AI-powered translation tools and Adobe's Firefly integration, as reported by Reuters and other outlets. \\nLegal & Regulatory Actions\\nApple Sued:\\n.\\nReuters reports that Apple is being sued by authors for allegedly using their copyrighted books to train its AI systems. \\nAnthropic Settlement:\\n.\\nAI company Anthropic agreed to a $1.5 billion settlement in a class-action lawsuit over the use of books in AI training, according to Reuters and Reddit users. \\nUS AI Infrastructure:\\n.\\nThe U.S. National Science Foundation launched the Integrated Data Systems and Services (IDSS) program, a new national-scale AI infrastructure project, to support AI research. \\nAI Applications & Technology\\nAI Psychosis Concern:\\n.\\nReports of a phenomenon called \\\"AI psychosis,\\\" where users lose touch with reality after heavy chatbot use, are gaining traction, according to NBC News. \\nGoogle AI Updates:\\n.\\nGoogle is integrating its Gemini AI into Adobe's Firefly for image editing and is also rolling out AI-powered live translation and a language learning tool within Google Translate, notes YouTube. \\nAI in Health:\\n.\\nAI is being used to detect dangerous heart conditions with an AI stethoscope and to predict virus evolution for flu vaccine strain selection. \\nInternational & Corporate Developments\\nGreece & OpenAI Deal:\\n.\\nGreece and OpenAI have agreed to a deal to promote innovation in schools and small businesses, according to Reuters. \\nNvidia Supercomputer in Germany:\\n.\\nGermany's Merz inaugurated a Nvidia supercomputer dedicated to research, according to Reuters. \\nHumanoid Robot Competitions:\\n.\\nChina recently hosted the world's first humanoid robot games, showcasing robots competing in sports like soccer and boxing, as highlighted by The Wall Street Journal. ",
+        "voiceId": "4080632d-4364-44f2-9e27-451574f1b96f",
+        "characterGender": "male",
+        "title": "Baby Zuck!",
+        "characterName": "Baby Zuck",
+        "userEmail": "",
+        "userFirstName": "",
+        "userLastName": "",
+        "advanced": {
+          "enabled": true,
+          "style": "Newscast",
+          "musicVolume": 0.1,
+          "voiceVolume": 1,
+          "includeVocals": false,
+          "seed": 968539143
+        }
+      }
+    }
   }
 ];
 
