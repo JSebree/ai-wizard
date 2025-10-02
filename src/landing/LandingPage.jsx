@@ -18,7 +18,7 @@ const templates = [
         "driver": "character",
         "wantsCutaways": false,
         "character": "Jackie, 20 something year old beautiful dark haired woman with a gentle smile and warm demeanor ",
-        "setting": "Famous street in Tokyo, Japan with Mount Fufi prominently in the background. Golden hours",
+        "setting": "Famous street in Tokyo, Japan with Mount Fuji prominently in the background. Golden hours",
         "action": "Jackie is walking the streets of Tokyo while talking into the camera as she vlogs her thoughts about the city ",
         "wantsMusic": true,
         "musicCategoryLabel": "Orchestral / Cinematic",
@@ -113,6 +113,43 @@ const templates = [
           "voiceVolume": 1,
           "includeVocals": false,
           "seed": 968539143
+        }
+      }
+    }
+  },
+  {
+    id: "zombs-ghost-1",
+    title: "Zombs — Halloween Ghost Story",
+    kind: "Storytelling",
+    description: "45 second ghost story told by a teenage zombie around a campfire on Halloween night.",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/5d94d9cb-9b47-49c3-aa4c-c981f4510c16_output_0.mp4",
+    json: {
+      "ui": {
+        "scene": "A 45 second ghost story on Halloween told by a teenage zombie in a dark sleepy haunted Halloween town",
+        "driver": "character",
+        "wantsCutaways": true,
+        "character": "A green-faced tattered skin clothes ripped zombie with red hair and expressive eyes",
+        "setting": "A campfire at the edge of the woods beside a sleepy old haunted town on Halloween",
+        "action": "A teenage zombie telling a ghost story to smaller little zombies Around a campfire. B-Roll cutaways to ghost scenes that support the story.",
+        "wantsMusic": true,
+        "musicCategoryLabel": "Lo-Fi / Chillhop",
+        "wantsCaptions": true,
+        "durationSec": 45,
+        "referenceText": "Generate a 45 second ghost story that is short but thrilling, fitting for a Halloween campfire story.",
+        "voiceId": "abc62a09-8c40-4af6-9d48-235d592fd20c",
+        "characterGender": "male",
+        "title": "Zombs",
+        "characterName": "Zombs",
+        "userEmail": "",
+        "userFirstName": "",
+        "userLastName": "",
+        "advanced": {
+          "enabled": true,
+          "style": "Anime",
+          "musicVolume": 0.1,
+          "voiceVolume": 1,
+          "includeVocals": false,
+          "seed": 928453185
         }
       }
     }
