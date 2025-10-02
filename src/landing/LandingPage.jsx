@@ -171,6 +171,17 @@ export default function LandingPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState(null);
+
+  function openForm(tpl = null) {
+    setPendingTemplate(tpl);
+    setShowForm(true);
+  }
+  function closeForm() {
+    setPendingTemplate(null);
+    setShowForm(false);
+  }
 
   // Prefill if user has already visited
   useEffect(() => {
@@ -184,8 +195,9 @@ export default function LandingPage() {
     } catch {}
   }, []);
 
-  function handleUseTemplate(tpl) {
-    // Save current user info
+  function handleSubmitUser(e) {
+    if (e) e.preventDefault();
+
     const fName = String(firstName || "").trim();
     const lName = String(lastName || "").trim();
     const v = String(email || "").trim();
@@ -198,57 +210,69 @@ export default function LandingPage() {
     try { localStorage.setItem(FIRSTNAME_KEY, fName); } catch {}
     try { localStorage.setItem(LASTNAME_KEY, lName); } catch {}
     try { localStorage.setItem(EMAIL_KEY, v); } catch {}
-
-    // Merge user info into the template JSON (without mutating the original)
-    const payload = JSON.parse(JSON.stringify(tpl.json));
-    if (payload && payload.ui) {
-      payload.ui.userFirstName = fName;
-      payload.ui.userLastName = lName;
-      payload.ui.userEmail = v;
-    }
-
-    // Save the template so the Interview wizard can prefill from it
-    try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch {}
-
-    // Ensure the wizard starts at the first step
     try { localStorage.setItem("interview_step_v1", "scene"); } catch {}
 
-    // Go to the interview
+    // If a template was chosen, merge user info & proceed via existing logic
+    if (pendingTemplate) {
+      const tpl = pendingTemplate;
+      const payload = JSON.parse(JSON.stringify(tpl.json));
+      if (payload && payload.ui) {
+        payload.ui.userFirstName = fName;
+        payload.ui.userLastName = lName;
+        payload.ui.userEmail = v;
+      }
+      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch {}
+      closeForm();
+      nav("/interview");
+      return;
+    }
+
+    // No template → just go to interview
+    closeForm();
     nav("/interview");
   }
 
-  function handleStart(e) {
-    e.preventDefault();
-    const fName = String(firstName || "").trim();
-    const lName = String(lastName || "").trim();
-    const v = String(email || "").trim();
-    if (!fName) {
-      alert("Please enter your first name.");
-      return;
-    }
-    if (!lName) {
-      alert("Please enter your last name.");
-      return;
-    }
-    if (!isValidEmail(v)) {
-      alert("Please enter a valid email.");
-      return;
-    }
-    try { localStorage.setItem(FIRSTNAME_KEY, fName); } catch {}
-    try { localStorage.setItem(LASTNAME_KEY, lName); } catch {}
-    try { localStorage.setItem(EMAIL_KEY, v); } catch {}
-    try { localStorage.setItem("interview_step_v1", "scene"); } catch {}
-    nav("/interview");
+  function handleUseTemplate(tpl) {
+    openForm(tpl);
   }
 
   return (
     <div style={{ maxWidth: 860, margin: "0 auto", padding: 24 }}>
+      <style>{`
+        .examplesGrid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 16px;
+        }
+        @media (min-width: 700px) {
+          .examplesGrid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (min-width: 1024px) {
+          .examplesGrid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+      `}</style>
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>SceneMe</h1>
         <p style={{ marginTop: 8, color: "#475569" }}>
           Turn ideas into polished AI video—start with a quick interview or pick a ready‑made template. SceneMe orchestrates voices, visuals, and music into a cohesive story.
         </p>
       </header>
+
+      {/* --- Primary CTA (centered) --- */}
+      <section style={{ textAlign: "center", marginBottom: 20 }}>
+        <button
+          type="button"
+          onClick={() => openForm(null)}
+          className="btn btn-primary"
+          style={{ padding: "12px 18px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff", fontWeight: 700 }}
+        >
+          Create your own
+        </button>
+      </section>
 
       {/* --- Examples Gallery --- */}
       <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
@@ -257,8 +281,16 @@ export default function LandingPage() {
               Quick examples you can start from.
             </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-              {templates.map((tpl) => (
+            <div className="examplesGrid">
+              {templates
+                .slice()
+                .sort((a, b) => {
+                  const order = { "Newscast": 1, "Podcast": 2, "Vlog": 3, "Storytelling": 4 };
+                  const ai = order[a.kind] || 99;
+                  const bi = order[b.kind] || 99;
+                  return ai - bi;
+                })
+                .map((tpl) => (
                 <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
                   <video
                     src={tpl.videoUrl}
@@ -271,7 +303,7 @@ export default function LandingPage() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleUseTemplate(tpl)}
+                      onClick={() => openForm(tpl)}
                       className="btn btn-secondary"
                       style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600 }}
                     >
@@ -283,47 +315,88 @@ export default function LandingPage() {
             </div>
       </section>
 
-      <form onSubmit={handleStart} className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff" }}>
-        <label htmlFor="firstName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>First name</label>
-        <input
-          id="firstName"
-          type="text"
-          placeholder="First name"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
-          required
-        />
-        <label htmlFor="lastName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Last name</label>
-        <input
-          id="lastName"
-          type="text"
-          placeholder="Last name"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
-          required
-        />
-        <label htmlFor="email" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your email</label>
-        <input
-          id="email"
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
-          required
-        />
-        <small style={{ display: "block", marginTop: 6, color: "#667085" }}>
-          We’ll use this for status updates and delivery. No spam.
-        </small>
+      {/* --- Intake Modal --- */}
+      {showForm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}
+          onClick={(e) => {
+            // close when clicking backdrop only
+            if (e.target === e.currentTarget) closeForm();
+          }}
+        >
+          <div style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 6 }}>
+              {pendingTemplate ? "Use template" : "Create your own"}
+            </h3>
+            <p style={{ marginTop: 0, color: "#475569" }}>
+              Tell us where to send status updates and your finished video.
+            </p>
+            <form onSubmit={handleSubmitUser}>
+              <label htmlFor="firstName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>First name</label>
+              <input
+                id="firstName"
+                type="text"
+                placeholder="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
+                required
+              />
+              <label htmlFor="lastName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Last name</label>
+              <input
+                id="lastName"
+                type="text"
+                placeholder="Last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
+                required
+              />
+              <label htmlFor="email" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your email</label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
+                required
+              />
+              <small style={{ display: "block", marginTop: 6, color: "#667085" }}>
+                We’ll use this for status updates and delivery. No spam.
+              </small>
 
-        <div style={{ marginTop: 16 }}>
-          <button type="submit" className="btn btn-primary" style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff" }}>
-            Start
-          </button>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="btn btn-secondary"
+                  style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#111827" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff" }}
+                >
+                  Continue
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
+      )}
     </div>
   );
 }
