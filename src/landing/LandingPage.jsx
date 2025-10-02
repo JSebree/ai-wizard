@@ -251,7 +251,7 @@ export default function LandingPage() {
         }
         @media (min-width: 1024px) {
           .examplesGrid {
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
           }
         }
       `}</style>
@@ -305,7 +305,7 @@ export default function LandingPage() {
                       type="button"
                       onClick={() => openForm(tpl)}
                       className="btn btn-secondary"
-                      style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600 }}
+                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600, fontSize: 12 }}
                     >
                       Use as template
                     </button>
