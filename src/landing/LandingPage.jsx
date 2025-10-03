@@ -195,6 +195,37 @@ export default function LandingPage() {
     } catch {}
   }, []);
 
+  // Hide the global "Review" button ONLY on the Landing page
+  useEffect(() => {
+    // Heuristic: find a top-right "Review" button rendered by the app header
+    // and temporarily hide it for this page only.
+    const candidates = Array.from(document.querySelectorAll('button, a'));
+    const toHide = candidates.find((el) => {
+      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+      return txt === 'review';
+    });
+
+    // If found, hide and remember prior inline styles to restore on unmount
+    let prevDisplay, prevVisibility;
+    if (toHide) {
+      prevDisplay = toHide.style.display;
+      prevVisibility = toHide.style.visibility;
+      toHide.style.display = 'none';
+      toHide.style.visibility = 'hidden';
+      toHide.setAttribute('data-hidden-by-landing', 'true');
+    }
+
+    return () => {
+      // Restore when leaving this page so other routes keep the button
+      const el = document.querySelector('[data-hidden-by-landing="true"]');
+      if (el) {
+        el.style.display = prevDisplay ?? '';
+        el.style.visibility = prevVisibility ?? '';
+        el.removeAttribute('data-hidden-by-landing');
+      }
+    };
+  }, []);
+
   function handleSubmitUser(e) {
     if (e) e.preventDefault();
 
