@@ -799,7 +799,7 @@ export default function InterviewPage({ onComplete }) {
     },
     {
       key: "action",
-      label: "Describe the action that occurs in the scene.",
+      label: "Describe what action is happening in the scene.",
       render: () => (
         <FieldRow label="Action" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
