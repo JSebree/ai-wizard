@@ -812,20 +812,53 @@ export default function InterviewPage({ onComplete }) {
       valid: () => meetsMin(answers.action, 30),
     },
     {
-      key: "directorsNotes",
-      label: "Do you have any director’s notes?",
+      key: "referenceText",
+      label: "Improve scene accuracy by adding script guidance (context, quotes, or key points).",
       render: () => (
-        <FieldRow label="Director’s notes (optional)" hint="The more detail you provide, the better your results will match your intentions.">
+        <FieldRow label="Script guidance" hint="The more detail you provide, the better your results will match your intentions. Minimum 30 characters.">
           <textarea
-            placeholder="e.g., Prioritize variety and atmosphere. Avoid readable signage."
-            value={answers.directorsNotes}
+            placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
+            value={answers.referenceText}
             onChange={(e) =>
-              setAnswers((s) => ({ ...s, directorsNotes: e.target.value }))
+              setAnswers((s) => ({ ...s, referenceText: e.target.value }))
             }
           />
         </FieldRow>
       ),
-      valid: () => true,
+      valid: () => meetsMin(answers.referenceText, 30),
+    },
+    {
+      key: "durationSec",
+      label: "How long do you want your scene to be?",
+      render: () => (
+        <FieldRow label="Duration (seconds)" hint="Renders generally take 2–3 mins per 1 second of video.">
+          <input
+            type="number"
+            min={3}
+            step={1}
+            value={answers.durationSec}
+            onChange={(e) =>
+              setAnswers((s) => ({ ...s, durationSec: Number(e.target.value) }))
+            }
+          />
+        </FieldRow>
+      ),
+      valid: () => Number(answers.durationSec) > 0,
+    },
+    {
+      key: "title",
+      label: "What is the title of your scene?",
+      render: () => (
+        <FieldRow label="Title">
+          <input
+            type="text"
+            placeholder="e.g., Barcelona Harbor &amp; City — B-Roll"
+            value={answers.title}
+            onChange={(e) => setAnswers((s) => ({ ...s, title: e.target.value }))}
+          />
+        </FieldRow>
+      ),
+      valid: () => req(answers.title),
     },
     {
       key: "wantsMusic",
@@ -888,7 +921,7 @@ export default function InterviewPage({ onComplete }) {
                 />
               </FieldRow>
 
-              <FieldRow label="Choose a music style" hint="Pick from curated presets.">
+              <FieldRow label="Choose a music style">
                 <select
                   value={answers.musicCategoryLabel || ""}
                   onChange={(e) =>
@@ -947,53 +980,20 @@ export default function InterviewPage({ onComplete }) {
       valid: () => typeof answers.wantsCaptions === "boolean",
     },
     {
-      key: "durationSec",
-      label: "How long do you want your scene to be?",
+      key: "directorsNotes",
+      label: "Do you have any director’s notes?",
       render: () => (
-        <FieldRow label="Duration (seconds)" hint="Renders generally take 2–3 mins per 1 second of video.">
-          <input
-            type="number"
-            min={3}
-            step={1}
-            value={answers.durationSec}
-            onChange={(e) =>
-              setAnswers((s) => ({ ...s, durationSec: Number(e.target.value) }))
-            }
-          />
-        </FieldRow>
-      ),
-      valid: () => Number(answers.durationSec) > 0,
-    },
-    {
-      key: "title",
-      label: "What is the title of your scene?",
-      render: () => (
-        <FieldRow label="Title">
-          <input
-            type="text"
-            placeholder="e.g., Barcelona Harbor & City — B-Roll"
-            value={answers.title}
-            onChange={(e) => setAnswers((s) => ({ ...s, title: e.target.value }))}
-          />
-        </FieldRow>
-      ),
-      valid: () => req(answers.title),
-    },
-    {
-      key: "referenceText",
-      label: "Improve scene accuracy by adding script guidance (context, quotes, or key points).",
-      render: () => (
-        <FieldRow label="Script guidance" hint="Provide context, quotes, or key points. Minimum 30 characters.">
+        <FieldRow label="Director’s notes (optional)" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
-            placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
-            value={answers.referenceText}
+            placeholder="e.g., Prioritize variety and atmosphere. Avoid readable signage."
+            value={answers.directorsNotes}
             onChange={(e) =>
-              setAnswers((s) => ({ ...s, referenceText: e.target.value }))
+              setAnswers((s) => ({ ...s, directorsNotes: e.target.value }))
             }
           />
         </FieldRow>
       ),
-      valid: () => meetsMin(answers.referenceText, 30),
+      valid: () => true,
     },
     {
       key: "advanced",
