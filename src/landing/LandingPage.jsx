@@ -289,7 +289,7 @@ export default function LandingPage() {
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>SceneMe</h1>
         <p style={{ marginTop: 8, color: "#475569" }}>
-          Turn ideas into polished AI video—start with a quick interview or pick a ready‑made template. SceneMe orchestrates voices, visuals, and music into a cohesive story.
+          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Create your own today,or start from a template below.
         </p>
       </header>
 
@@ -309,7 +309,7 @@ export default function LandingPage() {
       <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
             <h2 style={{ marginTop: 0, marginBottom: 12 }}>See what you can make</h2>
             <p style={{ marginTop: 0, color: "#475569" }}>
-              Quick examples you can start from.
+              Explore these examples to spark ideas or kick-start your own.
             </p>
 
             <div className="examplesGrid">

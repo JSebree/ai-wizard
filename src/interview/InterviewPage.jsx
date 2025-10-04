@@ -677,10 +677,10 @@ export default function InterviewPage({ onComplete }) {
     },
     {
       key: "driver",
-      label: "Is your scene character or narrator driven?",
+      label: "Who’s guiding the scene?",
       render: () => (
         <>
-          <FieldRow label="Choose a driver">
+          <FieldRow label="Choose your star">
             <RadioGroup
               name="driver"
               value={answers.driver}
@@ -693,16 +693,28 @@ export default function InterviewPage({ onComplete }) {
                 }))
               }
               options={[
-                { value: "character", label: "Character-driven" },
-                { value: "narrator", label: "Narrator-driven" },
+                { value: "character", label: "Character — An on-camera avatar who is part of the action." },
+                { value: "narrator", label: "Narrator — An off-screen voice that tells the story." },
               ]}
               inline
             />
           </FieldRow>
 
+          {/* New: character/narrator name on this step */}
+          <FieldRow label="What is your star's name?">
+            <input
+              type="text"
+              placeholder="e.g., Sarah"
+              value={answers.characterName}
+              onChange={(e) =>
+                setAnswers((s) => ({ ...s, characterName: e.target.value }))
+              }
+            />
+          </FieldRow>
+
           {answers.driver === "character" && (
             <>
-              <FieldRow label="Do you want cut-away shots?">
+              <FieldRow label="Do you want cutaway shots?" hint="Additional shots in the scene that don’t include an on-camera character.">
                 <RadioGroup
                   name="cutaways"
                   value={
@@ -740,7 +752,8 @@ export default function InterviewPage({ onComplete }) {
         </>
       ),
       valid: () =>
-        req(answers.driver) && (
+        req(answers.driver) &&
+        req(answers.characterName) && (
           answers.driver !== "character" || (
             typeof answers.wantsCutaways === "boolean" && meetsMin(answers.character, 40)
           )
@@ -771,23 +784,6 @@ export default function InterviewPage({ onComplete }) {
       valid: () => req(answers.voiceId),
     },
     {
-      key: "characterName",
-      label: "What is your character’s / narrator’s name?",
-      render: () => (
-        <FieldRow label="Name">
-          <input
-            type="text"
-            placeholder="e.g., Sarah"
-            value={answers.characterName}
-            onChange={(e) =>
-              setAnswers((s) => ({ ...s, characterName: e.target.value }))
-            }
-          />
-        </FieldRow>
-      ),
-      valid: () => req(answers.characterName),
-    },
-    {
       key: "setting",
       label: "Describe the scene’s setting.",
       render: () => (
@@ -803,7 +799,7 @@ export default function InterviewPage({ onComplete }) {
     },
     {
       key: "action",
-      label: "Describe the scene’s action.",
+      label: "Describe the action that occurs in the scene.",
       render: () => (
         <FieldRow label="Action" hint="The more detail you provide, the better your results will match your intentions.">
           <textarea
@@ -892,7 +888,7 @@ export default function InterviewPage({ onComplete }) {
                 />
               </FieldRow>
 
-              <FieldRow label="Choose a music style" hint="Pick from curated presets. Tags are mapped in n8n by label.">
+              <FieldRow label="Choose a music style" hint="Pick from curated presets.">
                 <select
                   value={answers.musicCategoryLabel || ""}
                   onChange={(e) =>
@@ -954,7 +950,7 @@ export default function InterviewPage({ onComplete }) {
       key: "durationSec",
       label: "How long do you want your scene to be?",
       render: () => (
-        <FieldRow label="Duration (seconds)">
+        <FieldRow label="Duration (seconds)" hint="Renders generally take 2–3 mins per 1 second of video.">
           <input
             type="number"
             min={3}
@@ -985,11 +981,11 @@ export default function InterviewPage({ onComplete }) {
     },
     {
       key: "referenceText",
-      label: "For better script guidance, please enter reference text.",
+      label: "Improve scene accuracy by adding script guidance (context, quotes, or key points).",
       render: () => (
-        <FieldRow label="Reference text (optional)" hint="The more detail you provide, the better your results will match your intentions.">
+        <FieldRow label="Script guidance" hint="Provide context, quotes, or key points. Minimum 30 characters.">
           <textarea
-            placeholder="Paste any relevant text for style or guidance."
+            placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
             value={answers.referenceText}
             onChange={(e) =>
               setAnswers((s) => ({ ...s, referenceText: e.target.value }))
@@ -997,7 +993,7 @@ export default function InterviewPage({ onComplete }) {
           />
         </FieldRow>
       ),
-      valid: () => true,
+      valid: () => meetsMin(answers.referenceText, 30),
     },
     {
       key: "advanced",
