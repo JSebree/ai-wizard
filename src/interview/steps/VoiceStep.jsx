@@ -26,32 +26,24 @@ const VOICES_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 // Normalize any incoming voice record to a simple {id, name, previewUrl}
 function normalizeVoice(v) {
+  // Normalize to { id, name, previewUrl }
   const id =
     v?.id ??
     v?.voice_id ??
     v?.tts_id ??
-    v?.name ?? // some lists use name as id
+    v?.voiceId ??
+    v?.name ??
     "";
+
+  // Prefer explicit friendly names; fall back to id
   const name =
-    (
-      v?.voice_name ??
-      v?.name ??
-      v?.label ??
-      v?.displayName ??
-      (typeof v === "string" ? v : "")
-    ) || "Untitled";
+    (v?.voice_name ?? v?.name ?? v?.label ?? v?.displayName ?? (typeof v === "string" ? v : "")) ||
+    String(id) ||
+    "Untitled";
+
+  // Our data source exposes only `audio_url` for previews
   const previewUrl =
-    (typeof v?.audio_url === "string" && v.audio_url.trim()) ||
-    (typeof v?.preview_url === "string" && v.preview_url.trim()) ||
-    (typeof v?.previewUrl === "string" && v.previewUrl.trim()) ||
-    (typeof v?.preview === "string" && v.preview.trim()) ||
-    (typeof v?.sample_url === "string" && v.sample_url.trim()) ||
-    (typeof v?.sample === "string" && v.sample.trim()) ||
-    (Array.isArray(v?.samples) && typeof v.samples[0]?.url === "string" && v.samples[0].url.trim()) ||
-    (typeof v?.demo === "string" && v.demo.trim()) ||
-    (typeof v?.url === "string" && v.url.trim()) ||
-    (typeof v?.audio === "string" && v.audio.trim()) ||
-    null;
+    (typeof v?.audio_url === "string" && v.audio_url.trim()) || null;
 
   return { id: String(id), name: String(name), previewUrl, _raw: v };
 }
@@ -265,6 +257,7 @@ export default function VoiceStep({
     const url = selectedVoice?.previewUrl;
     if (!url || !audioRef.current) return;
     try {
+      audioRef.current.crossOrigin = "anonymous";
       audioRef.current.src = url;
       await audioRef.current.play();
       setIsPlaying(true);
@@ -325,7 +318,7 @@ export default function VoiceStep({
       </div>
 
       {/* Hidden audio element */}
-      <audio ref={audioRef} preload="none" onEnded={() => setIsPlaying(false)} />
+      <audio ref={audioRef} preload="none" crossOrigin="anonymous" onEnded={() => setIsPlaying(false)} />
 
       {/* Hint when no preview is available */}
       {!selectedVoice?.previewUrl && selectedId ? (
