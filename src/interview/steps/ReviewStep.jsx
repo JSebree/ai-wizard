@@ -371,28 +371,45 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     const click = () => {
       // Special-case landing goes to root
       if (to === 'landing') {
-        try { localStorage.setItem('interview_step_key', 'landing'); } catch {}
+        try { localStorage.setItem(LS_KEY_STEP, 'landing'); } catch {}
         try { window.scrollTo({ top: 0 }); } catch {}
         window.location.href = '/';
         return;
       }
 
-      // Prefer parent handler if provided
-      if (typeof onEditStep === 'function') {
-        onEditStep(targetKey ?? to);
+      // If parent provided a quick-jump handler that expects an index,
+      // try to resolve a numeric index from stepIndexMap.
+      const idx = (targetKey && typeof stepIndexMap?.[targetKey] === 'number')
+        ? stepIndexMap[targetKey]
+        : (typeof to === 'number' ? to : null);
+
+      if (typeof onEditStep === 'function' && idx !== null) {
+        onEditStep(idx);
       }
 
       // Broadcast a navigation hint that shells can listen for
       try {
         window.dispatchEvent(new CustomEvent('interview:navigate', {
-          detail: { stepKey: targetKey ?? undefined }
+          detail: { stepKey: targetKey ?? undefined, stepIndex: idx ?? undefined }
         }));
       } catch {}
 
       // Persist intent so a hard reload or different shell can restore it
-      try { if (targetKey) localStorage.setItem('interview_step_key', String(targetKey)); } catch {}
+      try { if (targetKey) localStorage.setItem(LS_KEY_STEP, String(targetKey)); } catch {}
 
       try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch {}
+
+      // If we're currently on a /review route, navigate back to the base wizard
+      // (so the shell can pick up the stored step key on mount).
+      try {
+        const { pathname } = window.location;
+        const nextPath = pathname.replace(/\/?review\/?$/, '') || '/';
+        if (nextPath !== pathname) {
+          window.location.href = nextPath;
+          return;
+        }
+      } catch {}
+
       // Soft navigation is handled by listeners; fall back to reload
       setTimeout(() => { if (document.visibilityState !== 'hidden') window.location.reload(); }, 50);
     };
