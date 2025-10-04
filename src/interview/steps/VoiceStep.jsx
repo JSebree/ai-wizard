@@ -41,9 +41,16 @@ function normalizeVoice(v) {
     String(id) ||
     "Untitled";
 
-  // Our data source exposes only `audio_url` for previews
+  // Accept legacy and alternate preview fields; primary is `audio_url`
   const previewUrl =
-    (typeof v?.audio_url === "string" && v.audio_url.trim()) || null;
+    (typeof v?.audio_url === "string" && v.audio_url.trim()) ??
+    (typeof v?.preview_url === "string" && v.preview_url.trim()) ??
+    (typeof v?.previewUrl === "string" && v.previewUrl.trim()) ??
+    (typeof v?.sample === "string" && v.sample.trim()) ??
+    (typeof v?.demo === "string" && v.demo.trim()) ??
+    (typeof v?.url === "string" && v.url.trim()) ??
+    (typeof v?.audio === "string" && v.audio.trim()) ??
+    null;
 
   return { id: String(id), name: String(name), previewUrl, _raw: v };
 }
@@ -259,6 +266,7 @@ export default function VoiceStep({
     try {
       audioRef.current.crossOrigin = "anonymous";
       audioRef.current.src = url;
+      audioRef.current.currentTime = 0;
       await audioRef.current.play();
       setIsPlaying(true);
     } catch (err) {
