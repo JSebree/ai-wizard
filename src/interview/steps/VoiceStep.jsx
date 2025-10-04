@@ -26,33 +26,21 @@ const VOICES_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 // Normalize any incoming voice record to a simple {id, name, previewUrl}
 function normalizeVoice(v) {
-  // Normalize to { id, name, previewUrl }
-  const id =
-    v?.id ??
-    v?.voice_id ??
-    v?.tts_id ??
-    v?.voiceId ??
-    v?.name ??
-    "";
-
-  // Prefer explicit friendly names; fall back to id
-  const name =
-    (v?.voice_name ?? v?.name ?? v?.label ?? v?.displayName ?? (typeof v === "string" ? v : "")) ||
-    String(id) ||
-    "Untitled";
-
-  // Accept legacy and alternate preview fields; primary is `audio_url`
-  const previewUrl =
-    (typeof v?.audio_url === "string" && v.audio_url.trim()) ??
-    (typeof v?.preview_url === "string" && v.preview_url.trim()) ??
-    (typeof v?.previewUrl === "string" && v.previewUrl.trim()) ??
-    (typeof v?.sample === "string" && v.sample.trim()) ??
-    (typeof v?.demo === "string" && v.demo.trim()) ??
-    (typeof v?.url === "string" && v.url.trim()) ??
-    (typeof v?.audio === "string" && v.audio.trim()) ??
-    null;
-
-  return { id: String(id), name: String(name), previewUrl, _raw: v };
+  return {
+    id: v?.id || v?.name || "",
+    name: v?.name || v?.label || v?.displayName || v?.tts_id || "Untitled",
+    // Prefer your Supabase/DigitalOcean field
+    previewUrl:
+      v?.audio_url ||
+      v?.preview_url ||
+      v?.previewUrl ||
+      v?.sample ||
+      v?.demo ||
+      v?.url ||
+      v?.audio ||
+      null,
+    _raw: v,
+  };
 }
 
 function readCachedVoices() {
