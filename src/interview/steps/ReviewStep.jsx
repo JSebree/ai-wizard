@@ -364,43 +364,49 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     }
   }
 
-  // EditLink: accepts either a step key (preferred) or a numeric index for backward compatibility.
   const EditLink = ({ to, label = "Edit" }) => {
-    // If 'to' is a string, resolve via stepIndexMap
-    let resolvedStep = null;
-    if (to === 'landing') {
-      // special case for landing page
-      resolvedStep = 'landing';
-    } else if (typeof to === 'number') {
-      resolvedStep = to;
-    } else if (typeof to === 'string') {
-      // Look up index from stepIndexMap
-      const idx = stepIndexMap?.[to];
-      if (idx === undefined || idx === null) {
-        // If not found, do not render the button at all
-        return null;
-      }
-      resolvedStep = idx;
-    } else {
-      // invalid target
-      return null;
-    }
+    // Accept either a numeric index or a string step key.
+    const targetKey = typeof to === 'string' ? to : null;
+    const targetIndex = typeof to === 'number'
+      ? to
+      : (targetKey != null && Number.isFinite(stepIndexMap?.[targetKey])
+          ? stepIndexMap[targetKey]
+          : null);
+
     const click = () => {
-      if (resolvedStep === 'landing') {
+      // Special-case landing
+      if (to === 'landing') {
         try { window.scrollTo({ top: 0 }); } catch {}
         window.location.href = '/';
         return;
       }
+
+      // Preferred: parent handler – pass index if known, else the key
       if (typeof onEditStep === 'function') {
-        onEditStep(resolvedStep);
+        onEditStep(targetIndex ?? targetKey);
         return;
       }
-      // Fallback: persist target step and hard-reload so the wizard
-      // re-initializes on the correct step from localStorage.
-      try { localStorage.setItem(LS_KEY_STEP, String(resolvedStep)); } catch {}
+
+      // Notify shell (optional listener)
+      try {
+        window.dispatchEvent(new CustomEvent('interview:navigate', {
+          detail: { stepIndex: targetIndex ?? undefined, stepKey: targetKey ?? undefined }
+        }));
+      } catch {}
+
+      // Fallback: persist target and hard-reload so the wizard can restore
+      try {
+        if (targetIndex != null) {
+          localStorage.setItem(LS_KEY_STEP, String(targetIndex));
+        }
+        if (targetKey) {
+          localStorage.setItem('interview_step_key', String(targetKey));
+        }
+      } catch {}
       try { window.scrollTo({ top: 0 }); } catch {}
       window.location.reload();
     };
+
     return (
       <button
         type="button"
