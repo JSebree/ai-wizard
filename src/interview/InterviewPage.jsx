@@ -561,9 +561,40 @@ export default function InterviewPage({ onComplete }) {
     writeJSON(LS_KEY_ANS, answers);
   }, [answers]);
 
+  // (moved below steps): persist current step key defensively
+  // Normalize any previously-saved step (number or key) to a valid index
   useEffect(() => {
-    writeJSON(LS_KEY_STEP, stepIndex);
-  }, [stepIndex]);
+    try {
+      const raw = localStorage.getItem(LS_KEY_STEP);
+      if (raw == null) return;
+
+      const keys = steps.map(s => s.key);
+      let nextIdx = 0;
+
+      // If a numeric index was saved previously
+      if (/^\d+$/.test(String(raw))) {
+        const n = Number(raw);
+        nextIdx = (n >= 0 && n < keys.length) ? n : 0;
+      } else {
+        // Otherwise treat it as a key string
+        const k = String(raw);
+        const i = keys.indexOf(k);
+        nextIdx = (i >= 0) ? i : 0;
+      }
+
+      if (nextIdx !== stepIndex) {
+        setStepIndex(nextIdx);
+      }
+    } catch {
+      // ignore and keep current stepIndex
+    }
+  }, [steps.length]);  // re-run if order/keys change
+
+  // Persist the current step *key* so external pages can route reliably
+  useEffect(() => {
+    const key = steps[stepIndex]?.key ?? String(stepIndex);
+    writeJSON(LS_KEY_STEP, key);
+  }, [stepIndex, steps]);
 
   // Listen for app-level request to jump to first step without clearing answers
   useEffect(() => {
