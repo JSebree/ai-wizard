@@ -94,10 +94,13 @@ function mapTemplateToAnswers(ui, defaults) {
     wantsCutaways:
       typeof ui.wantsCutaways === "boolean" ? ui.wantsCutaways : defaults.wantsCutaways,
     character: ui.character ?? defaults.character,
-    // Voice
-    voiceId: ui.voiceId ?? defaults.voiceId,
-    voiceLabel: defaults.voiceLabel, // keep empty; will be derived by voices loader
-    characterGender: ui.characterGender ?? defaults.characterGender,
+    // Voice (robust import from various template shapes)
+    voiceId:
+      (ui.voiceId ?? ui.voice_id ?? (ui.voice?.id ?? ui.voice?.voice_id) ?? defaults.voiceId),
+    voiceLabel:
+      (ui.voiceLabel ?? ui.voice_name ?? ui.voice?.name ?? ui.voice?.voice_name ?? defaults.voiceLabel),
+    characterGender:
+      (ui.characterGender ?? ui.voiceGender ?? defaults.characterGender),
     characterName: ui.characterName ?? defaults.characterName,
     // Setting / action
     setting: ui.setting ?? defaults.setting,
