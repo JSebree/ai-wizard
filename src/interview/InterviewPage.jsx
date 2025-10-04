@@ -373,26 +373,96 @@ export default function InterviewPage({ onComplete }) {
 
   // Allow external components (e.g., ReviewStep) to jump to a specific step by key
   useEffect(() => {
+    // Rebind when the step list/keys change to avoid stale-closure bugs
+    const keys = steps.map(s => s.key);
+
+    // Normalize incoming targets to canonical step keys used in `steps`
+    const alias = {
+      // scene block
+      scene: 'scene',
+
+      // character / narrator block
+      driver: 'driver',
+      character: 'driver',
+      star: 'driver',
+
+      // voice block
+      voice: 'voiceId',
+      voiceId: 'voiceId',
+
+      // setting / action
+      setting: 'setting',
+      action: 'action',
+
+      // script / output guidance
+      output: 'referenceText',
+      reference: 'referenceText',
+      referenceText: 'referenceText',
+      script: 'referenceText',
+      guidance: 'referenceText',
+
+      // timing / title
+      duration: 'durationSec',
+      durationSec: 'durationSec',
+      title: 'title',
+
+      // audio / captions
+      audio: 'wantsMusic',
+      music: 'wantsMusic',
+      wantsMusic: 'wantsMusic',
+      captions: 'wantsCaptions',
+      wantsCaptions: 'wantsCaptions',
+
+      // notes / advanced
+      directorsNotes: 'directorsNotes',
+      notes: 'directorsNotes',
+      advanced: 'advanced',
+
+      // review (rare, but supported)
+      review: 'review',
+    };
+
+    function resolveKey(input) {
+      if (!input) return null;
+      if (typeof input === 'number') return steps[input]?.key ?? null;
+      if (typeof input === 'string') {
+        const k = alias[input] || input;
+        return keys.includes(k) ? k : null;
+      }
+      if (typeof input === 'object') {
+        const raw =
+          input.key ?? input.stepKey ?? input.targetKey ??
+          input.section ?? input.sectionKey ?? null;
+        if (Number.isInteger(input.index)) return steps[input.index]?.key ?? null;
+        if (typeof raw === 'string') {
+          const k = alias[raw] || raw;
+          return keys.includes(k) ? k : null;
+        }
+      }
+      return null;
+    }
+
     function onGoSpecificStep(e) {
-      const d = e?.detail;
-      const key = (d && (d.key || d.stepKey || d.targetKey || d)) || null;
-      if (!key) return;
-      const idx = steps.findIndex((s) => s.key === key);
+      const target = e?.detail ?? null;
+      const key = resolveKey(target);
+      if (!key) return; // ignore unknown targets
+
+      const idx = steps.findIndex(s => s.key === key);
       if (idx >= 0) {
         setStepIndex(idx);
         try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
       }
     }
 
-    window.addEventListener("interview:goStep", onGoSpecificStep);
-    window.addEventListener("interview:editStep", onGoSpecificStep);
+    window.addEventListener('interview:goStep', onGoSpecificStep);
+    window.addEventListener('interview:editStep', onGoSpecificStep);
 
     return () => {
-      window.removeEventListener("interview:goStep", onGoSpecificStep);
-      window.removeEventListener("interview:editStep", onGoSpecificStep);
+      window.removeEventListener('interview:goStep', onGoSpecificStep);
+      window.removeEventListener('interview:editStep', onGoSpecificStep);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Depend on the current *keys* so we rebind when order/keys change
+  }, [steps.map(s => s.key).join('|')]);
 
   const N8N_WEBHOOK_URL =
     (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
