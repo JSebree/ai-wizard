@@ -33,12 +33,13 @@ function normalizeVoice(v) {
     v?.name ?? // some lists use name as id
     "";
   const name =
-    v?.voice_name ??
-    v?.name ??
-    v?.label ??
-    v?.displayName ??
-    (typeof v === "string" ? v : "") ||
-    "Untitled";
+    (
+      v?.voice_name ??
+      v?.name ??
+      v?.label ??
+      v?.displayName ??
+      (typeof v === "string" ? v : "")
+    ) || "Untitled";
   const previewUrl =
     v?.audio_url ??
     v?.preview_url ??
@@ -227,18 +228,18 @@ export default function VoiceStep({
     [onChange, onLabelChange]
   );
 
-  // If selectedId changes (from props or user), ensure parent is notified with a valid label
+  // If selectedId changes (from props or user), backfill label for local display only.
+  // Do NOT emit onChange here to avoid feedback loops with parent state updates.
   useEffect(() => {
     if (!selectedId) return;
     const hit = Array.isArray(voices) ? voices.find((v) => v.id === selectedId) : null;
     const label = hit?.name || selectedLabel || "";
-    if (label) {
-      // keep our mirror label up-to-date too
-      if (label !== selectedLabel) setSelectedLabel(label);
-      emitChange(selectedId, label);
+    if (label && label !== selectedLabel) {
+      setSelectedLabel(label);
+      onLabelChange?.(label);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selectedId, voices]);
 
   const options = useMemo(() => (Array.isArray(voices) ? voices : []), [voices]);
   const selectedVoice = useMemo(
