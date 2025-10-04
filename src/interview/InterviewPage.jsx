@@ -504,28 +504,40 @@ export default function InterviewPage({ onComplete }) {
         const list = await loadVoices();
         if (cancelled) return;
 
-        // If user hasn’t picked a voice yet, gently set Emma (or first entry)
-        if (list && (!answers.voiceId || String(answers.voiceId).trim() === "")) {
+        // If user hasn’t picked a voice yet, gently set Emma (or first entry).
+        // Guard with a *functional* set to avoid overwriting a voice that may have been
+        // applied by a template after this effect captured stale `answers`.
+        if (list) {
           const emma = list.find((v) => /emma/i.test(v.name)) || list[0];
           if (emma) {
-            setAnswers((s) => ({
-              ...s,
-              voiceId: emma.id,
-              voiceLabel: emma.name,
-            }));
+            setAnswers((s) => {
+              const currId = typeof s.voiceId === "object"
+                ? (s.voiceId.id || s.voiceId.voice_id || s.voiceId.tts_id || "")
+                : (s.voiceId || "");
+              if (String(currId).trim()) return s; // already set (e.g., from template) → do not overwrite
+              return {
+                ...s,
+                voiceId: emma.id,
+                voiceLabel: s.voiceLabel || emma.name,
+              };
+            });
           }
         }
       } else {
-        // Voices restored from cache; also ensure default if needed
-        if (!answers.voiceId || String(answers.voiceId).trim() === "") {
-          const emma = voices.find((v) => /emma/i.test(v.name)) || voices[0];
-          if (emma) {
-            setAnswers((s) => ({
+        // Voices restored from cache; ensure default only if still empty (guarded)
+        const emma = voices.find((v) => /emma/i.test(v.name)) || voices[0];
+        if (emma) {
+          setAnswers((s) => {
+            const currId = typeof s.voiceId === "object"
+              ? (s.voiceId.id || s.voiceId.voice_id || s.voiceId.tts_id || "")
+              : (s.voiceId || "");
+            if (String(currId).trim()) return s; // someone (e.g., template) already set it
+            return {
               ...s,
               voiceId: emma.id,
-              voiceLabel: emma.name,
-            }));
-          }
+              voiceLabel: s.voiceLabel || emma.name,
+            };
+          });
         }
       }
     }
