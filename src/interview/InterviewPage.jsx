@@ -360,6 +360,7 @@ export default function InterviewPage({ onComplete }) {
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
+  // Jump to last (review) when 'interview:goReviewStep' fires
   useEffect(() => {
     function onGoReview() {
       const last = steps.length - 1;
@@ -378,47 +379,30 @@ export default function InterviewPage({ onComplete }) {
 
     // Normalize incoming targets to canonical step keys used in `steps`
     const alias = {
-      // scene block
       scene: 'scene',
-
-      // character / narrator block
       driver: 'driver',
       character: 'driver',
       star: 'driver',
-
-      // voice block
       voice: 'voiceId',
       voiceId: 'voiceId',
-
-      // setting / action
       setting: 'setting',
       action: 'action',
-
-      // script / output guidance
       output: 'referenceText',
       reference: 'referenceText',
       referenceText: 'referenceText',
       script: 'referenceText',
       guidance: 'referenceText',
-
-      // timing / title
       duration: 'durationSec',
       durationSec: 'durationSec',
       title: 'title',
-
-      // audio / captions
       audio: 'wantsMusic',
       music: 'wantsMusic',
       wantsMusic: 'wantsMusic',
       captions: 'wantsCaptions',
       wantsCaptions: 'wantsCaptions',
-
-      // notes / advanced
       directorsNotes: 'directorsNotes',
       notes: 'directorsNotes',
       advanced: 'advanced',
-
-      // review (rare, but supported)
       review: 'review',
     };
 
