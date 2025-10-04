@@ -360,93 +360,8 @@ export default function InterviewPage({ onComplete }) {
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
 
-  // Jump to last (review) when 'interview:goReviewStep' fires
-  useEffect(() => {
-    function onGoReview() {
-      const last = steps.length - 1;
-      if (last >= 0) setStepIndex(last);
-      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-    }
-    window.addEventListener("interview:goReviewStep", onGoReview);
-    return () => window.removeEventListener("interview:goReviewStep", onGoReview);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Allow external components (e.g., ReviewStep) to jump to a specific step by key
-  useEffect(() => {
-    // Rebind when the step list/keys change to avoid stale-closure bugs
-    const keys = steps.map(s => s.key);
-
-    // Normalize incoming targets to canonical step keys used in `steps`
-    const alias = {
-      scene: 'scene',
-      driver: 'driver',
-      character: 'driver',
-      star: 'driver',
-      voice: 'voiceId',
-      voiceId: 'voiceId',
-      setting: 'setting',
-      action: 'action',
-      output: 'referenceText',
-      reference: 'referenceText',
-      referenceText: 'referenceText',
-      script: 'referenceText',
-      guidance: 'referenceText',
-      duration: 'durationSec',
-      durationSec: 'durationSec',
-      title: 'title',
-      audio: 'wantsMusic',
-      music: 'wantsMusic',
-      wantsMusic: 'wantsMusic',
-      captions: 'wantsCaptions',
-      wantsCaptions: 'wantsCaptions',
-      directorsNotes: 'directorsNotes',
-      notes: 'directorsNotes',
-      advanced: 'advanced',
-      review: 'review',
-    };
-
-    function resolveKey(input) {
-      if (!input) return null;
-      if (typeof input === 'number') return steps[input]?.key ?? null;
-      if (typeof input === 'string') {
-        const k = alias[input] || input;
-        return keys.includes(k) ? k : null;
-      }
-      if (typeof input === 'object') {
-        const raw =
-          input.key ?? input.stepKey ?? input.targetKey ??
-          input.section ?? input.sectionKey ?? null;
-        if (Number.isInteger(input.index)) return steps[input.index]?.key ?? null;
-        if (typeof raw === 'string') {
-          const k = alias[raw] || raw;
-          return keys.includes(k) ? k : null;
-        }
-      }
-      return null;
-    }
-
-    function onGoSpecificStep(e) {
-      const target = e?.detail ?? null;
-      const key = resolveKey(target);
-      if (!key) return; // ignore unknown targets
-
-      const idx = steps.findIndex(s => s.key === key);
-      if (idx >= 0) {
-        setStepIndex(idx);
-        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
-      }
-    }
-
-    window.addEventListener('interview:goStep', onGoSpecificStep);
-    window.addEventListener('interview:editStep', onGoSpecificStep);
-
-    return () => {
-      window.removeEventListener('interview:goStep', onGoSpecificStep);
-      window.removeEventListener('interview:editStep', onGoSpecificStep);
-    };
-    // Depend on the current *keys* so we rebind when order/keys change
-  }, [steps.map(s => s.key).join('|')]);
+  // (Moved event-listener effects live below steps definition)
+  // --------------------------- Steps definition -------------------------
 
   const N8N_WEBHOOK_URL =
     (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
@@ -561,40 +476,9 @@ export default function InterviewPage({ onComplete }) {
     writeJSON(LS_KEY_ANS, answers);
   }, [answers]);
 
-  // (moved below steps): persist current step key defensively
-  // Normalize any previously-saved step (number or key) to a valid index
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY_STEP);
-      if (raw == null) return;
-
-      const keys = steps.map(s => s.key);
-      let nextIdx = 0;
-
-      // If a numeric index was saved previously
-      if (/^\d+$/.test(String(raw))) {
-        const n = Number(raw);
-        nextIdx = (n >= 0 && n < keys.length) ? n : 0;
-      } else {
-        // Otherwise treat it as a key string
-        const k = String(raw);
-        const i = keys.indexOf(k);
-        nextIdx = (i >= 0) ? i : 0;
-      }
-
-      if (nextIdx !== stepIndex) {
-        setStepIndex(nextIdx);
-      }
-    } catch {
-      // ignore and keep current stepIndex
-    }
-  }, [steps.length]);  // re-run if order/keys change
-
-  // Persist the current step *key* so external pages can route reliably
-  useEffect(() => {
-    const key = steps[stepIndex]?.key ?? String(stepIndex);
-    writeJSON(LS_KEY_STEP, key);
-  }, [stepIndex, steps]);
+    writeJSON(LS_KEY_STEP, stepIndex);
+  }, [stepIndex]);
 
   // Listen for app-level request to jump to first step without clearing answers
   useEffect(() => {
@@ -1142,6 +1026,104 @@ export default function InterviewPage({ onComplete }) {
       valid: () => true,
     },
   ];
+
+  // Jump to last (review) when 'interview:goReviewStep' fires
+  useEffect(() => {
+    function onGoReview() {
+      const last = steps.length - 1;
+      if (last >= 0) setStepIndex(last);
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    }
+    window.addEventListener("interview:goReviewStep", onGoReview);
+    return () => window.removeEventListener("interview:goReviewStep", onGoReview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Allow external components (e.g., ReviewStep) to jump to a specific step by key
+  useEffect(() => {
+    // Rebind when the step list/keys change to avoid stale-closure bugs
+    const keys = steps.map(s => s.key);
+
+    // Normalize incoming targets to canonical step keys used in `steps`
+    const alias = {
+      scene: 'scene',
+      driver: 'driver',
+      character: 'driver',
+      star: 'driver',
+      voice: 'voiceId',
+      voiceId: 'voiceId',
+      setting: 'setting',
+      action: 'action',
+      output: 'referenceText',
+      reference: 'referenceText',
+      referenceText: 'referenceText',
+      script: 'referenceText',
+      guidance: 'referenceText',
+      duration: 'durationSec',
+      durationSec: 'durationSec',
+      title: 'title',
+      audio: 'wantsMusic',
+      music: 'wantsMusic',
+      wantsMusic: 'wantsMusic',
+      captions: 'wantsCaptions',
+      wantsCaptions: 'wantsCaptions',
+      directorsNotes: 'directorsNotes',
+      notes: 'directorsNotes',
+      advanced: 'advanced',
+      review: 'review',
+    };
+
+    function resolveKey(input) {
+      if (!input) return null;
+      if (typeof input === 'number') return steps[input]?.key ?? null;
+      if (typeof input === 'string') {
+        const k = alias[input] || input;
+        return keys.includes(k) ? k : null;
+      }
+      if (typeof input === 'object') {
+        const raw =
+          input.key ?? input.stepKey ?? input.targetKey ??
+          input.section ?? input.sectionKey ?? null;
+        if (Number.isInteger(input.index)) return steps[input.index]?.key ?? null;
+        if (typeof raw === 'string') {
+          const k = alias[raw] || raw;
+          return keys.includes(k) ? k : null;
+        }
+      }
+      return null;
+    }
+
+    function onGoSpecificStep(e) {
+      const target = e?.detail ?? null;
+      const key = resolveKey(target);
+      if (!key) return; // ignore unknown targets
+
+      const idx = steps.findIndex(s => s.key === key);
+      if (idx >= 0) {
+        setStepIndex(idx);
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+      }
+    }
+
+    window.addEventListener('interview:goStep', onGoSpecificStep);
+    window.addEventListener('interview:editStep', onGoSpecificStep);
+
+    return () => {
+      window.removeEventListener('interview:goStep', onGoSpecificStep);
+      window.removeEventListener('interview:editStep', onGoSpecificStep);
+    };
+    // Depend on the current *keys* so we rebind when order/keys change
+  }, [steps.map(s => s.key).join('|')]);
+
+  // Clamp stepIndex to a valid range whenever steps change (prevents white screens)
+  useEffect(() => {
+    if (!Array.isArray(steps) || steps.length === 0) return;
+    if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= steps.length) {
+      const idx = Math.max(0, Math.min(steps.length - 1, Number(stepIndex) || 0));
+      setStepIndex(idx);
+      try { writeJSON(LS_KEY_STEP, idx); } catch {}
+    }
+  }, [steps.length]);
 
   useEffect(() => {
     // Hydrate from landing-page template and jump to Review
