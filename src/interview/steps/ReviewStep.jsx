@@ -364,31 +364,40 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     }
   }
 
-  // Map of step indices for quick Edit links (allows parent to override)
-  const idx = {
-    scene: stepIndexMap.scene ?? 0,
-    voice: stepIndexMap.voice ?? 2,
-    settingAction: stepIndexMap.settingAction ?? 4,
-    audio: stepIndexMap.audio ?? 7,
-    output: stepIndexMap.output ?? 9, // duration/title/reference
-    advanced: stepIndexMap.advanced ?? 12, // adjust based on your actual steps
-  };
-
-  // helper for quick “Edit” links (optional)
+  // EditLink: accepts either a step key (preferred) or a numeric index for backward compatibility.
   const EditLink = ({ to, label = "Edit" }) => {
+    // If 'to' is a string, resolve via stepIndexMap
+    let resolvedStep = null;
+    if (to === 'landing') {
+      // special case for landing page
+      resolvedStep = 'landing';
+    } else if (typeof to === 'number') {
+      resolvedStep = to;
+    } else if (typeof to === 'string') {
+      // Look up index from stepIndexMap
+      const idx = stepIndexMap?.[to];
+      if (idx === undefined || idx === null) {
+        // If not found, do not render the button at all
+        return null;
+      }
+      resolvedStep = idx;
+    } else {
+      // invalid target
+      return null;
+    }
     const click = () => {
-      if (to === 'landing') {
+      if (resolvedStep === 'landing') {
         try { window.scrollTo({ top: 0 }); } catch {}
         window.location.href = '/';
         return;
       }
       if (typeof onEditStep === 'function') {
-        onEditStep(to);
+        onEditStep(resolvedStep);
         return;
       }
       // Fallback: persist target step and hard-reload so the wizard
       // re-initializes on the correct step from localStorage.
-      try { localStorage.setItem(LS_KEY_STEP, String(to)); } catch {}
+      try { localStorage.setItem(LS_KEY_STEP, String(resolvedStep)); } catch {}
       try { window.scrollTo({ top: 0 }); } catch {}
       window.location.reload();
     };
@@ -513,7 +522,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Email" value={safe(ui.userEmail)} />
         </Section>
 
-        <Section title="Scene" action={<EditLink to={idx.scene} />}>
+        <Section title="Scene" action={<EditLink to="scene" />}>
           <Field label="Scene description" value={safe(ui.scene)} />
           <Field label="Driver" value={safe(ui.driver)} />
           {ui.driver === "character" && (
@@ -524,19 +533,19 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           )}
         </Section>
 
-        <Section title="Voice" action={<EditLink to={idx.voice} />}>
+        <Section title="Voice" action={<EditLink to="voice" />}>
           <Field label="Voice ID" value={safe(ui.voiceId)} mono />
           <Field label="Character gender (inferred)" value={safe(ui.characterGender)} />
           <Field label="Character / narrator name" value={safe(ui.characterName)} />
         </Section>
 
-        <Section title="Setting & Action" action={<EditLink to={idx.settingAction} />}>
+        <Section title="Setting & Action" action={<EditLink to="settingAction" />}>
           <Field label="Setting" value={safe(ui.setting)} />
           <Field label="Action" value={safe(ui.action)} />
           <Field label="Director’s notes" value={safe(ui.directorsNotes)} />
         </Section>
 
-        <Section title="Audio" action={<EditLink to={idx.audio} />}>
+        <Section title="Audio" action={<EditLink to="audio" />}>
           <Field label="Wants music" value={yesNo(ui.wantsMusic)} />
           {ui.wantsMusic && ui.musicCategoryLabel && (
             <Field label="Music category" value={safe(ui.musicCategoryLabel)} />
@@ -550,13 +559,13 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Wants captions" value={yesNo(ui.wantsCaptions)} />
         </Section>
 
-        <Section title="Output" action={<EditLink to={idx.output} />}>
+        <Section title="Output" action={<EditLink to="output" />}>
           <Field label="Duration (seconds)" value={safe(ui.durationSec)} />
           <Field label="Title" value={safe(ui.title)} />
           <Field label="Reference text" value={safe(ui.referenceText)} />
         </Section>
 
-        <Section title="Advanced settings" action={<EditLink to={idx.advanced} />}>
+        <Section title="Advanced settings" action={<EditLink to="advanced" />}>
           <Field label="Enabled" value={yesNo(ui?.advanced?.enabled)} />
           {ui?.advanced?.enabled ? (
             <>
