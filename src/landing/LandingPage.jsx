@@ -153,6 +153,43 @@ const templates = [
         }
       }
     }
+  },
+  {
+    id: "kendra-testimonial-1",
+    title: "Kendra Testimonial Ad",
+    kind: "Testimonial",
+    description: "30s car-seat testimonial ad about a delicious, affordable burger.",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/15b73581-e625-4d7d-812e-e05f968322c6_output_0.mp4",
+    json: {
+      "ui": {
+        "scene": "A 30 second testimonial advertisement staring a young woman sitting in here car discussing how delicious and affordable her burger is",
+        "driver": "character",
+        "wantsCutaways": false,
+        "character": "A beautiful 20 something year old African American woman with expressive eyes and bubbly personality ",
+        "setting": "The setting is inside of a car. The scene takes place in the front seat where the character is sitting and holding a juicy gourmet burger in one hand.",
+        "action": "The young woman sits in the front seat of her car, delivering a testimonial about a burger that she just ordered. She talks happily as she shows the burger in her hands",
+        "wantsMusic": true,
+        "musicCategoryLabel": "Lo-Fi / Chillhop",
+        "wantsCaptions": true,
+        "durationSec": 30,
+        "referenceText": "Generate a 30 second testimonial advertisement that features a delicious cheeseburger. Be sure to highlight the delicious taste, affordability, and convenience ",
+        "voiceId": "c9dd06ff-04eb-4b8e-b274-62b23bf54242",
+        "characterGender": "female",
+        "title": "Kendra ad",
+        "characterName": "Kendra",
+        "userEmail": "",
+        "userFirstName": "",
+        "userLastName": "",
+        "advanced": {
+          "enabled": true,
+          "style": "Photorealistic",
+          "musicVolume": 0.1,
+          "voiceVolume": 1,
+          "includeVocals": false,
+          "seed": 927896146
+        }
+      }
+    }
   }
 ];
 
