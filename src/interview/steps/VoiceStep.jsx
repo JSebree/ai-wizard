@@ -41,13 +41,16 @@ function normalizeVoice(v) {
       (typeof v === "string" ? v : "")
     ) || "Untitled";
   const previewUrl =
-    v?.audio_url ??
-    v?.preview_url ??
-    v?.previewUrl ??
-    v?.sample ??
-    v?.demo ??
-    v?.url ??
-    v?.audio ??
+    (typeof v?.audio_url === "string" && v.audio_url.trim()) ||
+    (typeof v?.preview_url === "string" && v.preview_url.trim()) ||
+    (typeof v?.previewUrl === "string" && v.previewUrl.trim()) ||
+    (typeof v?.preview === "string" && v.preview.trim()) ||
+    (typeof v?.sample_url === "string" && v.sample_url.trim()) ||
+    (typeof v?.sample === "string" && v.sample.trim()) ||
+    (Array.isArray(v?.samples) && typeof v.samples[0]?.url === "string" && v.samples[0].url.trim()) ||
+    (typeof v?.demo === "string" && v.demo.trim()) ||
+    (typeof v?.url === "string" && v.url.trim()) ||
+    (typeof v?.audio === "string" && v.audio.trim()) ||
     null;
 
   return { id: String(id), name: String(name), previewUrl, _raw: v };
@@ -281,16 +284,11 @@ export default function VoiceStep({
   return (
     <div className={`w-full ${className}`}>
       {/* Status row */}
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 h-4">
         {loading ? (
           <span className="text-xs text-slate-400">Loading…</span>
         ) : error ? (
           <span className="text-xs text-rose-400">{String(error)}</span>
-        ) : null}
-        {genderPreview ? (
-          <span className="text-xs text-slate-400">
-            Detected gender: <strong className="text-slate-200">{genderPreview}</strong>
-          </span>
         ) : null}
       </div>
 
