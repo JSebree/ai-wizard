@@ -383,15 +383,20 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         ? stepIndexMap[targetKey]
         : (typeof to === 'number' ? to : null);
 
-      if (typeof onEditStep === 'function' && idx !== null) {
-        onEditStep(idx);
+      // Prefer direct callback if provided: support both index *and* string key
+      if (typeof onEditStep === 'function') {
+        if (idx !== null && idx !== undefined) {
+          onEditStep(idx);
+        } else if (targetKey) {
+          onEditStep(targetKey);
+        }
       }
 
-      // Broadcast a navigation hint that shells can listen for
+      // Broadcast navigation hints for shells/listeners (both events for compatibility)
       try {
-        window.dispatchEvent(new CustomEvent('interview:navigate', {
-          detail: { stepKey: targetKey ?? undefined, stepIndex: idx ?? undefined }
-        }));
+        const detail = { stepKey: targetKey ?? undefined, stepIndex: idx ?? undefined };
+        window.dispatchEvent(new CustomEvent('interview:navigate', { detail }));
+        window.dispatchEvent(new CustomEvent('interview:editStep', { detail }));
       } catch {}
 
       // Persist intent so a hard reload or different shell can restore it
