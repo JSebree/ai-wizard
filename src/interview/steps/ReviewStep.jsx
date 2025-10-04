@@ -88,6 +88,25 @@ const N8N_BASE = 'https://n8n.simplifies.click';
 const WEBHOOK_INTAKE_DEFAULT = `${N8N_BASE}/webhook/sceneme`;
 const STATUS_GET = `${N8N_BASE}/webhook/status`;
 const LS_KEY_STEP = 'interview_step_v1';
+// Fallback indices in case parent doesn't supply a usable stepIndexMap
+// (kept conservative so "Edit" still jumps somewhere sensible)
+const FALLBACK_INDEX_BY_KEY = {
+  landing: 0,           // user/contact intake
+  scene: 1,             // scene basics (driver, cutaways, character)
+  voice: 2,             // voice selection
+  settingAction: 3,     // setting & action
+  output: 4,            // duration / title / reference text (wizard may regroup)
+  audio: 5,             // music & captions
+  advanced: 6           // advanced settings
+};
+
+function resolveStepIndex(targetKey, stepIndexMap) {
+  const idxFromMap = Number(stepIndexMap?.[targetKey]);
+  if (Number.isFinite(idxFromMap)) return idxFromMap;
+  const idxFromFallback = Number(FALLBACK_INDEX_BY_KEY[targetKey]);
+  if (Number.isFinite(idxFromFallback)) return idxFromFallback;
+  return null;
+}
 
 /**
  * ReviewStep
@@ -369,42 +388,38 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     const targetKey = typeof to === 'string' ? to : null;
     const targetIndex = typeof to === 'number'
       ? to
-      : (targetKey != null && Number.isFinite(stepIndexMap?.[targetKey])
-          ? stepIndexMap[targetKey]
-          : null);
+      : (targetKey != null ? resolveStepIndex(targetKey, stepIndexMap) : null);
 
     const click = () => {
-      // Special-case landing
+      // Special-case landing goes to root
       if (to === 'landing') {
+        try { localStorage.setItem('interview_step_key', 'landing'); } catch {}
+        const idx = resolveStepIndex('landing', stepIndexMap);
+        try { if (idx != null) localStorage.setItem(LS_KEY_STEP, String(idx)); } catch {}
         try { window.scrollTo({ top: 0 }); } catch {}
         window.location.href = '/';
         return;
       }
 
-      // Preferred: parent handler – pass index if known, else the key
+      // Prefer parent handler if provided
       if (typeof onEditStep === 'function') {
         onEditStep(targetIndex ?? targetKey);
-        return;
       }
 
-      // Notify shell (optional listener)
+      // Broadcast a navigation hint that shells can listen for
       try {
         window.dispatchEvent(new CustomEvent('interview:navigate', {
           detail: { stepIndex: targetIndex ?? undefined, stepKey: targetKey ?? undefined }
         }));
       } catch {}
 
-      // Fallback: persist target and hard-reload so the wizard can restore
-      try {
-        if (targetIndex != null) {
-          localStorage.setItem(LS_KEY_STEP, String(targetIndex));
-        }
-        if (targetKey) {
-          localStorage.setItem('interview_step_key', String(targetKey));
-        }
-      } catch {}
-      try { window.scrollTo({ top: 0 }); } catch {}
-      window.location.reload();
+      // Persist intent so a hard reload or different shell can restore it
+      try { if (targetKey) localStorage.setItem('interview_step_key', String(targetKey)); } catch {}
+      try { if (targetIndex != null) localStorage.setItem(LS_KEY_STEP, String(targetIndex)); } catch {}
+
+      try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch {}
+      // Soft navigation is handled by listeners; fall back to reload
+      setTimeout(() => { if (document.visibilityState !== 'hidden') window.location.reload(); }, 50);
     };
 
     return (
