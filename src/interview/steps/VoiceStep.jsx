@@ -252,7 +252,6 @@ export default function VoiceStep({
     const url = selectedVoice?.previewUrl;
     if (!url || !audioRef.current) return;
     try {
-      audioRef.current.crossOrigin = "anonymous";
       audioRef.current.src = url;
       audioRef.current.currentTime = 0;
       await audioRef.current.play();
@@ -314,7 +313,7 @@ export default function VoiceStep({
       </div>
 
       {/* Hidden audio element */}
-      <audio ref={audioRef} preload="none" crossOrigin="anonymous" onEnded={() => setIsPlaying(false)} />
+      <audio ref={audioRef} preload="none" onEnded={() => setIsPlaying(false)} />
 
       {/* Hint when no preview is available */}
       {!selectedVoice?.previewUrl && selectedId ? (
