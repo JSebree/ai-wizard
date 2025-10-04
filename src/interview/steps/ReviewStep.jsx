@@ -546,19 +546,19 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           )}
         </Section>
 
-        <Section title="Voice" action={<EditLink to="voice" />}>
+        <Section title="Voice" action={<EditLink to="voiceId" />}>
           <Field label="Voice ID" value={safe(ui.voiceId)} mono />
           <Field label="Character gender (inferred)" value={safe(ui.characterGender)} />
           <Field label="Character / narrator name" value={safe(ui.characterName)} />
         </Section>
 
-        <Section title="Setting & Action" action={<EditLink to="settingAction" />}>
+        <Section title="Setting & Action" action={<EditLink to="setting" />}>
           <Field label="Setting" value={safe(ui.setting)} />
           <Field label="Action" value={safe(ui.action)} />
           <Field label="Director’s notes" value={safe(ui.directorsNotes)} />
         </Section>
 
-        <Section title="Audio" action={<EditLink to="audio" />}>
+        <Section title="Audio" action={<EditLink to="wantsMusic" />}>
           <Field label="Wants music" value={yesNo(ui.wantsMusic)} />
           {ui.wantsMusic && ui.musicCategoryLabel && (
             <Field label="Music category" value={safe(ui.musicCategoryLabel)} />
@@ -572,7 +572,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Wants captions" value={yesNo(ui.wantsCaptions)} />
         </Section>
 
-        <Section title="Output" action={<EditLink to="output" />}>
+        <Section title="Output" action={<EditLink to="referenceText" />}>
           <Field label="Duration (seconds)" value={safe(ui.durationSec)} />
           <Field label="Title" value={safe(ui.title)} />
           <Field label="Reference text" value={safe(ui.referenceText)} />
