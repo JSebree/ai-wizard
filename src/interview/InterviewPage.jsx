@@ -690,6 +690,7 @@ export default function InterviewPage({ onComplete }) {
                   driver: v, // reset dependent fields when switching
                   wantsCutaways: v === "character" ? s.wantsCutaways : undefined,
                   character: v === "character" ? s.character : "",
+                  characterName: v === "character" ? (s.characterName || "") : "narrator",
                 }))
               }
               options={[
@@ -700,17 +701,18 @@ export default function InterviewPage({ onComplete }) {
             />
           </FieldRow>
 
-          {/* New: character/narrator name on this step */}
-          <FieldRow label="What is your star's name?">
-            <input
-              type="text"
-              placeholder="e.g., Sarah"
-              value={answers.characterName}
-              onChange={(e) =>
-                setAnswers((s) => ({ ...s, characterName: e.target.value }))
-              }
-            />
-          </FieldRow>
+          {answers.driver === "character" && (
+            <FieldRow label="What is your character's name?">
+              <input
+                type="text"
+                placeholder="e.g., Sarah"
+                value={answers.characterName}
+                onChange={(e) =>
+                  setAnswers((s) => ({ ...s, characterName: e.target.value }))
+                }
+              />
+            </FieldRow>
+          )}
 
           {answers.driver === "character" && (
             <>
@@ -753,11 +755,10 @@ export default function InterviewPage({ onComplete }) {
       ),
       valid: () =>
         req(answers.driver) &&
-        req(answers.characterName) && (
-          answers.driver !== "character" || (
-            typeof answers.wantsCutaways === "boolean" && meetsMin(answers.character, 40)
-          )
-        ),
+        (answers.driver !== "character" || req(answers.characterName)) &&
+        (answers.driver !== "character" || (
+          typeof answers.wantsCutaways === "boolean" && meetsMin(answers.character, 40)
+        )),
     },
     {
       key: "voiceId",
