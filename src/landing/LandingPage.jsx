@@ -5,6 +5,44 @@ import { useNavigate } from "react-router-dom";
 const TEMPLATE_KEY = "interview_template_v1";
 const templates = [
   {
+    id: "kendra-testimonial-featured",
+    title: "Kendra Testimonial Ad — Cutaway",
+    kind: "Advertisement",
+    featured: true,
+    description: "30s car-seat testimonial that ends with a burger B‑roll cutaway + price callout.",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/79fcae61-ae4c-4159-a04d-460e88051194_output_0.mp4",
+    json: {
+      "ui": {
+        "scene": "A 30 second testimonial advertisement staring a young woman sitting in here car discussing how delicious and affordable her burger is. end scene with a B-Roll cutaway clip of a gourmet cheeseburger when the narrator says \"the classic crusty burger, now only five ninety-nine!\"",
+        "driver": "character",
+        "wantsCutaways": true,
+        "character": "A beautiful 20 something year old African American woman with expressive eyes and bubbly personality, holding a gourmet cheeseburger in one hand ",
+        "setting": "The setting is inside of a car. The scene takes place in the front seat where the character is sitting and holding a juicy gourmet burger in one hand.",
+        "action": "The young woman sits in the front seat of her car, delivering a testimonial about a burger that she just ordered. She talks happily as she shows the burger in her hands",
+        "wantsMusic": true,
+        "musicCategoryLabel": "Lo-Fi / Chillhop",
+        "wantsCaptions": true,
+        "durationSec": 30,
+        "referenceText": "Generate a 30 second testimonial advertisement that features a delicious cheeseburger. Be sure to highlight the delicious taste, affordability, and convenience. End scene with a B-Roll cutaway clip of a gourmet cheeseburger when the narrator says \"the classic crusty burger, now only five ninety-nine!\"",
+        "voiceId": "c9dd06ff-04eb-4b8e-b274-62b23bf54242",
+        "characterGender": "female",
+        "title": "Kendra ad",
+        "characterName": "Kendra",
+        "userEmail": "",
+        "userFirstName": "",
+        "userLastName": "",
+        "advanced": {
+          "enabled": true,
+          "style": "Photorealistic",
+          "musicVolume": 0.1,
+          "voiceVolume": 1,
+          "includeVocals": false,
+          "seed": 927896146
+        }
+      }
+    }
+  },
+  {
     id: "tokyo-vlog-1",
     title: "Tokyo Vlog — Jackie",
     kind: "Vlog",
@@ -353,7 +391,10 @@ export default function LandingPage() {
               {templates
                 .slice()
                 .sort((a, b) => {
-                  const order = { "Newscast": 1, "Podcast": 2, "Vlog": 3, "Storytelling": 4 };
+                  // Prioritize featured templates first
+                  if (a.featured && !b.featured) return -1;
+                  if (b.featured && !a.featured) return 1;
+                  const order = { "Featured": 0, "Advertisement": 0, "Newscast": 1, "Podcast": 2, "Vlog": 3, "Storytelling": 4 };
                   const ai = order[a.kind] || 99;
                   const bi = order[b.kind] || 99;
                   return ai - bi;
