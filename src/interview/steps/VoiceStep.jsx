@@ -21,14 +21,23 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
  *  - Provides a Preview button when a preview URL exists.
  */
 
-const VOICES_CACHE_KEY = "voices_cache_v1";
+const VOICES_CACHE_KEY = "voices_cache_v2"; // bump cache to invalidate any stale entries
 const VOICES_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
-// Normalize any incoming voice record to a simple {id, name, previewUrl}
 function normalizeVoice(v) {
   return {
-    id: v?.id || v?.name || "",
-    name: v?.name || v?.label || v?.displayName || v?.tts_id || "Untitled",
+    id:
+      v?.id ??
+      v?.voice_id ??
+      v?.tts_id ??
+      v?.name ??
+      "",
+    name:
+      v?.voice_name ??
+      v?.name ??
+      v?.label ??
+      v?.displayName ??
+      "Untitled",
     // Prefer your Supabase/DigitalOcean field
     previewUrl:
       v?.audio_url ||
@@ -48,9 +57,13 @@ function readCachedVoices() {
     const raw = localStorage.getItem(VOICES_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.data || !parsed.ts) return null;
-    if (Date.now() - parsed.ts > VOICES_CACHE_TTL_MS) return null;
-    return Array.isArray(parsed.data) ? parsed.data : null;
+    const list = parsed?.data;
+    const ts = parsed?.ts;
+    if (!Array.isArray(list) || !ts) return null;
+    if (Date.now() - ts > VOICES_CACHE_TTL_MS) return null;
+    // Treat caches with no previewUrl as stale so we refetch
+    if (list.length && !list.some(v => v?.previewUrl)) return null;
+    return list;
   } catch {
     return null;
   }
@@ -71,18 +84,18 @@ async function loadVoicesFromStatic() {
     if (!res.ok) return [];
     const arr = await res.json();
     const normalized = (Array.isArray(arr) ? arr : arr?.voices || []).map(normalizeVoice);
-    // de-dupe by id and sort by name
+    // de-dupe by id
     const seen = new Set();
-    const out = [];
+    const deduped = [];
     for (const v of normalized) {
       if (!v.id) continue;
       if (!seen.has(v.id)) {
         seen.add(v.id);
-        out.push(v);
+        deduped.push(v);
       }
     }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
+    deduped.sort((a, b) => a.name.localeCompare(b.name));
+    return deduped;
   } catch {
     return [];
   }
@@ -257,7 +270,6 @@ export default function VoiceStep({
       await audioRef.current.play();
       setIsPlaying(true);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn("Preview failed:", err);
     }
   }
