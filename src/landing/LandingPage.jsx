@@ -48,11 +48,11 @@ const templates = [
     kind: "Vlog",
     description: "Travel vlog in Tokyo with A‑roll narration, cinematic style, 30s.",
     // Preview video users can watch
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/376082a1-bf47-4ae1-9737-27914a352f8d_output_0.mp4",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/65b20950-c34c-4d4f-97c2-b455dffd5dca_output_0.mp4",
     // The JSON used to generate the video (safe to tweak)
     json: {
       "ui": {
-        "scene": "A travel vlog hosted by a beautiful long fair haired lady in her mid to late 20s. She is walking the streets of Tokyo, Japan.",
+        "scene": "A travel vlog hosted by a beautiful long dark haired lady in her mid to late 20s. She is walking the streets of Tokyo, Japan.",
         "driver": "character",
         "wantsCutaways": false,
         "character": "Jackie, 20 something year old beautiful dark haired woman with a gentle smile and warm demeanor ",
