@@ -160,20 +160,20 @@ const templates = [
     title: "Zombs — Halloween Ghost Story",
     kind: "Storytelling",
     description: "45 second ghost story told by a teenage zombie around a campfire on Halloween night.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/5d94d9cb-9b47-49c3-aa4c-c981f4510c16_output_0.mp4",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/9033b835-7633-4531-a196-7a26d5b1cdb6_output_0.mp4",
     json: {
       "ui": {
-        "scene": "A 45 second ghost story on Halloween told by a teenage zombie in a dark sleepy haunted Halloween town",
+        "scene": "A 45 second scary story on Halloween told by a teenage zombie in a dark sleepy haunted Halloween town",
         "driver": "character",
         "wantsCutaways": true,
         "character": "A green-faced tattered skin clothes ripped zombie with red hair and expressive eyes",
         "setting": "A campfire at the edge of the woods beside a sleepy old haunted town on Halloween",
-        "action": "A teenage zombie telling a ghost story to smaller little zombies Around a campfire. B-Roll cutaways to ghost scenes that support the story.",
+        "action": "A teenage zombie telling a scary story to smaller little zombies Around a campfire. B-Roll cutaways to scenes of the zombies story.",
         "wantsMusic": true,
-        "musicCategoryLabel": "Lo-Fi / Chillhop",
+        "musicCategoryLabel": "Ambient / Soundscape",
         "wantsCaptions": true,
         "durationSec": 45,
-        "referenceText": "Generate a 45 second ghost story that is short but thrilling, fitting for a Halloween campfire story.",
+        "referenceText": "Generate a 45 second scary story that is short but thrilling, fitting for a Halloween campfire story.",
         "voiceId": "abc62a09-8c40-4af6-9d48-235d592fd20c",
         "characterGender": "male",
         "title": "Zombs",
@@ -187,7 +187,7 @@ const templates = [
           "musicVolume": 0.1,
           "voiceVolume": 1,
           "includeVocals": false,
-          "seed": 928453185
+          "seed": 926101120
         }
       }
     }
