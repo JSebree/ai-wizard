@@ -123,7 +123,7 @@ const templates = [
     title: "Newscast — Baby Zuck",
     kind: "Newscast",
     description: "AI newscast with A‑roll+B‑roll cutaways, 45s.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/17fc44ac-c8ea-4308-94cf-1914d03060fe_output_0.mp4",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/20e15a25-a114-49b8-afc0-e7185c23de6c_output_0.mp4",
     json: {
       "ui": {
         "scene": "A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day",
