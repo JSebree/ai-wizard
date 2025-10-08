@@ -86,7 +86,7 @@ const templates = [
     title: "Lil Cubes!",
     kind: "Podcast",
     description: "AI news podcast hosted by Baby Mark Cuban, 60s Photorealistic.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/5f6c2b8a-6303-45f0-8ce6-928ddf2a3423_output_0.mp4",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/050d5090-a77f-4fcd-9244-df1fb9530448_output_0.mp4",
     json: {
       "ui": {
         "scene": "A podcast about the future of AI tech hosted by Mark Cuban as a cute cherubic baby",
