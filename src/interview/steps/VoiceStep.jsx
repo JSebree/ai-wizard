@@ -23,6 +23,9 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 
 const VOICES_CACHE_KEY = "voices_cache_v2"; // bump cache to invalidate any stale entries
 const VOICES_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+// If the page returns to the foreground or regains network after this window,
+// we revalidate the cache (mobile-friendly).
+const VOICES_CACHE_MIN_REFRESH_MS = 10 * 60 * 1000; // 10 minutes
 
 function normalizeVoice(v) {
   return {
@@ -78,9 +81,28 @@ function writeCachedVoices(list) {
   } catch {}
 }
 
-async function loadVoicesFromStatic() {
+function readCachedTs() {
   try {
-    const res = await fetch("/voices.json", { cache: "no-store" });
+    const raw = localStorage.getItem(VOICES_CACHE_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw);
+    return Number(parsed?.ts || 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function clearCachedVoices() {
+  try {
+    localStorage.removeItem(VOICES_CACHE_KEY);
+  } catch {}
+}
+
+async function loadVoicesFromStatic(force = false) {
+  try {
+    // Add a cache-busting query param when force-refreshing (helps iOS/Safari)
+    const bust = force ? `?_=${Date.now()}` : "";
+    const res = await fetch(`/voices.json${bust}`, { cache: "no-store" });
     if (!res.ok) return [];
     const arr = await res.json();
     const normalized = (Array.isArray(arr) ? arr : arr?.voices || []).map(normalizeVoice);
@@ -113,6 +135,17 @@ export default function VoiceStep({
   const [voices, setVoices] = useState(() => readCachedVoices());
   const [loading, setLoading] = useState(!Array.isArray(voices));
   const [error, setError] = useState(null);
+
+  // Reusable loader that can optionally force-refresh the cache
+  const refreshVoices = useCallback(async (force = false) => {
+    setLoading(true);
+    setError(null);
+    if (force) clearCachedVoices();
+    const list = await loadVoicesFromStatic(force);
+    setVoices(list);
+    writeCachedVoices(list);
+    setLoading(false);
+  }, []);
 
   // Internal selection mirrors props; always strings
   const [selectedId, setSelectedId] = useState(() => {
@@ -172,20 +205,36 @@ export default function VoiceStep({
     let cancelled = false;
     async function ensure() {
       if (!Array.isArray(voices)) {
-        setLoading(true);
-        setError(null);
-        const list = await loadVoicesFromStatic();
+        await refreshVoices(false);
         if (cancelled) return;
-        setVoices(list);
-        writeCachedVoices(list);
-        setLoading(false);
       }
     }
     ensure();
     return () => {
       cancelled = true;
     };
-  }, []); // mount
+  }, [refreshVoices]); // mount
+
+  // Lightweight revalidation effect for mobile (visibility/online)
+  useEffect(() => {
+    function maybeRefresh() {
+      const ts = readCachedTs();
+      const stale = !ts || (Date.now() - ts > VOICES_CACHE_MIN_REFRESH_MS);
+      const missingPreviews = Array.isArray(voices) && voices.length > 0 && !voices.some(v => v?.previewUrl);
+      if (stale || missingPreviews) {
+        refreshVoices(true);
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") maybeRefresh();
+    };
+    window.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", maybeRefresh);
+    return () => {
+      window.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", maybeRefresh);
+    };
+  }, [voices, refreshVoices]);
 
   // If we have only id, backfill label from voices
   useEffect(() => {
@@ -267,6 +316,8 @@ export default function VoiceStep({
     try {
       audioRef.current.src = url;
       audioRef.current.currentTime = 0;
+      // Ensure a fresh load before play (helps iOS Safari)
+      audioRef.current.load();
       await audioRef.current.play();
       setIsPlaying(true);
     } catch (err) {
@@ -325,7 +376,7 @@ export default function VoiceStep({
       </div>
 
       {/* Hidden audio element */}
-      <audio ref={audioRef} preload="none" onEnded={() => setIsPlaying(false)} />
+      <audio ref={audioRef} preload="none" playsInline onEnded={() => setIsPlaying(false)} />
 
       {/* Hint when no preview is available */}
       {!selectedVoice?.previewUrl && selectedId ? (
