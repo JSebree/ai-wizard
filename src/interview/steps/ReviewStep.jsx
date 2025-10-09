@@ -581,6 +581,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Duration (seconds)" value={safe(ui.durationSec)} />
           <Field label="Title" value={safe(ui.title)} />
           <Field label="Reference text" value={safe(ui.referenceText)} />
+          <Field label="Gather research" value={yesNo(ui.research)} />
         </Section>
 
         <Section title="Advanced settings" action={<EditLink to="advanced" />}>

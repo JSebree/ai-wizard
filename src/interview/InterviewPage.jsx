@@ -122,6 +122,7 @@ function mapTemplateToAnswers(ui, defaults) {
     // Title & references
     title: ui.title ?? defaults.title,
     referenceText: ui.referenceText ?? defaults.referenceText,
+    research: typeof ui.research === "boolean" ? ui.research : defaults.research,
     // Advanced
     advancedEnabled:
       typeof adv.enabled === "boolean" ? adv.enabled : defaults.advancedEnabled,
@@ -169,6 +170,7 @@ function getDefaultAnswers() {
     title: "",
     // 12
     referenceText: "",
+    research: false,
     // Advanced settings
     advancedEnabled: true,
     stylePreset: "Photorealistic",
@@ -606,6 +608,7 @@ export default function InterviewPage({ onComplete }) {
       wantsCaptions: typeof wantsCaptions === "boolean" ? wantsCaptions : undefined,
       durationSec: Number(durationSec) || 0,
       referenceText: req(referenceText) ? referenceText : undefined,
+      research: Boolean(answers.research),
       lyrics:
         answers.wantsMusic && answers.musicIncludeVocals && req(answers.musicLyrics)
           ? answers.musicLyrics
@@ -800,15 +803,27 @@ export default function InterviewPage({ onComplete }) {
       key: "referenceText",
       label: "Improve scene accuracy by adding script guidance (context, quotes, or key points).",
       render: () => (
-        <FieldRow label="Script guidance" hint="The more detail you provide, the better your results will match your intentions. Minimum 30 characters.">
-          <textarea
-            placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
-            value={answers.referenceText}
-            onChange={(e) =>
-              setAnswers((s) => ({ ...s, referenceText: e.target.value }))
-            }
-          />
-        </FieldRow>
+        <>
+          <FieldRow label="Script guidance" hint="The more detail you provide, the better your results will match your intentions. Minimum 30 characters.">
+            <textarea
+              placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
+              value={answers.referenceText}
+              onChange={(e) =>
+                setAnswers((s) => ({ ...s, referenceText: e.target.value }))
+              }
+            />
+          </FieldRow>
+          <FieldRow label="Gather research?" hint="If enabled, the workflow will automatically perform external research based on your scene context.">
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(answers.research)}
+                onChange={(e) => setAnswers((s) => ({ ...s, research: e.target.checked }))}
+              />
+              Enable research
+            </label>
+          </FieldRow>
+        </>
       ),
       valid: () => meetsMin(answers.referenceText, 30),
     },
