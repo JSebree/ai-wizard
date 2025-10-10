@@ -62,14 +62,15 @@ const templates = [
         "musicCategoryLabel": "Orchestral / Cinematic",
         "wantsCaptions": true,
         "durationSec": 30,
-        "referenceText": "Find the 3 best things and 3 worst thing about visiting Tokyo, Japan and explore those in the vlog script",
+        "referenceText": "The most compelling reasons to move to Tokyo from San Francisco in 2026",
+        "research": true,
         "voiceId": "7e131f74-454c-459a-b13e-431a100a0efb",
         "characterGender": "female",
         "title": "Tokyo vlog",
         "characterName": "Jackie",
-        "userEmail": "",        // will be filled from landing inputs
-        "userFirstName": "",    // will be filled from landing inputs
-        "userLastName": "",     // will be filled from landing inputs
+        "userEmail": "",
+        "userFirstName": "",
+        "userLastName": "",
         "advanced": {
           "enabled": true,
           "style": "Cinematic",
