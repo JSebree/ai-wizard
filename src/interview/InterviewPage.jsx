@@ -804,10 +804,14 @@ export default function InterviewPage({ onComplete }) {
       label: "Improve scene accuracy by adding script guidance (context, quotes, or key points).",
       render: () => (
         <>
-          <FieldRow label="Script guidance" hint="The more detail you provide, the better your results will match your intentions. Minimum 30 characters.">
+          <FieldRow
+            label="Script guidance"
+            hint="The more detail you provide, the better your results will match your intentions. Minimum 30 characters. (Max 400 characters)"
+          >
             <textarea
               placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
               value={answers.referenceText}
+              maxLength={400}
               onChange={(e) =>
                 setAnswers((s) => ({ ...s, referenceText: e.target.value }))
               }
