@@ -435,7 +435,7 @@ export default function LandingPage() {
                   // Prioritize featured templates first
                   if (a.featured && !b.featured) return -1;
                   if (b.featured && !a.featured) return 1;
-                  const order = { "Featured": 0, "Advertisement": 0, "Documentary": 0, "Newscast": 1, "Podcast": 2, "Vlog": 3, "Storytelling": 4 };
+                  const order = { "Documentary": 0, "Vlog": 1, "Newscast": 2, "Podcast": 3, "Advertisement": 4, "Storytelling": 5, "Storybook": 6 };
                   const ai = order[a.kind] || 99;
                   const bi = order[b.kind] || 99;
                   return ai - bi;
