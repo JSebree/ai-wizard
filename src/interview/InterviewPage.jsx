@@ -811,7 +811,7 @@ export default function InterviewPage({ onComplete }) {
             <textarea
               placeholder="E.g., product overview, key talking points, or an excerpt that sets tone and facts."
               value={answers.referenceText}
-              maxLength={400}
+              maxLength={answers.research ? 400 : undefined}
               onChange={(e) =>
                 setAnswers((s) => ({ ...s, referenceText: e.target.value }))
               }
