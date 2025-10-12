@@ -432,13 +432,30 @@ export default function LandingPage() {
               {templates
                 .slice()
                 .sort((a, b) => {
-                  // Prioritize featured templates first
-                  if (a.featured && !b.featured) return -1;
-                  if (b.featured && !a.featured) return 1;
-                  const order = { "Documentary": 0, "Vlog": 1, "Newscast": 2, "Podcast": 3, "Advertisement": 4, "Storytelling": 5, "Storybook": 6 };
-                  const ai = order[a.kind] || 99;
-                  const bi = order[b.kind] || 99;
-                  return ai - bi;
+                  // Enforce strict global order by kind
+                  const ORDER = [
+                    "Documentary",
+                    "Vlog",
+                    "Newscast",
+                    "Podcast",
+                    "Advertisement",
+                    "Storytelling",
+                    "Storybook",
+                  ];
+                  const idx = (k) => {
+                    const i = ORDER.findIndex((s) => s.toLowerCase() === String(k || "").toLowerCase());
+                    return i === -1 ? ORDER.length : i;
+                  };
+
+                  const ai = idx(a.kind);
+                  const bi = idx(b.kind);
+                  if (ai !== bi) return ai - bi;
+
+                  // Within the same kind, prefer featured items first
+                  if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+
+                  // Otherwise preserve original order (stable sort fallback)
+                  return 0;
                 })
                 .map((tpl) => (
                 <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
