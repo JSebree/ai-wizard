@@ -29,9 +29,9 @@ const templates = [
         "characterGender": "male",
         "title": "Nikola Tesla",
         "characterName": "Nikola Tesla",
-        "userEmail": "jerick.sebree@gmail.com",
-        "userFirstName": "Jerick",
-        "userLastName": "Sebree",
+        "userEmail": "",
+        "userFirstName": "",
+        "userLastName": "",
         "advanced": {
           "enabled": true,
           "style": "Documentary",
