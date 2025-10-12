@@ -5,6 +5,45 @@ import { useNavigate } from "react-router-dom";
 const TEMPLATE_KEY = "interview_template_v1";
 const templates = [
   {
+    id: "nikola-tesla-doc-1",
+    title: "Nikola Tesla — Documentary",
+    kind: "Documentary",
+    featured: true,
+    description: "60s documentary hosted by Nikola Tesla with cinematic cutaways.",
+    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/07c21780-8dad-44d2-a190-02a0ed5a4b3f_output_0.mp4",
+    json: {
+      "ui": {
+        "scene": "A 60 second documentary about Nikola Tesla greatest accomplishments, hosted by Nikola Tesla himself. B-Roll cutaways to clips of his most famous accomplishments",
+        "driver": "character",
+        "wantsCutaways": true,
+        "character": "Nikola Tesla sits in an old Victorian era armchair. He is wearing his usual suit as he looks to the camera to speak",
+        "setting": "Nikola Tesla sits in an old Victorian era armchair in an Industrial era executive office. He is wearing his usual suit as he looks to the camera to speak",
+        "action": "Nikola Tesla sits in an old Victorian era armchair in an Industrial era executive office. He is wearing his usual suit as he looks to the camera to speak. ",
+        "wantsMusic": true,
+        "musicCategoryLabel": "Orchestral / Cinematic",
+        "wantsCaptions": true,
+        "durationSec": 60,
+        "referenceText": "Create a viral 60-second documentary video of Nikola Tesla showcasing the top two or three of his greatest inventions. Tesla, in a Victorian armchair within an industrial-era office, narrates his life’s work. Include cinematic B-roll of his experiments, innovations, and achievements as he reflects on his legacy.",
+        "research": true,
+        "voiceId": "caad6ab8-9cac-49e9-8b7b-21c0f3a18ae2",
+        "characterGender": "male",
+        "title": "Nikola Tesla",
+        "characterName": "Nikola Tesla",
+        "userEmail": "jerick.sebree@gmail.com",
+        "userFirstName": "Jerick",
+        "userLastName": "Sebree",
+        "advanced": {
+          "enabled": true,
+          "style": "Documentary",
+          "musicVolume": 0.1,
+          "voiceVolume": 1,
+          "includeVocals": false,
+          "seed": 805577011
+        }
+      }
+    }
+  },
+  {
     id: "kendra-testimonial-featured",
     title: "Kendra Testimonial Ad — Cutaway",
     kind: "Advertisement",
@@ -396,7 +435,7 @@ export default function LandingPage() {
                   // Prioritize featured templates first
                   if (a.featured && !b.featured) return -1;
                   if (b.featured && !a.featured) return 1;
-                  const order = { "Featured": 0, "Advertisement": 0, "Newscast": 1, "Podcast": 2, "Vlog": 3, "Storytelling": 4 };
+                  const order = { "Featured": 0, "Advertisement": 0, "Documentary": 0, "Newscast": 1, "Podcast": 2, "Vlog": 3, "Storytelling": 4 };
                   const ai = order[a.kind] || 99;
                   const bi = order[b.kind] || 99;
                   return ai - bi;
