@@ -32,14 +32,14 @@ function AppHeader() {
             src={LogoLight}
             alt="SceneMe"
             className="h-12 w-auto dark:hidden"
-            height={48}
+            height={64}
           />
           {/* Dark mode: white logo */}
           <img
             src={LogoDark}
             alt="SceneMe"
             className="h-12 w-auto hidden dark:inline"
-            height={48}
+            height={64}
           />
         </Link>
         <button
