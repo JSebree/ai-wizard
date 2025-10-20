@@ -31,14 +31,14 @@ function AppHeader() {
           <img
             src={LogoLight}
             alt="SceneMe"
-            className="h-12 w-auto dark:hidden"
+            className="h-10 md:h-14 lg:h-16 w-auto dark:hidden"
             height={64}
           />
           {/* Dark mode: white logo */}
           <img
             src={LogoDark}
             alt="SceneMe"
-            className="h-12 w-auto hidden dark:inline"
+            className="h-10 md:h-14 lg:h-16 w-auto hidden dark:inline"
             height={64}
           />
         </Link>
