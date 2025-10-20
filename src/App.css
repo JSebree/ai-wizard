@@ -51,6 +51,7 @@ body {
   align-items: center;
   line-height: 0;
   overflow: visible;
+  gap: 0 !important; /* override any Tailwind gap utilities */
 }
 .header-logo > img {
   display: block;                 /* remove extra baseline gap */
