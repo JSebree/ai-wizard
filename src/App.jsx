@@ -2,7 +2,7 @@ import React from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import InterviewPage from "./interview/InterviewPage.jsx";
 import LandingPage from "./landing/LandingPage.jsx";
-import LogoLight from "./assets/sceneme_black_icon_transparent.png"; // black logo for light mode
+import LogoLight from "./assets/SceneMe_black_icon_transparent.png"; // black logo for light mode
 import LogoDark from "./assets/sceneme_white_icon_transparent.png"; // white logo for dark mode
 
 function AppHeader() {
