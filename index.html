@@ -2,14 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Light mode favicon -->
-    <link rel="icon" type="image/png" href="/src/assets/SceneMe_black_icon_transparent.png" media="(prefers-color-scheme: light)" />
-
-    <!-- Dark mode favicon -->
-    <link rel="icon" type="image/png" href="/src/assets/SceneMe_white_icon_transparent.png" media="(prefers-color-scheme: dark)" />
-
-    <!-- Fallback favicon -->
-    <link rel="icon" type="image/png" href="/src/assets/SceneMe_black_icon_transparent.png" />
+    <!-- Dynamic favicon (uses /src/assets icons, swaps on theme) -->
+    <link id="favicon" rel="icon" type="image/png" href="/src/assets/SceneMe_black_icon_transparent.png" />
+    <script>
+      (function() {
+        var light = '/src/assets/SceneMe_black_icon_transparent.png?v=2';
+        var dark  = '/src/assets/SceneMe_white_icon_transparent.png?v=2';
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        var link = document.getElementById('favicon');
+        function setIcon() {
+          if (!link) return;
+          link.href = mq.matches ? dark : light;
+        }
+        setIcon();
+        try { mq.addEventListener('change', setIcon); } catch (e) { if (mq.addListener) mq.addListener(setIcon); }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite + React</title>
   </head>
