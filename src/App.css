@@ -43,3 +43,19 @@ body {
 .wizard-header { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
 .wizard-step { padding:.25rem .5rem; border-radius:.375rem; border:1px solid var(--border); color: var(--muted); }
 .wizard-step.active { color: var(--fg); border-color:#94a3b8; }
+
+/* --- Prevent header logo clipping & baseline cropping --- */
+.header-logo {
+  box-sizing: content-box;        /* outside padding without shrinking image */
+  padding: 6px 10px;              /* small safe margin around raster edges */
+  display: inline-flex;           /* align the image properly */
+  align-items: center;
+  line-height: 0;                 /* remove inline-image line box that can crop */
+  overflow: visible;              /* never clip the image */
+}
+.header-logo > img {
+  display: block;                 /* remove extra baseline gap */
+  object-fit: contain;            /* preserve full logo geometry */
+  overflow: visible;
+  image-rendering: auto;
+}
