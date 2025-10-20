@@ -90,3 +90,29 @@ input, textarea, select, .input, .select, .textarea {
 
 /* Brand row text should always inherit theme color */
 .brand-text { color: var(--fg); }
+
+
+/* ===== Force LIGHT theme regardless of OS or Tailwind .dark ===== */
+:root, html, body { color-scheme: light !important; }
+
+/* Win against Tailwind bg utilities applied to body/root/wrappers */
+html, body, #root { 
+  background-color: #ffffff !important; 
+  color: #0f172a !important; /* slate-900 */
+}
+
+/* If a framework adds `.dark` to <html> or containers, neutralize it */
+html.dark, .dark, .dark body { 
+  background-color: #ffffff !important; 
+  color: #0f172a !important; 
+}
+
+/* Common dark backgrounds to override at the top-level wrapper */
+[class*="bg-zinc-9"], [class*="bg-slate-9"], [class*="bg-neutral-9"], [class*="bg-gray-9"] {
+  background-color: #ffffff !important;
+}
+
+/* Ensure brand row never clips/crops and stays aligned */
+.header-logo { gap: 0 !important; column-gap: 0 !important; }
+.header-logo > img { display: block; object-fit: contain; }
+.header-logo > span { line-height: 1; }
