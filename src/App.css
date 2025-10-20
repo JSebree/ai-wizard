@@ -3,20 +3,13 @@
 /* Color variables with dark-mode overrides (works even without Tailwind) */
 
 :root {
+  color-scheme: light;
   --bg: #ffffff;
   --fg: #0f172a;   /* slate-900 */
   --muted: #475569;/* slate-600 */
   --border: #e2e8f0;/* slate-200 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b0b0c;    /* page background */
-    --fg: #e5e7eb;    /* foreground text */
-    --muted: #a3a3a3; /* subtle text */
-    --border: #2a2a2e;/* panel borders */
-  }
-}
 
 html, body, #root { height: 100%; }
 body {
@@ -94,14 +87,6 @@ input, textarea, select, .input, .select, .textarea {
   border-color: var(--border);
 }
 
-/* Override common Tailwind utility colors when the OS is in dark mode */
-@media (prefers-color-scheme: dark) {
-  .bg-white { background-color: #151517 !important; }
-  .text-gray-900, .text-slate-900 { color: #e5e7eb !important; }
-  .text-gray-700, .text-slate-700 { color: #cbd5e1 !important; }
-  .border-gray-200, .border-slate-200 { border-color: #2a2a2e !important; }
-  .bg-gray-900, .bg-slate-900 { background-color: #1f2937 !important; }
-}
 
 /* Brand row text should always inherit theme color */
 .brand-text { color: var(--fg); }
