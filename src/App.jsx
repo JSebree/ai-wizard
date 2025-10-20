@@ -31,13 +31,13 @@ function AppHeader() {
           <img
             src={LogoLight}
             alt="SceneMe"
-            className="h-16 md:h-28 lg:h-32 w-auto object-contain dark:hidden block shrink-0"
+            className="h-20 md:h-32 lg:h-36 w-auto object-contain overflow-visible block shrink-0"
           />
           {/* Dark mode: white logo */}
           <img
             src={LogoDark}
             alt="SceneMe"
-            className="h-16 md:h-28 lg:h-32 w-auto object-contain hidden dark:inline-block shrink-0"
+            className="h-20 md:h-32 lg:h-36 w-auto object-contain overflow-visible hidden dark:inline-block shrink-0"
           />
         </Link>
         <button
