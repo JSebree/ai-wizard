@@ -2,22 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Dynamic favicon (uses /src/assets icons, swaps on theme) -->
-    <link id="favicon" rel="icon" type="image/png" href="/src/assets/SceneMe_black_icon_transparent.png" />
-    <script>
-      (function() {
-        var light = '/src/assets/SceneMe_black_icon_transparent.png?v=2';
-        var dark  = '/src/assets/SceneMe_white_icon_transparent.png?v=2';
-        var mq = window.matchMedia('(prefers-color-scheme: dark)');
-        var link = document.getElementById('favicon');
-        function setIcon() {
-          if (!link) return;
-          link.href = mq.matches ? dark : light;
-        }
-        setIcon();
-        try { mq.addEventListener('change', setIcon); } catch (e) { if (mq.addListener) mq.addListener(setIcon); }
-      })();
-    </script>
+    <!-- Color-scheme hint lets the UA know we support both themes -->
+    <meta name="color-scheme" content="light dark" />
+    <!-- Favicons: browser will pick the one matching the current theme -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/src/assets/SceneMe_black_icon_transparent.png?v=3" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/src/assets/SceneMe_white_icon_transparent.png?v=3" media="(prefers-color-scheme: dark)" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite + React</title>
   </head>
