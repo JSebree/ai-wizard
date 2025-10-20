@@ -23,7 +23,7 @@ function AppHeader() {
               navigate("/");
             }
           }}
-          className="cursor-pointer select-none flex items-center gap-3"
+          className="header-logo cursor-pointer select-none flex items-center gap-3"
           title="Start a new interview"
         >
           <span className="sr-only">SceneMe</span>
