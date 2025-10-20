@@ -11,7 +11,7 @@ function AppHeader() {
 
   return (
     <header>
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3 min-h-[72px] md:min-h-[84px]">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-3 flex items-center justify-between gap-4 min-h-[96px] md:min-h-[124px]">
         <Link
           to="/"
           onClick={(e) => {
@@ -23,7 +23,7 @@ function AppHeader() {
               navigate("/");
             }
           }}
-          className="font-semibold tracking-tight cursor-pointer select-none"
+          className="cursor-pointer select-none flex items-center gap-3"
           title="Start a new interview"
         >
           <span className="sr-only">SceneMe</span>
@@ -31,15 +31,13 @@ function AppHeader() {
           <img
             src={LogoLight}
             alt="SceneMe"
-            className="h-12 md:h-16 lg:h-20 w-auto object-contain align-middle dark:hidden"
-            height={64}
+            className="h-16 md:h-28 lg:h-32 w-auto object-contain dark:hidden block shrink-0"
           />
           {/* Dark mode: white logo */}
           <img
             src={LogoDark}
             alt="SceneMe"
-            className="h-12 md:h-16 lg:h-20 w-auto object-contain align-middle hidden dark:inline"
-            height={64}
+            className="h-16 md:h-28 lg:h-32 w-auto object-contain hidden dark:inline-block shrink-0"
           />
         </Link>
         <button
