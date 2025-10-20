@@ -2,8 +2,8 @@ import React from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import InterviewPage from "./interview/InterviewPage.jsx";
 import LandingPage from "./landing/LandingPage.jsx";
-import LogoLight from "./assets/SceneMe_black_text_transparent.png"; // black logo with text for light mode
-import LogoDark from "./assets/SceneMe_white_text_transparent.png"; // white logo with text for dark mode
+import LogoLight from "./assets/SceneMe_black_icon_transparent.png"; // black icon for light mode
+import LogoDark from "./assets/SceneMe_white_icon_transparent.png"; // white icon for dark mode
 
 function AppHeader() {
   const location = useLocation();
@@ -27,20 +27,21 @@ function AppHeader() {
           title="Start a new interview"
         >
           <span className="sr-only">SceneMe</span>
-          {/* Light mode: black logo */}
+          {/* Light mode: black icon */}
           <img
             src={LogoLight}
             alt="SceneMe"
-            className="h-20 md:h-32 lg:h-36 w-auto object-contain overflow-visible block shrink-0 box-content p-1.5 md:p-2 lg:p-2.5"
-            style={{ imageRendering: 'auto' }}
+            className="h-16 md:h-20 lg:h-24 w-auto object-contain block dark:hidden shrink-0"
           />
-          {/* Dark mode: white logo */}
+          {/* Dark mode: white icon */}
           <img
             src={LogoDark}
             alt="SceneMe"
-            className="h-20 md:h-32 lg:h-36 w-auto object-contain overflow-visible hidden dark:inline-block shrink-0 box-content p-1.5 md:p-2 lg:p-2.5"
-            style={{ imageRendering: 'auto' }}
+            className="h-16 md:h-20 lg:h-24 w-auto object-contain hidden dark:inline-block shrink-0"
           />
+          <span className="ml-3 md:ml-4 text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight leading-none text-gray-900 dark:text-white select-none">
+            SceneMe
+          </span>
         </Link>
         <button
           type="button"
