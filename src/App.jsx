@@ -39,7 +39,7 @@ function AppHeader() {
             alt="SceneMe"
             className="h-16 md:h-20 lg:h-24 w-auto object-contain hidden dark:inline-block shrink-0"
           />
-          <span className="ml-3 md:ml-4 text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight leading-none text-gray-900 dark:text-white select-none">
+          <span className="ml-2 md:ml-3 text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight leading-none text-gray-900 dark:text-white select-none">
             SceneMe
           </span>
         </Link>
