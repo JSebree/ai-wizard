@@ -23,7 +23,7 @@ function AppHeader() {
               navigate("/");
             }
           }}
-          className="header-logo cursor-pointer select-none flex items-center gap-3"
+          className="header-logo cursor-pointer select-none flex items-center gap-0"
           title="Start a new interview"
         >
           <span className="sr-only">SceneMe</span>
@@ -39,7 +39,7 @@ function AppHeader() {
             alt="SceneMe"
             className="h-16 md:h-20 lg:h-24 w-auto object-contain hidden dark:inline-block shrink-0"
           />
-          <span className="ml-1 md:ml-2 text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight leading-none text-gray-900 dark:text-white select-none">
+          <span className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight leading-none text-gray-900 dark:text-white select-none m-0 p-0">
             SceneMe
           </span>
         </Link>
