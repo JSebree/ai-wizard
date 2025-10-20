@@ -11,7 +11,7 @@ function AppHeader() {
 
   return (
     <header>
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3 min-h-[56px]">
+      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3 min-h-[72px] md:min-h-[84px]">
         <Link
           to="/"
           onClick={(e) => {
@@ -31,14 +31,14 @@ function AppHeader() {
           <img
             src={LogoLight}
             alt="SceneMe"
-            className="h-10 md:h-14 lg:h-16 w-auto dark:hidden"
+            className="h-12 md:h-16 lg:h-20 w-auto object-contain align-middle dark:hidden"
             height={64}
           />
           {/* Dark mode: white logo */}
           <img
             src={LogoDark}
             alt="SceneMe"
-            className="h-10 md:h-14 lg:h-16 w-auto hidden dark:inline"
+            className="h-12 md:h-16 lg:h-20 w-auto object-contain align-middle hidden dark:inline"
             height={64}
           />
         </Link>
