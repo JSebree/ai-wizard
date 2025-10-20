@@ -2,6 +2,8 @@ import React from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import InterviewPage from "./interview/InterviewPage.jsx";
 import LandingPage from "./landing/LandingPage.jsx";
+import LogoLight from "./assets/sceneme_black_icon_transparent.png"; // black logo for light mode
+import LogoDark from "./assets/sceneme_white_icon_transparent.png"; // white logo for dark mode
 
 function AppHeader() {
   const location = useLocation();
@@ -24,7 +26,21 @@ function AppHeader() {
           className="font-semibold tracking-tight cursor-pointer select-none"
           title="Start a new interview"
         >
-          SceneMe
+          <span className="sr-only">SceneMe</span>
+          {/* Light mode: black logo */}
+          <img
+            src={LogoLight}
+            alt="SceneMe"
+            className="h-8 w-auto dark:hidden"
+            height={32}
+          />
+          {/* Dark mode: white logo */}
+          <img
+            src={LogoDark}
+            alt="SceneMe"
+            className="h-8 w-auto hidden dark:inline"
+            height={32}
+          />
         </Link>
         <button
           type="button"
