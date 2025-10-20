@@ -46,12 +46,11 @@ body {
 
 /* --- Prevent header logo clipping & baseline cropping --- */
 .header-logo {
-  box-sizing: content-box;        /* outside padding without shrinking image */
-  padding: 6px 10px;              /* small safe margin around raster edges */
-  display: inline-flex;           /* align the image properly */
+  box-sizing: border-box;
+  display: inline-flex;
   align-items: center;
-  line-height: 0;                 /* remove inline-image line box that can crop */
-  overflow: visible;              /* never clip the image */
+  line-height: 0;
+  overflow: visible;
 }
 .header-logo > img {
   display: block;                 /* remove extra baseline gap */
