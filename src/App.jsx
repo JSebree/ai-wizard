@@ -56,7 +56,7 @@ function AppHeader() {
               window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
             }
           }}
-          className="text-sm px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+          className="header-review-btn text-sm px-3 py-1 rounded select-none"
           title="Go to Review step"
         >
           Review

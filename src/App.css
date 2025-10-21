@@ -134,3 +134,26 @@ footer a svg {
   border-color: #000 !important;
   color: #fff !important;
 }
+
+/* Header "Review" button — force black theme and override Tailwind utilities */
+.header-review-btn {
+  background-color: #000 !important;
+  border-color: #000 !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  line-height: 1.25rem;
+}
+.header-review-btn:hover {
+  background-color: #111 !important;
+  border-color: #111 !important;
+}
+.header-review-btn:active {
+  background-color: #0a0a0a !important;
+  border-color: #0a0a0a !important;
+}
+.header-review-btn:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
