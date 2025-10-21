@@ -127,3 +127,10 @@ img[rel="icon"], svg {
 footer a svg {
   transition: stroke 0.2s ease-in-out;
 }
+/* Force Review button and other primary buttons to match site style */
+.button.primary,
+.btn-primary {
+  background: #000 !important;
+  border-color: #000 !important;
+  color: #fff !important;
+}
