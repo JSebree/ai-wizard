@@ -116,3 +116,14 @@ html.dark, .dark, .dark body {
 .header-logo { gap: 0 !important; column-gap: 0 !important; }
 .header-logo > img { display: block; object-fit: contain; }
 .header-logo > span { line-height: 1; }
+/* Ensure favicons and SVG icons inherit theme color properly */
+img[rel="icon"], svg {
+  color: var(--fg);
+  fill: none;
+  stroke: currentColor;
+}
+
+/* Footer icon hover smoothness */
+footer a svg {
+  transition: stroke 0.2s ease-in-out;
+}

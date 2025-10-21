@@ -338,7 +338,7 @@ function NavBar({ stepIndex, total, onReset }) {
         .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #CBD5E1; background: #fff; cursor: pointer; }
         .btn[disabled] { opacity: .5; cursor: not-allowed; }
         .btn-primary[disabled] { opacity: .6; }
-        .btn-primary { background: #111827; color: white; border-color: #111827; }
+        .btn-primary { background: #000; color: white; border-color: #000; }
         .btn-secondary { background: #fff; color: #111827; }
         textarea { width: 100%; min-height: 120px; padding: 10px; border-radius: 8px; border: 1px solid #CBD5E1; }
         input[type="text"], input[type="number"] { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #CBD5E1; }
