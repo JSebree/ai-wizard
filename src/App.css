@@ -39,7 +39,7 @@ body {
   padding: .5rem .875rem; border-radius: .5rem; border: 1px solid var(--border);
   background: transparent; color: var(--fg); cursor: pointer;
 }
-.button.primary { background: #2563eb; border-color: #2563eb; color: white; }
+.button.primary { background: #000 !important; border-color: #000 !important; color: #fff !important; }
 .button:disabled { opacity: .6; cursor: not-allowed; }
 
 /* Stepper header fallback (if custom component lacks styles) */

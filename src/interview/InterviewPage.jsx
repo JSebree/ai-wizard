@@ -327,7 +327,7 @@ function NavBar({ stepIndex, total, onReset }) {
           style={{
             width: `${pct}%`,
             height: 6,
-            background: "#3B82F6",
+            background: "#000",
             borderRadius: 999,
             transition: "width .25s ease",
           }}
@@ -339,7 +339,10 @@ function NavBar({ stepIndex, total, onReset }) {
         .btn[disabled] { opacity: .5; cursor: not-allowed; }
         .btn-primary[disabled] { opacity: .6; }
         .btn-primary { background: #000; color: white; border-color: #000; }
+        .btn-primary:hover { background: #111; border-color: #111; }
         .btn-secondary { background: #fff; color: #111827; }
+        .btn-secondary:hover { background: #f5f5f5; }
+        .btn:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
         textarea { width: 100%; min-height: 120px; padding: 10px; border-radius: 8px; border: 1px solid #CBD5E1; }
         input[type="text"], input[type="number"] { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #CBD5E1; }
         .page { max-width: 860px; margin: 0 auto; padding: 24px; }
