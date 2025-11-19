@@ -250,7 +250,7 @@ export default function SettingsStudioDemo() {
               marginTop: 12,
               padding: 10,
               borderRadius: 10,
-              border: "1px dashed #CBD5E1",
+              border: "1px solid #CBD5E1",
               background: "#F9FAFB",
             }}
           >
@@ -279,68 +279,85 @@ export default function SettingsStudioDemo() {
                 Generating preview image…
               </p>
             )}
-            {!isGenerating && previewImageUrl && (
+            {!isGenerating && (
               <>
                 <div
                   style={{
                     marginTop: 6,
                     borderRadius: 8,
                     overflow: "hidden",
-                    border: "1px solid #E5E7EB",
-                    display: "inline-block",
-                    maxWidth: "100%",
-                  }}
-                >
-                  <img
-                    src={previewImageUrl}
-                    alt="Setting preview"
-                    style={{
-                      display: "block",
-                      maxWidth: "100%",
-                      height: "auto",
-                    }}
-                  />
-                </div>
-                <div
-                  style={{
-                    marginTop: 8,
+                    border: "1px solid #0F172A",
+                    background: "#0F172A",
+                    minHeight: 180,
                     display: "flex",
-                    justifyContent: "flex-end",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!name.trim() || !basePrompt.trim()}
-                    title={
-                      !name.trim()
-                        ? "Enter a setting name to add this to your library"
-                        : undefined
-                    }
+                  {previewImageUrl ? (
+                    <img
+                      src={previewImageUrl}
+                      alt="Setting preview"
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        height: "auto",
+                        objectFit: "contain",
+                      }}
+                    />
+                  ) : (
+                    !previewError && (
+                      <p
+                        style={{
+                          margin: 16,
+                          fontSize: 11,
+                          color: "#E5E7EB",
+                          textAlign: "center",
+                        }}
+                      >
+                        No preview yet. Enter a base prompt and click{" "}
+                        <strong>Generate new setting</strong> to see a sample render of this
+                        environment.
+                      </p>
+                    )
+                  )}
+                </div>
+                {previewImageUrl && (
+                  <div
                     style={{
-                      padding: "6px 10px",
-                      borderRadius: 999,
-                      border: "1px solid #0F172A",
-                      background: "#0F172A",
-                      color: "#FFFFFF",
-                      fontSize: 12,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      cursor: "pointer",
+                      marginTop: 8,
+                      display: "flex",
+                      justifyContent: "flex-end",
                     }}
                   >
-                    <span style={{ fontSize: 14 }}>＋</span>
-                    <span>Add to saved settings</span>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={!name.trim() || !basePrompt.trim()}
+                      title={
+                        !name.trim()
+                          ? "Enter a setting name to add this to your library"
+                          : undefined
+                      }
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: "1px solid #0F172A",
+                        background: "#0F172A",
+                        color: "#FFFFFF",
+                        fontSize: 12,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>＋</span>
+                      <span>Add to saved settings</span>
+                    </button>
+                  </div>
+                )}
               </>
-            )}
-            {!isGenerating && !previewImageUrl && !previewError && (
-              <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>
-                No preview yet. Enter a base prompt and click “Generate preview” to see a sample
-                render of this setting.
-              </p>
             )}
           </div>
 
