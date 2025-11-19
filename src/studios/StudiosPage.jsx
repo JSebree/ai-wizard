@@ -15,7 +15,14 @@ export default function StudiosPage() {
   }, [activeTab]);
 
   return (
-    <div style={{ maxWidth: "100%", width: "100%", margin: "0 auto", padding: 24 }}>
+    <div
+      style={{
+        maxWidth: "1040px",
+        width: "100%",
+        margin: "0 auto",
+        padding: 24,
+      }}
+    >
       {/* Header / Breadcrumb */}
       <header style={{ marginBottom: 20 }}>
         <button
