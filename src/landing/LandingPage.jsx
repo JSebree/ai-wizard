@@ -421,6 +421,68 @@ export default function LandingPage() {
         </button>
       </section>
 
+
+      {/* --- Examples Gallery --- */}
+      <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
+            <h2 style={{ marginTop: 0, marginBottom: 12 }}>Get inspired</h2>
+            <p style={{ marginTop: 0, color: "#475569" }}>
+              Explore examples to inspire you—or use them to jump-start your own scene.
+            </p>
+
+            <div className="examplesGrid">
+              {templates
+                .slice()
+                .sort((a, b) => {
+                  // Enforce strict global order by kind
+                  const ORDER = [
+                    "Documentary",
+                    "Vlog",
+                    "Newscast",
+                    "Podcast",
+                    "Advertisement",
+                    "Storytelling",
+                    "Storybook",
+                  ];
+                  const idx = (k) => {
+                    const i = ORDER.findIndex((s) => s.toLowerCase() === String(k || "").toLowerCase());
+                    return i === -1 ? ORDER.length : i;
+                  };
+
+                  const ai = idx(a.kind);
+                  const bi = idx(b.kind);
+                  if (ai !== bi) return ai - bi;
+
+                  // Within the same kind, prefer featured items first
+                  if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+
+                  // Otherwise preserve original order (stable sort fallback)
+                  return 0;
+                })
+                .map((tpl) => (
+                <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
+                  <video
+                    src={tpl.videoUrl}
+                    controls
+                    style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }}
+                  />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 8px", border: "1px solid #E5E7EB", borderRadius: 999, color: "#334155" }}>
+                      {tpl.kind || "Template"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openForm(tpl)}
+                      className="btn btn-secondary"
+                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600, fontSize: 12 }}
+                    >
+                      Use as template
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+      </section>
+
       {/* --- Studios Preview (Early Access) --- */}
       <section style={{ marginBottom: 20 }}>
         <div
@@ -516,67 +578,6 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
-
-      {/* --- Examples Gallery --- */}
-      <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
-            <h2 style={{ marginTop: 0, marginBottom: 12 }}>Get inspired</h2>
-            <p style={{ marginTop: 0, color: "#475569" }}>
-              Explore examples to inspire you—or use them to jump-start your own scene.
-            </p>
-
-            <div className="examplesGrid">
-              {templates
-                .slice()
-                .sort((a, b) => {
-                  // Enforce strict global order by kind
-                  const ORDER = [
-                    "Documentary",
-                    "Vlog",
-                    "Newscast",
-                    "Podcast",
-                    "Advertisement",
-                    "Storytelling",
-                    "Storybook",
-                  ];
-                  const idx = (k) => {
-                    const i = ORDER.findIndex((s) => s.toLowerCase() === String(k || "").toLowerCase());
-                    return i === -1 ? ORDER.length : i;
-                  };
-
-                  const ai = idx(a.kind);
-                  const bi = idx(b.kind);
-                  if (ai !== bi) return ai - bi;
-
-                  // Within the same kind, prefer featured items first
-                  if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
-
-                  // Otherwise preserve original order (stable sort fallback)
-                  return 0;
-                })
-                .map((tpl) => (
-                <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
-                  <video
-                    src={tpl.videoUrl}
-                    controls
-                    style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }}
-                  />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 8px", border: "1px solid #E5E7EB", borderRadius: 999, color: "#334155" }}>
-                      {tpl.kind || "Template"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => openForm(tpl)}
-                      className="btn btn-secondary"
-                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600, fontSize: 12 }}
-                    >
-                      Use as template
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
       </section>
 
       {/* --- Intake Modal --- */}
