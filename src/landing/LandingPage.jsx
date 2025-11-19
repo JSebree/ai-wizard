@@ -421,6 +421,103 @@ export default function LandingPage() {
         </button>
       </section>
 
+      {/* --- Studios Preview (Early Access) --- */}
+      <section style={{ marginBottom: 20 }}>
+        <div
+          className="card"
+          style={{
+            padding: 18,
+            border: "1px solid #E5E7EB",
+            borderRadius: 12,
+            background: "#F9FAFB",
+          }}
+        >
+          <h2 style={{ marginTop: 0, marginBottom: 8 }}>SceneMe Studios (Preview)</h2>
+          <p style={{ marginTop: 0, marginBottom: 16, color: "#475569" }}>
+            Design reusable characters and settings for your stories. These tools are functional
+            preview studios and are not yet connected to the one-click Express workflow.
+          </p>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 12,
+            }}
+          >
+            {/* Character Studio card */}
+            <div
+              style={{
+                border: "1px solid #E5E7EB",
+                borderRadius: 12,
+                padding: 12,
+                background: "#FFFFFF",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 4 }}>Character Studio (Preview)</h3>
+              <p style={{ marginTop: 0, marginBottom: 8, color: "#64748B", fontSize: 14 }}>
+                Create and save reusable characters—faces, vibes, and style notes—to use across
+                multiple scenes and episodes.
+              </p>
+              <p style={{ marginTop: 0, marginBottom: 10, color: "#9CA3AF", fontSize: 12 }}>
+                Preview only. Characters are not yet wired into the automated video generator.
+              </p>
+              <button
+                type="button"
+                onClick={() => nav("/character-studio")}
+                className="btn btn-secondary"
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #111827",
+                  background: "#FFFFFF",
+                  color: "#111827",
+                  fontWeight: 600,
+                  fontSize: 12,
+                }}
+              >
+                Explore Character Studio
+              </button>
+            </div>
+
+            {/* Settings Studio card */}
+            <div
+              style={{
+                border: "1px solid #E5E7EB",
+                borderRadius: 12,
+                padding: 12,
+                background: "#FFFFFF",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 4 }}>Settings Studio (Preview)</h3>
+              <p style={{ marginTop: 0, marginBottom: 8, color: "#64748B", fontSize: 14 }}>
+                Build a library of reusable environments—lofts, beaches, labs, and more—for
+                future scenes and B‑roll.
+              </p>
+              <p style={{ marginTop: 0, marginBottom: 10, color: "#9CA3AF", fontSize: 12 }}>
+                Preview only. Settings are not yet wired into the automated video generator.
+              </p>
+              <button
+                type="button"
+                onClick={() => nav("/settings-studio")}
+                className="btn btn-secondary"
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #111827",
+                  background: "#FFFFFF",
+                  color: "#111827",
+                  fontWeight: 600,
+                  fontSize: 12,
+                }}
+              >
+                Explore Settings Studio
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* --- Examples Gallery --- */}
       <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
             <h2 style={{ marginTop: 0, marginBottom: 12 }}>Get inspired</h2>
