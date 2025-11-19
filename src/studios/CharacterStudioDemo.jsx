@@ -57,10 +57,9 @@ export default function CharacterStudioDemo() {
     setIsUploading(true);
 
     try {
-      const endpoint = import.meta.env.VITE_UPLOAD_REFERENCE_URL;
-      if (!endpoint) {
-        throw new Error("VITE_UPLOAD_REFERENCE_URL is not configured.");
-      }
+      const endpoint =
+        import.meta.env.VITE_UPLOAD_REFERENCE_URL ||
+        "https://n8n.simplifies.click/webhook/upload-reference-image";
 
       const formData = new FormData();
       formData.append("file", file);
