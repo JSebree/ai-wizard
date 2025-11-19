@@ -1,16 +1,7 @@
 import React, { useState, useEffect } from "react";
-
+import VoiceStep from "../interview/steps/VoiceStep.jsx";
 
 const STORAGE_KEY = "sceneme.characters";
-
-// Temporary voice presets for the Character Studio.
-// TODO: Replace with your shared VOICE_PRESETS or dynamic registry.
-const VOICE_PRESETS = [
-  "voice_narrator_warm",
-  "voice_confident_host_female",
-  "voice_casual_friend_male",
-  "voice_child_playful",
-];
 
 export default function CharacterStudioDemo() {
   const [name, setName] = useState("");
@@ -192,27 +183,29 @@ export default function CharacterStudioDemo() {
             >
               Voice (optional)
             </label>
-            <select
-              value={voiceId}
-              onChange={(e) => setVoiceId(e.target.value)}
+            <div
               style={{
-                width: "100%",
-                padding: 10,
                 borderRadius: 8,
                 border: "1px solid #CBD5E1",
-                background: "#FFFFFF",
-                fontSize: 13,
+                padding: 8,
+                background: "#020617",
               }}
             >
-              <option value="">— Select a voice —</option>
-              {VOICE_PRESETS.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
+              <VoiceStep
+                value={voiceId}
+                onChange={(id) => {
+                  // VoiceStep emits onChange(id, label); we only need the id here.
+                  if (typeof id === "string") {
+                    setVoiceId(id);
+                  } else if (id && typeof id === "object" && id.voiceId) {
+                    setVoiceId(id.voiceId);
+                  }
+                }}
+                className="text-xs"
+              />
+            </div>
             <p style={{ marginTop: 4, fontSize: 11, color: "#9CA3AF" }}>
-              This selection is saved as <code>voiceId</code> in the character asset for use in your
+              The selected voice id is stored on this character and can be passed directly into your
               TTS pipeline.
             </p>
           </div>
