@@ -8,6 +8,8 @@ export default function SettingsStudioDemo() {
   const [negativePrompt, setNegativePrompt] = useState("");
   const [mood, setMood] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [settings, setSettings] = useState([]);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -46,8 +48,67 @@ export default function SettingsStudioDemo() {
     setNegativePrompt("");
     setMood("");
     setReferenceImageUrl("");
+    setUploadStatus("");
+    setUploadError("");
+    setPreviewImageUrl("");
+    setPreviewError("");
     setError("");
   };
+
+  const handleReferenceImageUpload = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setUploadError("");
+      setUploadStatus("Uploading…");
+
+      try {
+        const endpoint = import.meta.env.VITE_UPLOAD_REFERENCE_URL || "";
+        if (!endpoint) {
+          throw new Error(
+            "Upload endpoint is not configured (VITE_UPLOAD_REFERENCE_URL)."
+          );
+        }
+
+        const formData = new FormData();
+        formData.append("kind", "setting");
+        formData.append("name", name.trim() || "Untitled setting");
+        formData.append("file", file);
+
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => "");
+          throw new Error(`Upload failed: ${resp.status} ${text}`);
+        }
+
+        const data = await resp.json();
+        const url =
+          data?.publicUrl || data?.public_url || data?.url || data?.image_url;
+        if (!url) {
+          throw new Error("Upload response did not include a publicUrl.");
+        }
+
+        setReferenceImageUrl(url);
+        // If there is no preview yet, seed it with the uploaded image
+        setPreviewImageUrl((prev) => prev || url);
+        setUploadStatus("Uploaded successfully.");
+      } catch (err) {
+        console.error(err);
+        setUploadError(
+          err instanceof Error
+            ? err.message
+            : "Failed to upload reference image."
+        );
+        setUploadStatus("");
+      }
+    },
+    [name]
+  );
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -270,20 +331,61 @@ export default function SettingsStudioDemo() {
                 marginBottom: 4,
               }}
             >
-              Reference image URL (optional)
+              Reference image (optional)
             </label>
             <input
-              type="text"
-              placeholder="https://.../loft_main.png"
-              value={referenceImageUrl}
-              onChange={(e) => setReferenceImageUrl(e.target.value)}
+              type="file"
+              accept="image/*"
+              onChange={handleReferenceImageUpload}
               style={{
                 width: "100%",
-                padding: 10,
+                padding: 8,
                 borderRadius: 8,
                 border: "1px solid #CBD5E1",
+                background: "#FFFFFF",
               }}
             />
+            {uploadStatus && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 11,
+                  color: "#15803D",
+                }}
+              >
+                {uploadStatus}
+              </p>
+            )}
+            {uploadError && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 11,
+                  color: "#B91C1C",
+                }}
+              >
+                {uploadError}
+              </p>
+            )}
+            {referenceImageUrl && (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 11,
+                  color: "#64748B",
+                }}
+              >
+                Current image:{" "}
+                <a
+                  href={referenceImageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#0369A1" }}
+                >
+                  Open in new tab
+                </a>
+              </div>
+            )}
           </div>
 
           {error && (
