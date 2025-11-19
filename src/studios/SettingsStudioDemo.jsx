@@ -115,24 +115,33 @@ export default function SettingsStudioDemo() {
   );
 
   const handleSave = () => {
-    if (!name.trim()) {
+    const rawName = name.trim();
+    const rawPrompt = basePrompt.trim();
+
+    if (!rawName) {
       setError("Setting name is required.");
       return;
     }
-    if (!basePrompt.trim()) {
+    if (!rawPrompt) {
       setError("Base prompt is required.");
       return;
     }
 
+    // Replace spaces with underscores for workflow-safe naming
+    const safeName = rawName.replace(/\s+/g, "_");
+
     const now = new Date().toISOString();
+
+    // Prefer the current preview image; fall back to the last uploaded reference image
+    const imageUrl = previewImageUrl || referenceImageUrl.trim() || undefined;
 
     const newSetting = {
       id: `setting_${Date.now()}`,
-      name: name.trim(),              // maps to settings_name
-      basePrompt: basePrompt.trim(),  // maps to base_prompt
+      name: safeName,               // maps to settings_name
+      basePrompt: rawPrompt,        // maps to base_prompt
       negativePrompt: negativePrompt.trim() || undefined,
       mood: mood.trim() || undefined,
-      referenceImageUrl: referenceImageUrl.trim() || undefined,
+      referenceImageUrl: imageUrl,
       createdAt: now,
       updatedAt: now,
     };
@@ -563,18 +572,21 @@ export default function SettingsStudioDemo() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {s.referenceImageUrl && (
-                    <div
-                      style={{
-                        width: 80,
-                        height: 60,
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        border: "1px solid #E5E7EB",
-                        background: "#E5E7EB",
-                        flexShrink: 0,
-                      }}
-                    >
+                  <div
+                    style={{
+                      width: 80,
+                      height: 60,
+                      borderRadius: 6,
+                      overflow: "hidden",
+                      border: "1px solid #E5E7EB",
+                      background: "#E5E7EB",
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {s.referenceImageUrl ? (
                       <img
                         src={s.referenceImageUrl}
                         alt={s.name || "Setting thumbnail"}
@@ -585,8 +597,19 @@ export default function SettingsStudioDemo() {
                           display: "block",
                         }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "#9CA3AF",
+                          padding: 4,
+                          textAlign: "center",
+                        }}
+                      >
+                        No image
+                      </span>
+                    )}
+                  </div>
                   <div>
                     <div
                       style={{

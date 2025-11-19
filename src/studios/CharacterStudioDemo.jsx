@@ -11,6 +11,7 @@ export default function CharacterStudioDemo() {
   const [characters, setCharacters] = useState([]);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   // Live preview + upload state
   const [previewUrl, setPreviewUrl] = useState("");
@@ -103,22 +104,31 @@ export default function CharacterStudioDemo() {
   };
 
   const handleSave = () => {
-    if (!name.trim()) {
+    const rawName = name.trim();
+    const rawPrompt = basePrompt.trim();
+
+    if (!rawName) {
       setError("Character name is required.");
       return;
     }
-    if (!basePrompt.trim()) {
+    if (!rawPrompt) {
       setError("Base prompt is required.");
       return;
     }
 
+    // Replace spaces with underscores for workflow‑safe naming
+    const safeName = rawName.replace(/\s+/g, "_");
+
     const now = new Date().toISOString();
+
+    // Prefer the preview image; fall back to the uploaded reference image if needed
+    const imageUrl = previewUrl || referenceImageUrl.trim() || undefined;
 
     const newCharacter = {
       id: `char_${Date.now()}`,
-      name: name.trim(),
-      basePrompt: basePrompt.trim(),
-      referenceImageUrl: referenceImageUrl.trim() || undefined,
+      name: safeName,
+      basePrompt: rawPrompt,
+      referenceImageUrl: imageUrl,
       voiceId: voiceId.trim() || undefined,
       createdAt: now,
       updatedAt: now,
@@ -134,6 +144,21 @@ export default function CharacterStudioDemo() {
     persistCharacters(next);
     if (expandedId === id) {
       setExpandedId(null);
+    }
+  };
+
+  const handleCopyJson = (character) => {
+    try {
+      const text = JSON.stringify(character, null, 2);
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        setCopiedId(character.id);
+        setTimeout(() => {
+          setCopiedId((current) => (current === character.id ? null : current));
+        }, 1500);
+      }
+    } catch (e) {
+      console.warn("Failed to copy JSON to clipboard", e);
     }
   };
 
@@ -551,11 +576,27 @@ export default function CharacterStudioDemo() {
                       borderRadius: 6,
                       border: "1px solid #D1D5DB",
                       background: "#FFFFFF",
+                      color: "#374151",
                       fontSize: 11,
                       cursor: "pointer",
                     }}
                   >
                     {expandedId === c.id ? "Hide JSON" : "View JSON"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(c)}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #0369A1",
+                      background: "#EFF6FF",
+                      color: "#0369A1",
+                      fontSize: 11,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copiedId === c.id ? "Copied!" : "Copy JSON"}
                   </button>
                   <button
                     type="button"
