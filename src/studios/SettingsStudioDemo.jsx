@@ -64,7 +64,9 @@ export default function SettingsStudioDemo() {
       setUploadStatus("Uploading…");
 
       try {
-        const endpoint = import.meta.env.VITE_UPLOAD_REFERENCE_URL || "";
+        const endpoint =
+          import.meta.env.VITE_UPLOAD_REFERENCE_URL ||
+          "https://n8n.simplifies.click/webhook/upload-reference-image";
         if (!endpoint) {
           throw new Error(
             "Upload endpoint is not configured (VITE_UPLOAD_REFERENCE_URL)."
