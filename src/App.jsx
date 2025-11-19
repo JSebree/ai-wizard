@@ -2,8 +2,7 @@ import React from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import InterviewPage from "./interview/InterviewPage.jsx";
 import LandingPage from "./landing/LandingPage.jsx";
-import CharacterStudioDemo from "./studios/CharacterStudioDemo.jsx";
-import SettingsStudioDemo from "./studios/SettingsStudioDemo.jsx";
+import StudiosPage from "./studios/StudiosPage.jsx";
 import LogoLight from "./assets/SceneMe_black_icon_transparent.png"; // black icon for light mode
 import LogoDark from "./assets/SceneMe_white_icon_transparent.png"; // white icon for dark mode
 
@@ -171,8 +170,7 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/interview" element={<InterviewPage />} />
-          <Route path="/character-studio" element={<CharacterStudioDemo />} />
-          <Route path="/settings-studio" element={<SettingsStudioDemo />} />
+          <Route path="/studios" element={<StudiosPage />} />
         </Routes>
       </main>
       <Footer />

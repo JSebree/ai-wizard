@@ -405,20 +405,53 @@ export default function LandingPage() {
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>SceneMe</h1>
         <p style={{ marginTop: 8, color: "#475569" }}>
-          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Create your own today, or start from a template below.
+          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Explore the one‑click Express workflow below, or try the new SceneMe Studios (Preview) tools for reusable characters and settings.
         </p>
       </header>
 
       {/* --- Primary CTA (centered) --- */}
       <section style={{ textAlign: "center", marginBottom: 20 }}>
-        <button
-          type="button"
-          onClick={() => openForm(null)}
-          className="btn btn-primary"
-          style={{ padding: "12px 18px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff", fontWeight: 700 }}
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}
         >
-          Create your own
-        </button>
+          <button
+            type="button"
+            onClick={() => openForm(null)}
+            className="btn btn-primary"
+            style={{
+              padding: "12px 18px",
+              borderRadius: 8,
+              border: "1px solid #111827",
+              background: "#111827",
+              color: "#fff",
+              fontWeight: 700,
+            }}
+          >
+            Create your own
+          </button>
+          <button
+            type="button"
+            onClick={() => nav("/studios")}
+            className="btn btn-secondary"
+            style={{
+              padding: "10px 16px",
+              borderRadius: 8,
+              border: "1px solid #E5E7EB",
+              background: "#FFFFFF",
+              color: "#111827",
+              fontWeight: 600,
+              fontSize: 14,
+            }}
+          >
+            Try SceneMe Studios (Preview)
+          </button>
+        </div>
       </section>
 
 
@@ -483,102 +516,7 @@ export default function LandingPage() {
             </div>
       </section>
 
-      {/* --- Studios Preview (Early Access) --- */}
-      <section style={{ marginBottom: 20 }}>
-        <div
-          className="card"
-          style={{
-            padding: 18,
-            border: "1px solid #E5E7EB",
-            borderRadius: 12,
-            background: "#F9FAFB",
-          }}
-        >
-          <h2 style={{ marginTop: 0, marginBottom: 8 }}>SceneMe Studios (Preview)</h2>
-          <p style={{ marginTop: 0, marginBottom: 16, color: "#475569" }}>
-            Design reusable characters and settings for your stories. These tools are functional
-            preview studios and are not yet connected to the one-click Express workflow.
-          </p>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: 12,
-            }}
-          >
-            {/* Character Studio card */}
-            <div
-              style={{
-                border: "1px solid #E5E7EB",
-                borderRadius: 12,
-                padding: 12,
-                background: "#FFFFFF",
-              }}
-            >
-              <h3 style={{ marginTop: 0, marginBottom: 4 }}>Character Studio (Preview)</h3>
-              <p style={{ marginTop: 0, marginBottom: 8, color: "#64748B", fontSize: 14 }}>
-                Create and save reusable characters—faces, vibes, and style notes—to use across
-                multiple scenes and episodes.
-              </p>
-              <p style={{ marginTop: 0, marginBottom: 10, color: "#9CA3AF", fontSize: 12 }}>
-                Preview only. Characters are not yet wired into the automated video generator.
-              </p>
-              <button
-                type="button"
-                onClick={() => nav("/character-studio")}
-                className="btn btn-secondary"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #111827",
-                  background: "#FFFFFF",
-                  color: "#111827",
-                  fontWeight: 600,
-                  fontSize: 12,
-                }}
-              >
-                Explore Character Studio
-              </button>
-            </div>
-
-            {/* Settings Studio card */}
-            <div
-              style={{
-                border: "1px solid #E5E7EB",
-                borderRadius: 12,
-                padding: 12,
-                background: "#FFFFFF",
-              }}
-            >
-              <h3 style={{ marginTop: 0, marginBottom: 4 }}>Settings Studio (Preview)</h3>
-              <p style={{ marginTop: 0, marginBottom: 8, color: "#64748B", fontSize: 14 }}>
-                Build a library of reusable environments—lofts, beaches, labs, and more—for
-                future scenes and B‑roll.
-              </p>
-              <p style={{ marginTop: 0, marginBottom: 10, color: "#9CA3AF", fontSize: 12 }}>
-                Preview only. Settings are not yet wired into the automated video generator.
-              </p>
-              <button
-                type="button"
-                onClick={() => nav("/settings-studio")}
-                className="btn btn-secondary"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #111827",
-                  background: "#FFFFFF",
-                  color: "#111827",
-                  fontWeight: 600,
-                  fontSize: 12,
-                }}
-              >
-                Explore Settings Studio
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* --- Intake Modal --- */}
       {showForm && (
