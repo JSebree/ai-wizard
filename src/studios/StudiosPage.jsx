@@ -5,7 +5,14 @@ import SettingsStudioDemo from "./SettingsStudioDemo.jsx";
 
 export default function StudiosPage() {
   const nav = useNavigate();
-  const [activeTab, setActiveTab] = useState("characters"); // "characters" | "settings"
+  const initialTab = localStorage.getItem("studios.activeTab") || "characters";
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  React.useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem("studios.activeTab", activeTab);
+    }
+  }, [activeTab]);
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>

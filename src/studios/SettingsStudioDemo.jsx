@@ -225,6 +225,71 @@ export default function SettingsStudioDemo() {
         </p>
 
         <div style={{ display: "grid", gap: 12 }}>
+          {/* Preview panel */}
+          <div
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderRadius: 10,
+              border: "1px dashed #CBD5E1",
+              background: "#F9FAFB",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+                Live preview
+              </span>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                Uses base prompt, negative prompt, and optional reference image
+              </span>
+            </div>
+            {previewError && (
+              <p style={{ margin: 0, marginBottom: 6, fontSize: 11, color: "#B91C1C" }}>
+                {previewError}
+              </p>
+            )}
+            {isGenerating && (
+              <p style={{ margin: 0, fontSize: 12, color: "#64748B" }}>
+                Generating preview image…
+              </p>
+            )}
+            {!isGenerating && previewImageUrl && (
+              <div
+                style={{
+                  marginTop: 6,
+                  borderRadius: 8,
+                  overflow: "hidden",
+                  border: "1px solid #E5E7EB",
+                  display: "inline-block",
+                  maxWidth: "100%",
+                }}
+              >
+                <img
+                  src={previewImageUrl}
+                  alt="Setting preview"
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                  }}
+                />
+              </div>
+            )}
+            {!isGenerating && !previewImageUrl && !previewError && (
+              <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>
+                No preview yet. Enter a base prompt and click “Generate preview” to see a sample
+                render of this setting.
+              </p>
+            )}
+          </div>
+
           <div>
             <label
               style={{
@@ -234,20 +299,61 @@ export default function SettingsStudioDemo() {
                 marginBottom: 4,
               }}
             >
-              Setting name *
+              Reference image (optional)
             </label>
             <input
-              type="text"
-              placeholder="Loft, Lake platform, Train station..."
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              type="file"
+              accept="image/*"
+              onChange={handleReferenceImageUpload}
               style={{
                 width: "100%",
-                padding: 10,
+                padding: 8,
                 borderRadius: 8,
                 border: "1px solid #CBD5E1",
+                background: "#FFFFFF",
               }}
             />
+            {uploadStatus && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 11,
+                  color: "#15803D",
+                }}
+              >
+                {uploadStatus}
+              </p>
+            )}
+            {uploadError && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 11,
+                  color: "#B91C1C",
+                }}
+              >
+                {uploadError}
+              </p>
+            )}
+            {referenceImageUrl && (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 11,
+                  color: "#64748B",
+                }}
+              >
+                Current image:{" "}
+                <a
+                  href={referenceImageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#0369A1" }}
+                >
+                  Open in new tab
+                </a>
+              </div>
+            )}
           </div>
 
           <div>
@@ -336,61 +442,20 @@ export default function SettingsStudioDemo() {
                 marginBottom: 4,
               }}
             >
-              Reference image (optional)
+              Setting name *
             </label>
             <input
-              type="file"
-              accept="image/*"
-              onChange={handleReferenceImageUpload}
+              type="text"
+              placeholder="Loft, Lake platform, Train station..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               style={{
                 width: "100%",
-                padding: 8,
+                padding: 10,
                 borderRadius: 8,
                 border: "1px solid #CBD5E1",
-                background: "#FFFFFF",
               }}
             />
-            {uploadStatus && (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 11,
-                  color: "#15803D",
-                }}
-              >
-                {uploadStatus}
-              </p>
-            )}
-            {uploadError && (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 11,
-                  color: "#B91C1C",
-                }}
-              >
-                {uploadError}
-              </p>
-            )}
-            {referenceImageUrl && (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 11,
-                  color: "#64748B",
-                }}
-              >
-                Current image:{" "}
-                <a
-                  href={referenceImageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "#0369A1" }}
-                >
-                  Open in new tab
-                </a>
-              </div>
-            )}
           </div>
 
           {error && (
@@ -452,71 +517,6 @@ export default function SettingsStudioDemo() {
             >
               {isGenerating ? "Generating preview…" : "Generate preview"}
             </button>
-          </div>
-
-          {/* Preview panel */}
-          <div
-            style={{
-              marginTop: 12,
-              padding: 10,
-              borderRadius: 10,
-              border: "1px dashed #CBD5E1",
-              background: "#F9FAFB",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 6,
-              }}
-            >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
-                Live preview
-              </span>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>
-                Uses base prompt, negative prompt, and optional reference image
-              </span>
-            </div>
-            {previewError && (
-              <p style={{ margin: 0, marginBottom: 6, fontSize: 11, color: "#B91C1C" }}>
-                {previewError}
-              </p>
-            )}
-            {isGenerating && (
-              <p style={{ margin: 0, fontSize: 12, color: "#64748B" }}>
-                Generating preview image…
-              </p>
-            )}
-            {!isGenerating && previewImageUrl && (
-              <div
-                style={{
-                  marginTop: 6,
-                  borderRadius: 8,
-                  overflow: "hidden",
-                  border: "1px solid #E5E7EB",
-                  display: "inline-block",
-                  maxWidth: "100%",
-                }}
-              >
-                <img
-                  src={previewImageUrl}
-                  alt="Setting preview"
-                  style={{
-                    display: "block",
-                    maxWidth: "100%",
-                    height: "auto",
-                  }}
-                />
-              </div>
-            )}
-            {!isGenerating && !previewImageUrl && !previewError && (
-              <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>
-                No preview yet. Enter a base prompt and click “Generate preview” to see a sample
-                render of this setting.
-              </p>
-            )}
           </div>
         </div>
       </section>
