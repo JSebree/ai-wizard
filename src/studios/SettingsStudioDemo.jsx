@@ -223,6 +223,29 @@ export default function SettingsStudioDemo() {
           directly into payloads for your n8n workflows, including base prompts and negative
           prompts for your T2I / I2I models.
         </p>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: 8,
+          }}
+        >
+          <button
+            type="button"
+            onClick={resetForm}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 999,
+              border: "1px solid #E5E7EB",
+              background: "#FFFFFF",
+              color: "#4B5563",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            Clear form
+          </button>
+        </div>
 
         <div style={{ display: "grid", gap: 12 }}>
           {/* Preview panel */}
@@ -261,26 +284,61 @@ export default function SettingsStudioDemo() {
               </p>
             )}
             {!isGenerating && previewImageUrl && (
-              <div
-                style={{
-                  marginTop: 6,
-                  borderRadius: 8,
-                  overflow: "hidden",
-                  border: "1px solid #E5E7EB",
-                  display: "inline-block",
-                  maxWidth: "100%",
-                }}
-              >
-                <img
-                  src={previewImageUrl}
-                  alt="Setting preview"
+              <>
+                <div
                   style={{
-                    display: "block",
+                    marginTop: 6,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    border: "1px solid #E5E7EB",
+                    display: "inline-block",
                     maxWidth: "100%",
-                    height: "auto",
                   }}
-                />
-              </div>
+                >
+                  <img
+                    src={previewImageUrl}
+                    alt="Setting preview"
+                    style={{
+                      display: "block",
+                      maxWidth: "100%",
+                      height: "auto",
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!name.trim() || !basePrompt.trim()}
+                    title={
+                      !name.trim()
+                        ? "Enter a setting name to add this to your library"
+                        : undefined
+                    }
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      border: "1px solid #0F172A",
+                      background: "#0F172A",
+                      color: "#FFFFFF",
+                      fontSize: 12,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>＋</span>
+                    <span>Add to saved settings</span>
+                  </button>
+                </div>
+              </>
             )}
             {!isGenerating && !previewImageUrl && !previewError && (
               <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>
@@ -471,36 +529,6 @@ export default function SettingsStudioDemo() {
               alignItems: "center",
             }}
           >
-            <button
-              type="button"
-              onClick={handleSave}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 8,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#FFFFFF",
-                fontWeight: 600,
-                fontSize: 14,
-              }}
-            >
-              Save setting
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 8,
-                border: "1px solid #E5E7EB",
-                background: "#FFFFFF",
-                color: "#374151",
-                fontWeight: 500,
-                fontSize: 13,
-              }}
-            >
-              Clear form
-            </button>
             <button
               type="button"
               onClick={handleGeneratePreview}
