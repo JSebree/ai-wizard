@@ -252,6 +252,41 @@ export default function CharacterStudioDemo() {
                 </p>
               )}
             </div>
+            {previewUrl && (
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!name.trim() || !basePrompt.trim()}
+                  title={
+                    !name.trim()
+                      ? "Enter a character name to add this to your library"
+                      : undefined
+                  }
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    border: "1px solid #0F172A",
+                    background: "#0F172A",
+                    color: "#FFFFFF",
+                    fontSize: 12,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>＋</span>
+                  <span>Add to saved characters</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Reference image uploader */}
@@ -282,11 +317,6 @@ export default function CharacterStudioDemo() {
             {isUploading && (
               <p style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>
                 Uploading reference image…
-              </p>
-            )}
-            {!isUploading && previewUrl && !uploadError && (
-              <p style={{ marginTop: 4, fontSize: 12, color: "#16A34A" }}>
-                Uploaded successfully — preview above.
               </p>
             )}
             {uploadError && (
@@ -412,39 +442,6 @@ export default function CharacterStudioDemo() {
               }}
             >
               Generate new character
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "8px 14px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#FFFFFF",
-                color: "#111827",
-                fontWeight: 600,
-                fontSize: 13,
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 18,
-                  height: 18,
-                  borderRadius: "999px",
-                  border: "1px solid #111827",
-                  fontSize: 12,
-                  lineHeight: 1,
-                }}
-              >
-                +
-              </span>
-              <span>Add to saved characters</span>
             </button>
           </div>
         </div>
