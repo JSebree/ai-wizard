@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import VoiceStep from "../interview/steps/VoiceStep.jsx";
 
 const STORAGE_KEY = "sceneme.characters";
@@ -17,6 +17,18 @@ export default function CharacterStudioDemo() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  // Voice upload state (for user-recorded / uploaded voices)
+  const [isVoiceUploading, setIsVoiceUploading] = useState(false);
+  const [voiceUploadError, setVoiceUploadError] = useState("");
+  const [voiceUploadInfo, setVoiceUploadInfo] = useState(null);
+
+  // Recording state for in-browser voice capture
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState(null);
+  const [recordedUrl, setRecordedUrl] = useState("");
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
 
   // Load saved characters from localStorage on mount
   useEffect(() => {
@@ -49,6 +61,134 @@ export default function CharacterStudioDemo() {
     setError("");
     setPreviewUrl("");
     setUploadError("");
+    setVoiceUploadError("");
+    setVoiceUploadInfo(null);
+    setIsRecording(false);
+    setRecordedBlob(null);
+    if (recordedUrl) {
+      try {
+        URL.revokeObjectURL(recordedUrl);
+      } catch {}
+    }
+    setRecordedUrl("");
+  };
+  // Upload a recorded/selected voice file to n8n / DO Spaces staging
+  const handleVoiceUpload = async (file) => {
+    if (!file) return;
+    setVoiceUploadError("");
+    setVoiceUploadInfo(null);
+    setIsVoiceUploading(true);
+
+    try {
+      const endpoint =
+        import.meta.env.VITE_UPLOAD_REFERENCE_URL ||
+        "https://n8n.simplifies.click/webhook/upload-reference-image";
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("kind", "voice");
+
+      // Use character name as a base for the voice label if available
+      const fileBaseName = file.name
+        ? file.name.replace(/\.[^/.]+$/, "")
+        : "custom_voice";
+      const rawLabel = (name && name.trim()) || fileBaseName;
+      formData.append("name", rawLabel);
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Upload failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      const urlFromApi =
+        data?.publicUrl ||
+        data?.normalized?.publicUrl ||
+        data?.url ||
+        "";
+
+      // Derive a workflow-safe voice id (spaces -> underscores)
+      const safeVoiceId = rawLabel
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036F]/g, "")
+        .trim()
+        .replace(/\s+/g, "_");
+
+      // Store this voice id on the character so pipelines can use it
+      setVoiceId(safeVoiceId);
+      setVoiceUploadInfo({ voiceId: safeVoiceId, url: urlFromApi || undefined });
+    } catch (err) {
+      console.error("Voice upload failed", err);
+      setVoiceUploadError(
+        err instanceof Error ? err.message : "Voice upload failed. Please try again."
+      );
+    } finally {
+      setIsVoiceUploading(false);
+    }
+  };
+
+  // Start in-browser audio recording using MediaRecorder
+  const startRecording = async () => {
+    setVoiceUploadError("");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setVoiceUploadError("This browser does not support microphone recording.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
+        setRecordedBlob(blob);
+        if (recordedUrl) {
+          try {
+            URL.revokeObjectURL(recordedUrl);
+          } catch {}
+        }
+        const url = URL.createObjectURL(blob);
+        setRecordedUrl(url);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Failed to start recording", err);
+      setVoiceUploadError("Could not access microphone. Check your permissions.");
+    }
+  };
+
+  const stopRecording = () => {
+    const mediaRecorder = mediaRecorderRef.current;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+    }
+    setIsRecording(false);
+  };
+
+  const uploadRecordedVoice = () => {
+    if (!recordedBlob) {
+      setVoiceUploadError("Record a voice sample first.");
+      return;
+    }
+    const file = new File([recordedBlob], "recording.webm", {
+      type: recordedBlob.type || "audio/webm",
+    });
+    handleVoiceUpload(file);
   };
 
   // Upload reference image to n8n / DO Spaces staging
@@ -438,6 +578,95 @@ export default function CharacterStudioDemo() {
               The selected voice id is stored on this character and can be passed directly into your
               TTS pipeline.
             </p>
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
+              Record voice (optional)
+            </label>
+            <div
+              style={{
+                borderRadius: 8,
+                border: "1px solid #CBD5E1",
+                padding: 8,
+                background: "#FFFFFF",
+                display: "grid",
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #111827",
+                    background: isRecording ? "#B91C1C" : "#111827",
+                    color: "#FFFFFF",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {isRecording ? "Stop recording" : "Start recording"}
+                </button>
+                <button
+                  type="button"
+                  onClick={uploadRecordedVoice}
+                  disabled={!recordedBlob || isVoiceUploading}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #0369A1",
+                    background: !recordedBlob || isVoiceUploading ? "#E5E7EB" : "#EFF6FF",
+                    color: !recordedBlob || isVoiceUploading ? "#9CA3AF" : "#0369A1",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor:
+                      !recordedBlob || isVoiceUploading ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isVoiceUploading ? "Saving voice…" : "Save recording as voice"}
+                </button>
+              </div>
+              {recordedUrl && (
+                <audio
+                  controls
+                  src={recordedUrl}
+                  style={{ width: "100%", marginTop: 4 }}
+                />
+              )}
+              {isVoiceUploading && (
+                <p style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>
+                  Uploading voice recording…
+                </p>
+              )}
+              {voiceUploadError && (
+                <p style={{ marginTop: 4, fontSize: 12, color: "#B91C1C" }}>
+                  {voiceUploadError}
+                </p>
+              )}
+              {voiceUploadInfo && (
+                <p style={{ marginTop: 4, fontSize: 12, color: "#16A34A" }}>
+                  This character will use voice id <code>{voiceUploadInfo.voiceId}</code>
+                  {voiceUploadInfo.url ? " (reference uploaded)" : ""}.
+                </p>
+              )}
+            </div>
           </div>
 
           {error && (
