@@ -12,7 +12,6 @@ export default function SettingsStudioDemo() {
   const [uploadError, setUploadError] = useState("");
   const [settings, setSettings] = useState([]);
   const [error, setError] = useState("");
-  const [expandedId, setExpandedId] = useState(null);
 
   // Live preview state
   const [previewImageUrl, setPreviewImageUrl] = useState("");
@@ -146,9 +145,6 @@ export default function SettingsStudioDemo() {
   const handleDelete = (id) => {
     const next = settings.filter((s) => s.id !== id);
     persistSettings(next);
-    if (expandedId === id) {
-      setExpandedId(null);
-    }
   };
 
   const handleGeneratePreview = useCallback(async () => {
@@ -543,16 +539,37 @@ export default function SettingsStudioDemo() {
                   borderRadius: 10,
                   padding: 10,
                   background: "#F9FAFB",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {s.referenceImageUrl && (
+                    <div
+                      style={{
+                        width: 80,
+                        height: 60,
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        border: "1px solid #E5E7EB",
+                        background: "#E5E7EB",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={s.referenceImageUrl}
+                        alt={s.name || "Setting thumbnail"}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    </div>
+                  )}
                   <div>
                     <div
                       style={{
@@ -563,78 +580,24 @@ export default function SettingsStudioDemo() {
                     >
                       {s.name}
                     </div>
-                    {s.basePrompt && (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "#6B7280",
-                          marginBottom: 2,
-                          maxHeight: 40,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {s.basePrompt}
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#9CA3AF",
-                      }}
-                    >
-                      Created: {new Date(s.createdAt).toLocaleString()}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedId((prev) => (prev === s.id ? null : s.id))
-                      }
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #D1D5DB",
-                        background: "#FFFFFF",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {expandedId === s.id ? "Hide JSON" : "View JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(s.id)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #FCA5A5",
-                        background: "#FEF2F2",
-                        color: "#B91C1C",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </button>
                   </div>
                 </div>
-                {expandedId === s.id && (
-                  <pre
-                    style={{
-                      marginTop: 8,
-                      fontSize: 11,
-                      background: "#111827",
-                      color: "#E5E7EB",
-                      padding: 8,
-                      borderRadius: 8,
-                      overflowX: "auto",
-                    }}
-                  >
-                    {JSON.stringify(s, null, 2)}
-                  </pre>
-                )}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(s.id)}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #FCA5A5",
+                    background: "#FEF2F2",
+                    color: "#B91C1C",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             ))}
           </div>
