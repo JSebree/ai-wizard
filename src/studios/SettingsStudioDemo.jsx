@@ -371,17 +371,6 @@ export default function SettingsStudioDemo() {
                 background: "#FFFFFF",
               }}
             />
-            {uploadStatus && (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 11,
-                  color: "#15803D",
-                }}
-              >
-                {uploadStatus}
-              </p>
-            )}
             {uploadError && (
               <p
                 style={{
@@ -392,25 +381,6 @@ export default function SettingsStudioDemo() {
               >
                 {uploadError}
               </p>
-            )}
-            {referenceImageUrl && (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 11,
-                  color: "#64748B",
-                }}
-              >
-                Current image:{" "}
-                <a
-                  href={referenceImageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "#0369A1" }}
-                >
-                  Open in new tab
-                </a>
-              </div>
             )}
           </div>
 
@@ -543,7 +513,7 @@ export default function SettingsStudioDemo() {
                 fontSize: 13,
               }}
             >
-              {isGenerating ? "Generating preview…" : "Generate preview"}
+              {isGenerating ? "Generating new setting…" : "Generate new setting"}
             </button>
           </div>
         </div>
