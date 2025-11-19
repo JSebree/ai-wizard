@@ -496,13 +496,18 @@ export default function SettingsStudioDemo() {
                   borderRadius: 8,
                   overflow: "hidden",
                   border: "1px solid #E5E7EB",
-                  maxHeight: 260,
+                  display: "inline-block",
+                  maxWidth: "100%",
                 }}
               >
                 <img
                   src={previewImageUrl}
                   alt="Setting preview"
-                  style={{ width: "100%", display: "block", objectFit: "cover" }}
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                  }}
                 />
               </div>
             )}
