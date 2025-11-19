@@ -4,9 +4,7 @@ const STORAGE_KEY = "sceneme.characters";
 
 export default function CharacterStudioDemo() {
   const [name, setName] = useState("");
-  const [shortDescription, setShortDescription] = useState("");
-  const [appearanceNotes, setAppearanceNotes] = useState("");
-  const [personalityNotes, setPersonalityNotes] = useState("");
+  const [basePrompt, setBasePrompt] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
   const [voiceId, setVoiceId] = useState("");
   const [characters, setCharacters] = useState([]);
@@ -38,9 +36,7 @@ export default function CharacterStudioDemo() {
 
   const resetForm = () => {
     setName("");
-    setShortDescription("");
-    setAppearanceNotes("");
-    setPersonalityNotes("");
+    setBasePrompt("");
     setReferenceImageUrl("");
     setVoiceId("");
     setError("");
@@ -51,15 +47,17 @@ export default function CharacterStudioDemo() {
       setError("Character name is required.");
       return;
     }
+    if (!basePrompt.trim()) {
+      setError("Base prompt is required.");
+      return;
+    }
 
     const now = new Date().toISOString();
 
     const newCharacter = {
       id: `char_${Date.now()}`,
       name: name.trim(),
-      shortDescription: shortDescription.trim(),
-      appearanceNotes: appearanceNotes.trim(),
-      personalityNotes: personalityNotes.trim(),
+      basePrompt: basePrompt.trim(),
       referenceImageUrl: referenceImageUrl.trim() || undefined,
       voiceId: voiceId.trim() || undefined,
       createdAt: now,
@@ -131,65 +129,13 @@ export default function CharacterStudioDemo() {
                 marginBottom: 4,
               }}
             >
-              Short description
+              Base prompt *
             </label>
             <textarea
-              rows={2}
-              placeholder="One or two lines that sum them up in the story."
-              value={shortDescription}
-              onChange={(e) => setShortDescription(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                resize: "vertical",
-              }}
-            />
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Appearance notes
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Hair, skin tone, clothing, age, posture, physical quirks..."
-              value={appearanceNotes}
-              onChange={(e) => setAppearanceNotes(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                resize: "vertical",
-              }}
-            />
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Personality notes
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Energy level, quirks, how they speak, decision style..."
-              value={personalityNotes}
-              onChange={(e) => setPersonalityNotes(e.target.value)}
+              rows={5}
+              placeholder="A confident young Black woman with shoulder-length natural curls shaped into a rounded silhouette..."
+              value={basePrompt}
+              onChange={(e) => setBasePrompt(e.target.value)}
               style={{
                 width: "100%",
                 padding: 10,
@@ -333,15 +279,18 @@ export default function CharacterStudioDemo() {
                     >
                       {c.name}
                     </div>
-                    {c.shortDescription && (
+                    {c.basePrompt && (
                       <div
                         style={{
-                          fontSize: 12,
+                          fontSize: 11,
                           color: "#6B7280",
                           marginBottom: 2,
+                          maxHeight: 40,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
                         }}
                       >
-                        {c.shortDescription}
+                        {c.basePrompt}
                       </div>
                     )}
                     <div
