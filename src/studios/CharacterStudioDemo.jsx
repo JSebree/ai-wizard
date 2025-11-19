@@ -489,131 +489,149 @@ export default function CharacterStudioDemo() {
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {characters.map((c) => (
-              <div
-                key={c.id}
-                style={{
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 10,
-                  padding: 10,
-                  background: "#F9FAFB",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {c.referenceImageUrl ? (
-                    <div
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 8,
-                        overflow: "hidden",
-                        border: "1px solid #E5E7EB",
-                        background: "#0F172A",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <img
-                        src={c.referenceImageUrl}
-                        alt={c.name}
+              <div key={c.id} style={{ display: "grid", gap: 4 }}>
+                <div
+                  style={{
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "#F9FAFB",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {c.referenceImageUrl ? (
+                      <div
                         style={{
-                          display: "block",
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
+                          width: 72,
+                          height: 72,
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          border: "1px solid #E5E7EB",
+                          background: "#0F172A",
+                          flexShrink: 0,
                         }}
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 8,
-                        border: "1px dashed #D1D5DB",
-                        background: "#F3F4F6",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 11,
-                        color: "#9CA3AF",
-                        flexShrink: 0,
-                      }}
-                    >
-                      No image
-                    </div>
-                  )}
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 14,
-                        marginBottom: 2,
-                      }}
-                    >
-                      {c.name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#9CA3AF",
-                      }}
-                    >
-                      Created: {new Date(c.createdAt).toLocaleString()}
+                      >
+                        <img
+                          src={c.referenceImageUrl}
+                          alt={c.name}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          width: 72,
+                          height: 72,
+                          borderRadius: 8,
+                          border: "1px dashed #D1D5DB",
+                          background: "#F3F4F6",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 11,
+                          color: "#9CA3AF",
+                          flexShrink: 0,
+                        }}
+                      >
+                        No image
+                      </div>
+                    )}
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {c.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#9CA3AF",
+                        }}
+                      >
+                        Created: {new Date(c.createdAt).toLocaleString()}
+                      </div>
                     </div>
                   </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedId((prev) => (prev === c.id ? null : c.id))
+                      }
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #D1D5DB",
+                        background: "#FFFFFF",
+                        color: "#374151",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {expandedId === c.id ? "Hide JSON" : "View JSON"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyJson(c)}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #0369A1",
+                        background: "#EFF6FF",
+                        color: "#0369A1",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {copiedId === c.id ? "Copied!" : "Copy JSON"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c.id)}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #FCA5A5",
+                        background: "#FEF2F2",
+                        color: "#B91C1C",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedId((prev) => (prev === c.id ? null : c.id))
-                    }
+                {expandedId === c.id && (
+                  <pre
                     style={{
-                      padding: "4px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #D1D5DB",
-                      background: "#FFFFFF",
-                      color: "#374151",
+                      margin: 0,
+                      padding: 10,
+                      borderRadius: 8,
+                      border: "1px solid #E5E7EB",
+                      background: "#0F172A",
+                      color: "#E5E7EB",
                       fontSize: 11,
-                      cursor: "pointer",
+                      overflowX: "auto",
+                      whiteSpace: "pre",
                     }}
                   >
-                    {expandedId === c.id ? "Hide JSON" : "View JSON"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyJson(c)}
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #0369A1",
-                      background: "#EFF6FF",
-                      color: "#0369A1",
-                      fontSize: 11,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {copiedId === c.id ? "Copied!" : "Copy JSON"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(c.id)}
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: 6,
-                      border: "1px solid #FCA5A5",
-                      background: "#FEF2F2",
-                      color: "#B91C1C",
-                      fontSize: 11,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
+                    {JSON.stringify(c, null, 2)}
+                  </pre>
+                )}
               </div>
             ))}
           </div>
