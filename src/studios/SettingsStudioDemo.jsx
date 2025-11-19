@@ -95,10 +95,13 @@ export default function SettingsStudioDemo() {
           throw new Error("Upload response did not include a publicUrl.");
         }
 
+        // Store the URL so it can be saved with the setting later
         setReferenceImageUrl(url);
-        // If there is no preview yet, seed it with the uploaded image
-        setPreviewImageUrl((prev) => prev || url);
-        setUploadStatus("Uploaded successfully.");
+
+        // Always show the freshly uploaded image in the live preview panel
+        setPreviewImageUrl(url);
+
+        setUploadStatus("Uploaded successfully — preview below.");
       } catch (err) {
         console.error(err);
         setUploadError(
