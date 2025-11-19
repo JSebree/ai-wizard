@@ -12,6 +12,8 @@ export default function SettingsStudioDemo() {
   const [uploadError, setUploadError] = useState("");
   const [settings, setSettings] = useState([]);
   const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   // Live preview state
   const [previewImageUrl, setPreviewImageUrl] = useState("");
@@ -154,6 +156,21 @@ export default function SettingsStudioDemo() {
   const handleDelete = (id) => {
     const next = settings.filter((s) => s.id !== id);
     persistSettings(next);
+  };
+
+  const handleCopyJson = (setting) => {
+    try {
+      const text = JSON.stringify(setting, null, 2);
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        setCopiedId(setting.id);
+        setTimeout(() => {
+          setCopiedId((current) => (current === setting.id ? null : current));
+        }, 1500);
+      }
+    } catch (e) {
+      console.warn("Failed to copy JSON to clipboard", e);
+    }
   };
 
   const handleGeneratePreview = useCallback(async () => {
@@ -558,86 +575,137 @@ export default function SettingsStudioDemo() {
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {settings.map((s) => (
-              <div
-                key={s.id}
-                style={{
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 10,
-                  padding: 10,
-                  background: "#F9FAFB",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      width: 80,
-                      height: 60,
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      border: "1px solid #E5E7EB",
-                      background: "#E5E7EB",
-                      flexShrink: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {s.referenceImageUrl ? (
-                      <img
-                        src={s.referenceImageUrl}
-                        alt={s.name || "Setting thumbnail"}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "#9CA3AF",
-                          padding: 4,
-                          textAlign: "center",
-                        }}
-                      >
-                        No image
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 14,
-                        marginBottom: 2,
-                      }}
-                    >
-                      {s.name}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(s.id)}
+              <div key={s.id} style={{ display: "grid", gap: 4 }}>
+                <div
                   style={{
-                    padding: "4px 8px",
-                    borderRadius: 6,
-                    border: "1px solid #FCA5A5",
-                    background: "#FEF2F2",
-                    color: "#B91C1C",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    flexShrink: 0,
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "#F9FAFB",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
                   }}
                 >
-                  Delete
-                </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div
+                      style={{
+                        width: 80,
+                        height: 60,
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        border: "1px solid #E5E7EB",
+                        background: "#E5E7EB",
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {s.referenceImageUrl ? (
+                        <img
+                          src={s.referenceImageUrl}
+                          alt={s.name || "Setting thumbnail"}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#9CA3AF",
+                            padding: 4,
+                            textAlign: "center",
+                          }}
+                        >
+                          No image
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {s.name}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedId((current) => (current === s.id ? null : s.id))
+                      }
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #D1D5DB",
+                        background: "#FFFFFF",
+                        color: "#374151",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {expandedId === s.id ? "Hide JSON" : "View JSON"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyJson(s)}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #0369A1",
+                        background: "#EFF6FF",
+                        color: "#0369A1",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {copiedId === s.id ? "Copied!" : "Copy JSON"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(s.id)}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #FCA5A5",
+                        background: "#FEF2F2",
+                        color: "#B91C1C",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {expandedId === s.id && (
+                  <pre
+                    style={{
+                      margin: 0,
+                      padding: 10,
+                      borderRadius: 8,
+                      border: "1px solid #E5E7EB",
+                      background: "#0F172A",
+                      color: "#E5E7EB",
+                      fontSize: 11,
+                      overflowX: "auto",
+                      whiteSpace: "pre",
+                    }}
+                  >
+                    {JSON.stringify(s, null, 2)}
+                  </pre>
+                )}
               </div>
             ))}
           </div>
