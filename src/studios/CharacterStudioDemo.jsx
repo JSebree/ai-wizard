@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from "react";
 
+
 const STORAGE_KEY = "sceneme.characters";
+
+// Temporary voice presets for the Character Studio.
+// TODO: Replace with your shared VOICE_PRESETS or dynamic registry.
+const VOICE_PRESETS = [
+  "voice_narrator_warm",
+  "voice_confident_host_female",
+  "voice_casual_friend_male",
+  "voice_child_playful",
+];
 
 export default function CharacterStudioDemo() {
   const [name, setName] = useState("");
@@ -180,11 +190,9 @@ export default function CharacterStudioDemo() {
                 marginBottom: 4,
               }}
             >
-              Voice ID (optional)
+              Voice (optional)
             </label>
-            <input
-              type="text"
-              placeholder="higgs_voice_ari_01 or UUID from your voice registry"
+            <select
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
               style={{
@@ -192,8 +200,21 @@ export default function CharacterStudioDemo() {
                 padding: 10,
                 borderRadius: 8,
                 border: "1px solid #CBD5E1",
+                background: "#FFFFFF",
+                fontSize: 13,
               }}
-            />
+            >
+              <option value="">— Select a voice —</option>
+              {VOICE_PRESETS.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <p style={{ marginTop: 4, fontSize: 11, color: "#9CA3AF" }}>
+              This selection is saved as <code>voiceId</code> in the character asset for use in your
+              TTS pipeline.
+            </p>
           </div>
 
           {error && (
