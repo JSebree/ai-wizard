@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "sceneme.settings";
 
@@ -11,6 +11,11 @@ export default function SettingsStudioDemo() {
   const [settings, setSettings] = useState([]);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+
+  // Live preview state
+  const [previewImageUrl, setPreviewImageUrl] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Load saved settings from localStorage on mount
   useEffect(() => {
@@ -79,6 +84,61 @@ export default function SettingsStudioDemo() {
       setExpandedId(null);
     }
   };
+
+  const handleGeneratePreview = useCallback(async () => {
+    setPreviewError("");
+
+    if (!basePrompt.trim()) {
+      setPreviewError("Base prompt is required to generate a preview.");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      // TODO: Replace this with your real settings preview endpoint.
+      // For example: import.meta.env.VITE_SETTINGS_PREVIEW_URL
+      const endpoint = import.meta.env.VITE_SETTINGS_PREVIEW_URL || "";
+      if (!endpoint) {
+        throw new Error("Preview endpoint is not configured (VITE_SETTINGS_PREVIEW_URL).");
+      }
+
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: basePrompt.trim(),
+          negative_prompt: negativePrompt.trim() || "",
+          mood: mood.trim() || "",
+          reference_image_url: referenceImageUrl.trim() || undefined,
+        }),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Preview request failed: ${resp.status} ${text}`);
+      }
+
+      const data = await resp.json();
+      const url =
+        data?.image_url ||
+        data?.preview_url ||
+        (Array.isArray(data?.images) ? data.images[0] : null);
+
+      if (!url) {
+        throw new Error("Preview response did not include an image_url.");
+      }
+
+      setPreviewImageUrl(url);
+    } catch (err) {
+      console.error(err);
+      setPreviewError(err instanceof Error ? err.message : "Failed to generate preview.");
+      setPreviewImageUrl("");
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [basePrompt, negativePrompt, mood, referenceImageUrl]);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -230,7 +290,15 @@ export default function SettingsStudioDemo() {
             <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>{error}</p>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: 4,
+              alignItems: "center",
+            }}
+          >
             <button
               type="button"
               onClick={handleSave}
@@ -261,6 +329,82 @@ export default function SettingsStudioDemo() {
             >
               Clear form
             </button>
+            <button
+              type="button"
+              onClick={handleGeneratePreview}
+              disabled={isGenerating}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid #0369A1",
+                background: isGenerating ? "#E0F2FE" : "#F0F9FF",
+                color: "#0C4A6E",
+                fontWeight: 500,
+                fontSize: 13,
+              }}
+            >
+              {isGenerating ? "Generating preview…" : "Generate preview"}
+            </button>
+          </div>
+
+          {/* Preview panel */}
+          <div
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderRadius: 10,
+              border: "1px dashed #CBD5E1",
+              background: "#F9FAFB",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+                Live preview
+              </span>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                Uses base prompt, negative prompt, and optional reference image
+              </span>
+            </div>
+            {previewError && (
+              <p style={{ margin: 0, marginBottom: 6, fontSize: 11, color: "#B91C1C" }}>
+                {previewError}
+              </p>
+            )}
+            {isGenerating && (
+              <p style={{ margin: 0, fontSize: 12, color: "#64748B" }}>
+                Generating preview image…
+              </p>
+            )}
+            {!isGenerating && previewImageUrl && (
+              <div
+                style={{
+                  marginTop: 6,
+                  borderRadius: 8,
+                  overflow: "hidden",
+                  border: "1px solid #E5E7EB",
+                  maxHeight: 260,
+                }}
+              >
+                <img
+                  src={previewImageUrl}
+                  alt="Setting preview"
+                  style={{ width: "100%", display: "block", objectFit: "cover" }}
+                />
+              </div>
+            )}
+            {!isGenerating && !previewImageUrl && !previewError && (
+              <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>
+                No preview yet. Enter a base prompt and click “Generate preview” to see a sample
+                render of this setting.
+              </p>
+            )}
           </div>
         </div>
       </section>
