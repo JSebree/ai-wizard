@@ -41,7 +41,7 @@ export default function StudiosPage() {
           ← Back to SceneMe home
         </button>
         <h1 style={{ margin: 0 }}>SceneMe Studios (Preview)</h1>
-        <p style={{ marginTop: 8, color: "#475569", maxWidth: 720 }}>
+        <p style={{ marginTop: 8, color: "#475569" }}>
           Early access tools for building reusable creative assets. Use the Character Studio to
           define persistent characters, and the Settings Studio to design reusable environments
           your stories can return to. These are functional preview tools and are not yet wired
