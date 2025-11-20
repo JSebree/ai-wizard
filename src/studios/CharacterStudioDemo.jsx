@@ -12,6 +12,9 @@ export default function CharacterStudioDemo() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+  const [registerSuccess, setRegisterSuccess] = useState("");
 
   // Live preview + upload state
   const [previewUrl, setPreviewUrl] = useState("");
@@ -53,6 +56,53 @@ export default function CharacterStudioDemo() {
     }
   };
 
+  // Register character in shared Supabase registry via n8n
+  const registerCharacterInRegistry = async (payload) => {
+    setRegisterError("");
+    setRegisterSuccess("");
+    setIsRegistering(true);
+
+    try {
+      const res = await fetch(
+        "https://n8n.simplifies.click/webhook/webhook/register-character",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Registry call failed with status ${res.status}`);
+      }
+
+      const data = await res.json().catch(() => ({}));
+
+      const displayName =
+        payload.name ||
+        data.name ||
+        payload.id ||
+        data.id ||
+        "character";
+
+      setRegisterSuccess(
+        `Character "${displayName}" successfully added to the shared registry.`
+      );
+    } catch (err) {
+      console.error("Character registry call failed", err);
+      setRegisterError(
+        err instanceof Error
+          ? err.message
+          : "Failed to add character to registry."
+      );
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   const resetForm = () => {
     setName("");
     setBasePrompt("");
@@ -71,6 +121,7 @@ export default function CharacterStudioDemo() {
       } catch {}
     }
     setRecordedUrl("");
+    setRegisterError("");
   };
   // Upload a recorded/selected voice file to n8n / DO Spaces staging
   const handleVoiceUpload = async (file) => {
@@ -243,7 +294,7 @@ export default function CharacterStudioDemo() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const rawName = name.trim();
     const rawPrompt = basePrompt.trim();
 
@@ -256,13 +307,20 @@ export default function CharacterStudioDemo() {
       return;
     }
 
+    // Prefer the preview image; fall back to the uploaded reference image if needed
+    const imageUrl = previewUrl || referenceImageUrl.trim() || "";
+
+    if (!imageUrl) {
+      setError(
+        "A preview or reference image is required before saving a character."
+      );
+      return;
+    }
+
     // Replace spaces with underscores for workflow‑safe naming
     const safeName = rawName.replace(/\s+/g, "_");
 
     const now = new Date().toISOString();
-
-    // Prefer the preview image; fall back to the uploaded reference image if needed
-    const imageUrl = previewUrl || referenceImageUrl.trim() || undefined;
 
     const newCharacter = {
       id: `char_${Date.now()}`,
@@ -276,6 +334,16 @@ export default function CharacterStudioDemo() {
 
     const next = [...characters, newCharacter];
     persistCharacters(next);
+
+    // Push into shared Supabase registry via n8n
+    await registerCharacterInRegistry({
+      id: newCharacter.id,
+      name: safeName,
+      basePrompt: rawPrompt,
+      baseImageUrl: imageUrl,
+      voiceId: voiceId.trim() || undefined,
+    });
+
     resetForm();
   };
 
@@ -428,7 +496,7 @@ export default function CharacterStudioDemo() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!name.trim() || !basePrompt.trim()}
+                  disabled={!name.trim() || !basePrompt.trim() || isRegistering}
                   title={
                     !name.trim()
                       ? "Enter a character name to add this to your library"
@@ -444,11 +512,15 @@ export default function CharacterStudioDemo() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4,
-                    cursor: "pointer",
+                    cursor:
+                      !name.trim() || !basePrompt.trim() || isRegistering
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity: isRegistering ? 0.8 : 1,
                   }}
                 >
                   <span style={{ fontSize: 14 }}>＋</span>
-                  <span>Add to saved characters</span>
+                  <span>{isRegistering ? "Saving…" : "Add to saved characters"}</span>
                 </button>
               </div>
             )}
@@ -671,6 +743,16 @@ export default function CharacterStudioDemo() {
 
           {error && (
             <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>{error}</p>
+          )}
+          {registerError && (
+            <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>
+              {registerError}
+            </p>
+          )}
+          {registerSuccess && (
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#16A34A" }}>
+              {registerSuccess}
+            </p>
           )}
 
           <div
