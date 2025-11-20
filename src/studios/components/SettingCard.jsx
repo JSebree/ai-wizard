@@ -11,7 +11,9 @@ export default function SettingCard({ setting, onClose }) {
     core_prompt,
     mood,
     base_image_url,
+    baseImageUrl,
     base_hero,
+    baseHero,
     scene_n,
     scene_ne,
     scene_e,
@@ -26,26 +28,30 @@ export default function SettingCard({ setting, onClose }) {
     status,
   } = setting;
 
+  const resolvedBaseImage =
+    base_hero ||
+    baseHero ||
+    base_image_url ||
+    baseImageUrl ||
+    null;
+
   // Choose a primary image to display as the main thumbnail
   const primaryImage =
-    base_hero ||
-    base_image_url ||
+    resolvedBaseImage ||
     scene_n ||
     scene_e ||
     scene_s ||
     scene_w ||
-    establishing_overhead ||
     scene_ne ||
     scene_se ||
     scene_sw ||
     scene_nw ||
+    establishing_overhead ||
     null;
 
   // All images we might have for this setting
   const galleryImages = [
-    { key: 'base_image_url', label: 'Base image', url: base_image_url },
-    { key: 'base_hero', label: 'Base hero', url: base_hero },
-    { key: 'establishing_overhead', label: 'Overhead', url: establishing_overhead },
+    { key: 'base', label: 'Base image', url: resolvedBaseImage },
     { key: 'scene_n', label: 'North', url: scene_n },
     { key: 'scene_ne', label: 'North-east', url: scene_ne },
     { key: 'scene_e', label: 'East', url: scene_e },
@@ -54,12 +60,12 @@ export default function SettingCard({ setting, onClose }) {
     { key: 'scene_sw', label: 'South-west', url: scene_sw },
     { key: 'scene_w', label: 'West', url: scene_w },
     { key: 'scene_nw', label: 'North-west', url: scene_nw },
-  ].filter(entry => !!entry.url);
+    { key: 'establishing_overhead', label: 'Overhead', url: establishing_overhead },
+  ].filter((entry) => !!entry.url);
 
   // Checkmark indicator row (same idea as CharacterCard)
   const galleryStatus = [
-    { key: 'base', label: 'Base', present: !!(base_image_url || base_hero) },
-    { key: 'overhead', label: 'Overhead', present: !!establishing_overhead },
+    { key: 'base', label: 'Base', present: !!resolvedBaseImage },
     { key: 'n', label: 'N', present: !!scene_n },
     { key: 'ne', label: 'NE', present: !!scene_ne },
     { key: 'e', label: 'E', present: !!scene_e },
@@ -68,6 +74,7 @@ export default function SettingCard({ setting, onClose }) {
     { key: 'sw', label: 'SW', present: !!scene_sw },
     { key: 'w', label: 'W', present: !!scene_w },
     { key: 'nw', label: 'NW', present: !!scene_nw },
+    { key: 'overhead', label: 'Overhead', present: !!establishing_overhead },
   ];
 
   function handleClose() {
