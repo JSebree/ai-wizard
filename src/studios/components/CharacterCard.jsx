@@ -15,6 +15,7 @@ export default function CharacterCard({ character, onSelect }) {
     headshot_right,
     headshot_left,
     voiceRefUrl,
+    voicePreviewUrl,
     voiceKind,
     createdAt,
     updatedAt,
@@ -88,8 +89,12 @@ export default function CharacterCard({ character, onSelect }) {
           <p className="text-xs text-gray-600 mb-1">
             Voice: {voiceKind === 'character-only' ? 'Character-specific' : 'Preset voice'}
           </p>
-          {voiceRefUrl && (
-            <audio controls src={voiceRefUrl} className="w-full mt-1" />
+          {(voiceRefUrl || voicePreviewUrl) && (
+            <audio
+              controls
+              src={voiceRefUrl || voicePreviewUrl}
+              className="w-full mt-1"
+            />
           )}
         </div>
       )}
