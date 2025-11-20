@@ -94,6 +94,16 @@ export default function CharacterCard({ character, onClose }) {
     { key: 'headshot_left', label: 'Headshot (left)', url: headshot_left },
   ].filter(entry => !!entry.url);
 
+  const galleryStatus = [
+    { key: 'base', label: 'Base', present: !!(base_image_url || base_hero || referenceImageUrl) },
+    { key: 'headshot', label: 'Headshot', present: !!headshot_front },
+    { key: 'torso', label: 'Torso', present: !!torso_front },
+    { key: 'headshot_left', label: 'Headshot (left)', present: !!headshot_left },
+    { key: 'headshot_right', label: 'Headshot (right)', present: !!headshot_right },
+    { key: 'fullbody_front', label: 'Full body (front)', present: !!fullbody_centered },
+    { key: 'fullbody_side', label: 'Full body (side)', present: !!fullbody_side },
+  ];
+
   // Resolve voice preview:
   // 1) character-specific voiceRefUrl wins
   // 2) otherwise, try a global preset voice via voices.json
@@ -161,6 +171,23 @@ export default function CharacterCard({ character, onClose }) {
               </div>
             </div>
           )}
+
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
+            {galleryStatus.map((slot) => (
+              <span key={slot.key} className="flex items-center gap-1">
+                <span
+                  className={
+                    slot.present
+                      ? 'inline-flex h-3 w-3 items-center justify-center rounded-full bg-emerald-500 text-[9px] text-white'
+                      : 'inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[9px] text-gray-400'
+                  }
+                >
+                  {slot.present ? '✓' : '–'}
+                </span>
+                {slot.label}
+              </span>
+            ))}
+          </div>
 
           {hasAnyVoice && (
             <div className="mt-3">
