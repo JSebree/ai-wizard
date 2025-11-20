@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import SettingCard from "./components/SettingCard";
 
 const STORAGE_KEY = "sceneme.settings";
 
@@ -14,6 +15,7 @@ export default function SettingsStudioDemo() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [selectedSetting, setSelectedSetting] = useState(null);
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
@@ -699,7 +701,10 @@ export default function SettingsStudioDemo() {
                     gap: 10,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+                    onClick={() => setSelectedSetting(s)}
+                  >
                     <div
                       style={{
                         width: 80,
@@ -753,9 +758,10 @@ export default function SettingsStudioDemo() {
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     <button
                       type="button"
-                      onClick={() =>
-                        setExpandedId((current) => (current === s.id ? null : s.id))
-                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedId((current) => (current === s.id ? null : s.id));
+                      }}
                       style={{
                         padding: "4px 8px",
                         borderRadius: 6,
@@ -770,7 +776,10 @@ export default function SettingsStudioDemo() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleCopyJson(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyJson(s);
+                      }}
                       style={{
                         padding: "4px 8px",
                         borderRadius: 6,
@@ -785,7 +794,10 @@ export default function SettingsStudioDemo() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(s.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(s.id);
+                      }}
                       style={{
                         padding: "4px 8px",
                         borderRadius: 6,
@@ -822,6 +834,12 @@ export default function SettingsStudioDemo() {
           </div>
         )}
       </section>
+      {selectedSetting && (
+        <SettingCard
+          setting={selectedSetting}
+          onClose={() => setSelectedSetting(null)}
+        />
+      )}
     </div>
   );
 }
