@@ -538,20 +538,51 @@ export default function CharacterStudioDemo() {
             >
               Reference image (optional)
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              key={previewUrl}
-              onChange={(e) => handleReferenceUpload(e.target.files?.[0] || null)}
+            <div
               style={{
-                display: "block",
-                width: "100%",
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                background: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
               }}
-            />
+            >
+              <label
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: "1px solid #111827",
+                  background: "#111827",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span>Choose file</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  key={previewUrl}
+                  onChange={(e) =>
+                    handleReferenceUpload(e.target.files?.[0] || null)
+                  }
+                  style={{ display: "none" }}
+                />
+              </label>
+              {referenceImageUrl && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#6B7280",
+                  }}
+                >
+                  File selected from disk
+                </span>
+              )}
+            </div>
             {isUploading && (
               <p style={{ marginTop: 4, fontSize: 12, color: "#6B7280" }}>
                 Uploading reference image…
@@ -661,7 +692,7 @@ export default function CharacterStudioDemo() {
                 marginBottom: 4,
               }}
             >
-              Record voice (optional)
+              Add your voice (optional)
             </label>
             <div
               style={{
@@ -723,10 +754,23 @@ export default function CharacterStudioDemo() {
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    cursor: "pointer",
                   }}
                 >
-                  <span>or upload a voice file</span>
+                  <span>or</span>
+                  <span
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: "1px solid #D1D5DB",
+                      background: "#F9FAFB",
+                      color: "#111827",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Upload voice file
+                  </span>
                   <input
                     type="file"
                     accept="audio/*"
@@ -738,7 +782,7 @@ export default function CharacterStudioDemo() {
                       // reset so the same file can be picked again if needed
                       e.target.value = "";
                     }}
-                    style={{ fontSize: 11 }}
+                    style={{ display: "none" }}
                   />
                 </label>
               </div>
