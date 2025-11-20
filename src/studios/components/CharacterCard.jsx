@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 
 export default function CharacterCard({ character, onSelect }) {
-  if (!character) return null;
-
   const [voices, setVoices] = useState(null);
   const [fullImage, setFullImage] = useState(null);
+  const [isOpen, setIsOpen] = useState(true);
+
+  if (!character || !isOpen) return null;
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +49,10 @@ export default function CharacterCard({ character, onSelect }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setIsOpen(true);
+  }, [character && (character.id || character.name)]);
 
   const {
     name,
@@ -109,13 +114,18 @@ export default function CharacterCard({ character, onSelect }) {
     voiceKind ||
     (voiceRefUrl ? 'character-only' : presetId ? 'preset' : null);
 
+  function handleClose() {
+    setIsOpen(false);
+    onSelect?.(null);
+  }
+
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => onSelect?.(null)}>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={handleClose}>
         <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl relative" onClick={(e) => e.stopPropagation()}>
           <button
             className="absolute top-3 right-3 text-gray-500 hover:text-black"
-            onClick={() => onSelect?.(null)}
+            onClick={handleClose}
           >
             ✕
           </button>
@@ -124,10 +134,11 @@ export default function CharacterCard({ character, onSelect }) {
               <img
                 src={primaryImage}
                 alt={name}
-                className="w-32 h-32 rounded-md object-cover border"
+                className="w-64 h-64 rounded-lg object-cover border cursor-pointer"
+                onClick={() => setFullImage(primaryImage)}
               />
             ) : (
-              <div className="w-32 h-32 rounded-md border bg-slate-100 flex items-center justify-center text-xs text-slate-400">
+              <div className="w-48 h-48 rounded-lg border bg-slate-100 flex items-center justify-center text-xs text-slate-400">
                 No image
               </div>
             )}
