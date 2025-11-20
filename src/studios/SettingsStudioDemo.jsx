@@ -478,19 +478,38 @@ export default function SettingsStudioDemo() {
             >
               Reference image (optional)
             </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleReferenceImageUpload}
-            ref={fileInputRef}
-            style={{
-              width: "100%",
-              padding: 8,
-              borderRadius: 8,
-              border: "1px solid #CBD5E1",
-              background: "#FFFFFF",
-            }}
-          />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  border: "1px solid #0F172A",
+                  background: "#0F172A",
+                  color: "#F9FAFB",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                }}
+              >
+                Choose file
+              </button>
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleReferenceImageUpload}
+              ref={fileInputRef}
+              style={{ display: "none" }}
+            />
             {uploadError && (
               <p
                 style={{
@@ -634,13 +653,14 @@ export default function SettingsStudioDemo() {
               onClick={handleGeneratePreview}
               disabled={isGenerating}
               style={{
-                padding: "10px 14px",
-                borderRadius: 8,
-                border: "1px solid #0369A1",
-                background: isGenerating ? "#E0F2FE" : "#F0F9FF",
-                color: "#0C4A6E",
+                padding: "10px 16px",
+                borderRadius: 999,
+                border: "1px solid #0F172A",
+                background: "#0F172A",
+                color: "#FFFFFF",
                 fontWeight: 500,
                 fontSize: 13,
+                cursor: isGenerating ? "default" : "pointer",
               }}
             >
               {isGenerating ? "Generating new setting…" : "Generate new setting"}
