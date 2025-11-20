@@ -541,6 +541,7 @@ export default function CharacterStudioDemo() {
             <input
               type="file"
               accept="image/*"
+              key={previewUrl}
               onChange={(e) => handleReferenceUpload(e.target.files?.[0] || null)}
               style={{
                 display: "block",
@@ -714,6 +715,32 @@ export default function CharacterStudioDemo() {
                 >
                   {isVoiceUploading ? "Saving voice…" : "Save recording as voice"}
                 </button>
+                {/* Upload pre-recorded voice file */}
+                <label
+                  style={{
+                    fontSize: 11,
+                    color: "#4B5563",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>or upload a voice file</span>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      if (file) {
+                        handleVoiceUpload(file);
+                      }
+                      // reset so the same file can be picked again if needed
+                      e.target.value = "";
+                    }}
+                    style={{ fontSize: 11 }}
+                  />
+                </label>
               </div>
               {recordedUrl && (
                 <audio
