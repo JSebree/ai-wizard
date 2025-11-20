@@ -310,6 +310,9 @@ export default function CharacterStudioDemo() {
     // Prefer the preview image; fall back to the uploaded reference image if needed
     const imageUrl = previewUrl || referenceImageUrl.trim() || "";
 
+    // Voice reference URL (uploaded/recorded)
+    const voiceRefUrl = voiceUploadInfo?.url || undefined;
+
     if (!imageUrl) {
       setError(
         "A preview or reference image is required before saving a character."
@@ -328,6 +331,7 @@ export default function CharacterStudioDemo() {
       basePrompt: rawPrompt,
       referenceImageUrl: imageUrl,
       voiceId: voiceId.trim() || undefined,
+      voiceRefUrl: voiceRefUrl || null,
       createdAt: now,
       updatedAt: now,
     };
@@ -342,6 +346,7 @@ export default function CharacterStudioDemo() {
       basePrompt: rawPrompt,
       baseImageUrl: imageUrl,
       voiceId: voiceId.trim() || undefined,
+      voiceRefUrl: voiceRefUrl || null,
     });
 
     resetForm();
