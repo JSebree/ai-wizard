@@ -321,19 +321,30 @@ export default function SettingsStudioDemo() {
           background: "#FFFFFF",
         }}
       >
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Settings workspace</h2>
-        <p style={{ marginTop: 0, marginBottom: 16, color: "#64748B", fontSize: 14 }}>
-          Define reusable environments for your stories. These settings can later be converted
-          directly into payloads for your n8n workflows, including base prompts and negative
-          prompts for your T2I / I2I models.
-        </p>
         <div
           style={{
             display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: 8,
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 12,
+            marginBottom: 12,
           }}
         >
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Settings workspace</h2>
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: 0,
+                color: "#64748B",
+                fontSize: 14,
+              }}
+            >
+              Define reusable environments for your stories. These settings can later be converted
+              directly into payloads for your n8n workflows, including base prompts and negative
+              prompts for your T2I / I2I models.
+            </p>
+          </div>
           <button
             type="button"
             onClick={resetForm}
@@ -345,6 +356,7 @@ export default function SettingsStudioDemo() {
               color: "#4B5563",
               fontSize: 12,
               cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
           >
             Clear form
