@@ -372,6 +372,9 @@ export default function CharacterStudioDemo() {
     if (expandedId === id) {
       setExpandedId(null);
     }
+    if (activeCharacter && activeCharacter.id === id) {
+      setActiveCharacter(null);
+    }
   };
 
   const handleCopyJson = (character) => {
