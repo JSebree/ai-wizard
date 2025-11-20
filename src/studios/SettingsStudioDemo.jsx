@@ -15,6 +15,9 @@ export default function SettingsStudioDemo() {
   const [expandedId, setExpandedId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+
   // Live preview state
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [previewError, setPreviewError] = useState("");
@@ -54,6 +57,54 @@ export default function SettingsStudioDemo() {
     setPreviewImageUrl("");
     setPreviewError("");
     setError("");
+  };
+
+  const registerSettingInRegistry = async ({
+    id,
+    name,
+    corePrompt,
+    mood,
+    baseImageUrl,
+  }) => {
+    setRegisterError("");
+    setIsRegistering(true);
+
+    try {
+      const endpoint =
+        import.meta.env.VITE_REGISTER_SETTING_URL ||
+        "https://n8n.simplifies.click/webhook/webhook/register-setting";
+
+      const payload = {
+        id,
+        name,
+        core_prompt: corePrompt,
+        mood: mood || null,
+        base_image_url: baseImageUrl,
+        kind: "setting",
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Registry call failed with status ${res.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to register setting", err);
+      setRegisterError(
+        err instanceof Error
+          ? err.message
+          : "Failed to register setting in shared catalog.",
+      );
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   const handleReferenceImageUpload = useCallback(
@@ -116,9 +167,10 @@ export default function SettingsStudioDemo() {
     [name]
   );
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const rawName = name.trim();
     const rawPrompt = basePrompt.trim();
+    const rawMood = mood.trim();
 
     if (!rawName) {
       setError("Setting name is required.");
@@ -129,20 +181,26 @@ export default function SettingsStudioDemo() {
       return;
     }
 
+    // Prefer the current preview image; fall back to the last uploaded reference image
+    const imageUrl = (previewImageUrl || referenceImageUrl.trim() || "").trim();
+    if (!imageUrl) {
+      setError("Generate or upload a reference image before saving this setting.");
+      return;
+    }
+
+    setError("");
+
     // Replace spaces with underscores for workflow-safe naming
     const safeName = rawName.replace(/\s+/g, "_");
-
     const now = new Date().toISOString();
-
-    // Prefer the current preview image; fall back to the last uploaded reference image
-    const imageUrl = previewImageUrl || referenceImageUrl.trim() || undefined;
+    const id = `setting_${Date.now()}`;
 
     const newSetting = {
-      id: `setting_${Date.now()}`,
+      id,
       name: safeName,               // maps to settings_name
       basePrompt: rawPrompt,        // maps to base_prompt
       negativePrompt: negativePrompt.trim() || undefined,
-      mood: mood.trim() || undefined,
+      mood: rawMood || undefined,
       referenceImageUrl: imageUrl,
       createdAt: now,
       updatedAt: now,
@@ -150,6 +208,15 @@ export default function SettingsStudioDemo() {
 
     const next = [...settings, newSetting];
     persistSettings(next);
+
+    await registerSettingInRegistry({
+      id,
+      name: safeName,
+      corePrompt: rawPrompt,
+      mood: rawMood,
+      baseImageUrl: imageUrl,
+    });
+
     resetForm();
   };
 
@@ -359,7 +426,7 @@ export default function SettingsStudioDemo() {
                     <button
                       type="button"
                       onClick={handleSave}
-                      disabled={!name.trim() || !basePrompt.trim()}
+                      disabled={!name.trim() || !basePrompt.trim() || isRegistering}
                       title={
                         !name.trim()
                           ? "Enter a setting name to add this to your library"
@@ -379,7 +446,7 @@ export default function SettingsStudioDemo() {
                       }}
                     >
                       <span style={{ fontSize: 14 }}>＋</span>
-                      <span>Add to saved settings</span>
+                      <span>{isRegistering ? "Saving to catalog…" : "Add to saved settings"}</span>
                     </button>
                   </div>
                 )}
@@ -527,6 +594,11 @@ export default function SettingsStudioDemo() {
 
           {error && (
             <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>{error}</p>
+          )}
+          {registerError && (
+            <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>
+              {registerError}
+            </p>
           )}
 
           <div
