@@ -59,6 +59,7 @@ export default function SettingsStudioDemo() {
     setPreviewError("");
     setError("");
     setRegisterError("");
+    setRegisterSuccess("");
     // Note: we intentionally do NOT clear registerSuccess here so the user
     // can still see the "logged" confirmation after the form resets.
   };
