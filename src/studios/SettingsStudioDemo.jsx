@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "sceneme.settings";
 
@@ -18,6 +18,8 @@ export default function SettingsStudioDemo() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
+
+  const fileInputRef = useRef(null);
 
   // Live preview state
   const [previewImageUrl, setPreviewImageUrl] = useState("");
@@ -62,6 +64,9 @@ export default function SettingsStudioDemo() {
     setRegisterSuccess("");
     // Note: we intentionally do NOT clear registerSuccess here so the user
     // can still see the "logged" confirmation after the form resets.
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const registerSettingInRegistry = async ({
@@ -474,18 +479,19 @@ export default function SettingsStudioDemo() {
             >
               Reference image (optional)
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleReferenceImageUpload}
-              style={{
-                width: "100%",
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                background: "#FFFFFF",
-              }}
-            />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleReferenceImageUpload}
+            ref={fileInputRef}
+            style={{
+              width: "100%",
+              padding: 8,
+              borderRadius: 8,
+              border: "1px solid #CBD5E1",
+              background: "#FFFFFF",
+            }}
+          />
             {uploadError && (
               <p
                 style={{
