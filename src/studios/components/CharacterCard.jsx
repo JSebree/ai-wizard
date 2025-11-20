@@ -3,9 +3,8 @@ import React, { useEffect, useState } from 'react';
 export default function CharacterCard({ character, onSelect }) {
   const [voices, setVoices] = useState(null);
   const [fullImage, setFullImage] = useState(null);
-  const [isOpen, setIsOpen] = useState(true);
 
-  if (!character || !isOpen) return null;
+  if (!character) return null;
 
   useEffect(() => {
     let cancelled = false;
@@ -50,9 +49,6 @@ export default function CharacterCard({ character, onSelect }) {
     };
   }, []);
 
-  useEffect(() => {
-    setIsOpen(true);
-  }, [character && (character.id || character.name)]);
 
   const {
     name,
@@ -115,7 +111,7 @@ export default function CharacterCard({ character, onSelect }) {
     (voiceRefUrl ? 'character-only' : presetId ? 'preset' : null);
 
   function handleClose() {
-    setIsOpen(false);
+    setFullImage(null);
     onSelect?.(null);
   }
 
