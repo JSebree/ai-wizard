@@ -1,7 +1,52 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export default function CharacterCard({ character, onSelect }) {
   if (!character) return null;
+
+  const [voices, setVoices] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVoices() {
+      try {
+        const res = await fetch('/voices.json', { cache: 'no-store' });
+        if (!res.ok) {
+          if (!cancelled) setVoices([]);
+          return;
+        }
+        const raw = await res.json();
+        const arr = Array.isArray(raw) ? raw : raw?.voices || [];
+        const list = arr
+          .map((v) => ({
+            id:
+              v.id ||
+              v.voice_id ||
+              v.tts_id ||
+              v.name ||
+              '',
+            previewUrl:
+              v.audio_url ||
+              v.preview_url ||
+              v.previewUrl ||
+              v.sample ||
+              v.demo ||
+              v.url ||
+              v.audio ||
+              null,
+          }))
+          .filter((v) => v.id);
+        if (!cancelled) setVoices(list);
+      } catch {
+        if (!cancelled) setVoices([]);
+      }
+    }
+
+    loadVoices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const {
     name,
@@ -17,6 +62,8 @@ export default function CharacterCard({ character, onSelect }) {
     voiceRefUrl,
     voicePreviewUrl,
     voiceKind,
+    voiceId,
+    voice_id,
     createdAt,
     updatedAt,
   } = character;
@@ -36,6 +83,7 @@ export default function CharacterCard({ character, onSelect }) {
   const galleryImages = [
     { key: 'base_image_url', label: 'Base', url: base_image_url },
     { key: 'base_hero', label: 'Base hero', url: base_hero },
+    { key: 'referenceImageUrl', label: 'Reference', url: referenceImageUrl },
     { key: 'fullbody_centered', label: 'Full body (centered)', url: fullbody_centered },
     { key: 'fullbody_side', label: 'Full body (side)', url: fullbody_side },
     { key: 'torso_front', label: 'Torso (front)', url: torso_front },
@@ -43,6 +91,22 @@ export default function CharacterCard({ character, onSelect }) {
     { key: 'headshot_right', label: 'Headshot (right)', url: headshot_right },
     { key: 'headshot_left', label: 'Headshot (left)', url: headshot_left },
   ].filter(entry => !!entry.url);
+
+  // Resolve voice preview:
+  // 1) character-specific voiceRefUrl wins
+  // 2) otherwise, try a global preset voice via voices.json
+  const presetId = voiceId || voice_id || null;
+  let registryPreview = null;
+  if (presetId && Array.isArray(voices)) {
+    const hit = voices.find((v) => v.id === presetId);
+    registryPreview = hit?.previewUrl || null;
+  }
+
+  const effectiveVoiceUrl = voiceRefUrl || voicePreviewUrl || registryPreview;
+  const hasAnyVoice = !!(effectiveVoiceUrl || presetId);
+  const effectiveKind =
+    voiceKind ||
+    (voiceRefUrl ? 'character-only' : presetId ? 'preset' : null);
 
   return (
     <div
@@ -84,15 +148,17 @@ export default function CharacterCard({ character, onSelect }) {
         </div>
       )}
 
-      {voiceKind && (
+      {hasAnyVoice && (
         <div className="mt-3">
-          <p className="text-xs text-gray-600 mb-1">
-            Voice: {voiceKind === 'character-only' ? 'Character-specific' : 'Preset voice'}
-          </p>
-          {(voiceRefUrl || voicePreviewUrl) && (
+          {effectiveKind && (
+            <p className="text-xs text-gray-600 mb-1">
+              Voice: {effectiveKind === 'character-only' ? 'Character-specific' : 'Preset voice'}
+            </p>
+          )}
+          {effectiveVoiceUrl && (
             <audio
               controls
-              src={voiceRefUrl || voicePreviewUrl}
+              src={effectiveVoiceUrl}
               className="w-full mt-1"
             />
           )}
