@@ -4,6 +4,7 @@ export default function CharacterCard({ character, onSelect }) {
   if (!character) return null;
 
   const [voices, setVoices] = useState(null);
+  const [fullImage, setFullImage] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,66 +110,74 @@ export default function CharacterCard({ character, onSelect }) {
     (voiceRefUrl ? 'character-only' : presetId ? 'preset' : null);
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl relative">
-        <button
-          className="absolute top-3 right-3 text-gray-500 hover:text-black"
-          onClick={() => onSelect?.(null)}
-        >
-          ✕
-        </button>
-        <div className="flex items-center gap-4">
-          {primaryImage ? (
-            <img
-              src={primaryImage}
-              alt={name}
-              className="w-20 h-20 rounded-md object-cover border"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-md border bg-slate-100 flex items-center justify-center text-xs text-slate-400">
-              No image
+    <>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => onSelect?.(null)}>
+        <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl relative" onClick={(e) => e.stopPropagation()}>
+          <button
+            className="absolute top-3 right-3 text-gray-500 hover:text-black"
+            onClick={() => onSelect?.(null)}
+          >
+            ✕
+          </button>
+          <div className="flex items-center gap-4">
+            {primaryImage ? (
+              <img
+                src={primaryImage}
+                alt={name}
+                className="w-32 h-32 rounded-md object-cover border"
+              />
+            ) : (
+              <div className="w-32 h-32 rounded-md border bg-slate-100 flex items-center justify-center text-xs text-slate-400">
+                No image
+              </div>
+            )}
+            <div className="flex-1">
+              <h3 className="font-semibold text-lg">{name}</h3>
+              <p className="text-xs text-gray-500">
+                Created: {new Date(createdAt || character.created_at).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {galleryImages.length > 1 && (
+            <div className="mt-3">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {galleryImages.map((img) => (
+                  <img
+                    key={img.key}
+                    src={img.url}
+                    alt={`${name} - ${img.label}`}
+                    className="w-14 h-14 rounded-md object-cover border flex-shrink-0 cursor-pointer"
+                    onClick={() => setFullImage(img.url)}
+                  />
+                ))}
+              </div>
             </div>
           )}
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg">{name}</h3>
-            <p className="text-xs text-gray-500">
-              Created: {new Date(createdAt || character.created_at).toLocaleString()}
-            </p>
-          </div>
-        </div>
 
-        {galleryImages.length > 1 && (
-          <div className="mt-3">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {galleryImages.map((img) => (
-                <img
-                  key={img.key}
-                  src={img.url}
-                  alt={`${name} - ${img.label}`}
-                  className="w-14 h-14 rounded-md object-cover border flex-shrink-0"
+          {hasAnyVoice && (
+            <div className="mt-3">
+              {effectiveKind && (
+                <p className="text-xs text-gray-600 mb-1">
+                  Voice: {effectiveKind === 'character-only' ? 'Character-specific' : 'Preset voice'}
+                </p>
+              )}
+              {effectiveVoiceUrl && (
+                <audio
+                  controls
+                  src={effectiveVoiceUrl}
+                  className="w-full mt-1"
                 />
-              ))}
+              )}
             </div>
-          </div>
-        )}
-
-        {hasAnyVoice && (
-          <div className="mt-3">
-            {effectiveKind && (
-              <p className="text-xs text-gray-600 mb-1">
-                Voice: {effectiveKind === 'character-only' ? 'Character-specific' : 'Preset voice'}
-              </p>
-            )}
-            {effectiveVoiceUrl && (
-              <audio
-                controls
-                src={effectiveVoiceUrl}
-                className="w-full mt-1"
-              />
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      {fullImage && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setFullImage(null)}>
+          <img src={fullImage} className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+    </>
   );
 }
