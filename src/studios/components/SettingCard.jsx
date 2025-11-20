@@ -14,6 +14,8 @@ export default function SettingCard({ setting, onClose }) {
     baseImageUrl,
     base_hero,
     baseHero,
+    referenceImageUrl,
+    reference_image_url,
     scene_n,
     scene_ne,
     scene_e,
@@ -33,6 +35,8 @@ export default function SettingCard({ setting, onClose }) {
     baseHero ||
     base_image_url ||
     baseImageUrl ||
+    referenceImageUrl ||
+    reference_image_url ||
     null;
 
   // Choose a primary image to display as the main thumbnail
