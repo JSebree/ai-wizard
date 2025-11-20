@@ -438,6 +438,20 @@ export default function CharacterStudioDemo() {
               pipelines.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={resetForm}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "1px solid #E5E7EB",
+              background: "#FFFFFF",
+              color: "#374151",
+              fontSize: 13,
+            }}
+          >
+            Clear form
+          </button>
         </div>
 
         <div style={{ display: "grid", gap: 16 }}>
@@ -459,31 +473,9 @@ export default function CharacterStudioDemo() {
               }}
             >
               <span style={{ fontSize: 13, fontWeight: 600 }}>Live preview</span>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <span style={{ fontSize: 11, color: "#9CA3AF" }}>
-                  Uses base prompt and optional reference image
-                </span>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 999,
-                    border: "1px solid #E5E7EB",
-                    background: "#FFFFFF",
-                    color: "#374151",
-                    fontSize: 12,
-                  }}
-                >
-                  Clear form
-                </button>
-              </div>
+              <span style={{ fontSize: 11, color: "#9CA3AF" }}>
+                Uses base prompt and optional reference image
+              </span>
             </div>
             <div
               style={{
