@@ -17,6 +17,7 @@ export default function SettingsStudioDemo() {
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
+  const [registerSuccess, setRegisterSuccess] = useState("");
 
   // Live preview state
   const [previewImageUrl, setPreviewImageUrl] = useState("");
@@ -57,6 +58,8 @@ export default function SettingsStudioDemo() {
     setPreviewImageUrl("");
     setPreviewError("");
     setError("");
+    setRegisterError("");
+    setRegisterSuccess("");
   };
 
   const registerSettingInRegistry = async ({
@@ -67,6 +70,7 @@ export default function SettingsStudioDemo() {
     baseImageUrl,
   }) => {
     setRegisterError("");
+    setRegisterSuccess("");
     setIsRegistering(true);
 
     try {
@@ -95,6 +99,9 @@ export default function SettingsStudioDemo() {
         const text = await res.text().catch(() => "");
         throw new Error(text || `Registry call failed with status ${res.status}`);
       }
+
+      // Success
+      setRegisterSuccess("Setting successfully added to the shared registry.");
     } catch (err) {
       console.error("Failed to register setting", err);
       setRegisterError(
@@ -598,6 +605,11 @@ export default function SettingsStudioDemo() {
           {registerError && (
             <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>
               {registerError}
+            </p>
+          )}
+          {registerSuccess && (
+            <p style={{ margin: 0, fontSize: 12, color: "#059669" }}>
+              {registerSuccess}
             </p>
           )}
 
