@@ -8,6 +8,8 @@ export default function CharacterStudioDemo() {
   const [basePrompt, setBasePrompt] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
   const [voiceId, setVoiceId] = useState("");
+  const [voiceKind, setVoiceKind] = useState("preset"); // 'preset' | 'character'
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
   const [characters, setCharacters] = useState([]);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -108,6 +110,8 @@ export default function CharacterStudioDemo() {
     setBasePrompt("");
     setReferenceImageUrl("");
     setVoiceId("");
+    setVoiceKind("preset");
+    setVoicePreviewUrl("");
     setError("");
     setPreviewUrl("");
     setUploadError("");
@@ -169,6 +173,14 @@ export default function CharacterStudioDemo() {
         .replace(/[\u0300-\u036F]/g, "")
         .trim()
         .replace(/\s+/g, "_");
+
+      // Mark this as a character-scoped voice and remember a preview URL
+      setVoiceKind("character");
+      if (urlFromApi) {
+        setVoicePreviewUrl(urlFromApi);
+      } else if (recordedUrl) {
+        setVoicePreviewUrl(recordedUrl);
+      }
 
       // Store this voice id on the character so pipelines can use it
       setVoiceId(safeVoiceId);
@@ -673,12 +685,19 @@ export default function CharacterStudioDemo() {
             >
               <VoiceStep
                 value={voiceId}
-                onChange={(id) => {
-                  if (typeof id === "string") {
-                    setVoiceId(id);
-                  } else if (id && typeof id === "object" && id.voiceId) {
-                    setVoiceId(id.voiceId);
+                onChange={(idOrObj, label) => {
+                  let nextId = "";
+                  if (typeof idOrObj === "string") {
+                    nextId = idOrObj;
+                  } else if (idOrObj && typeof idOrObj === "object" && idOrObj.voiceId) {
+                    nextId = idOrObj.voiceId;
                   }
+                  setVoiceId(nextId);
+                  // Selecting from the registry means this is a preset voice
+                  setVoiceKind("preset");
+                  // Clear any character-only upload metadata
+                  setVoicePreviewUrl("");
+                  setVoiceUploadInfo(null);
                 }}
                 className="text-xs"
               />
