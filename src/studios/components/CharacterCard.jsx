@@ -121,7 +121,7 @@ export default function CharacterCard({ character, onSelect }) {
         <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl relative" onClick={(e) => e.stopPropagation()}>
           <button
             className="absolute top-3 right-3 text-gray-500 hover:text-black"
-            onClick={handleClose}
+            onClick={(e) => { e.stopPropagation(); handleClose(); }}
           >
             ✕
           </button>
@@ -130,7 +130,7 @@ export default function CharacterCard({ character, onSelect }) {
               <img
                 src={primaryImage}
                 alt={name}
-                className="w-64 h-64 rounded-lg object-cover border cursor-pointer"
+                className="max-w-[320px] max-h-[320px] rounded-lg object-cover border cursor-pointer"
                 onClick={() => setFullImage(primaryImage)}
               />
             ) : (
@@ -182,7 +182,9 @@ export default function CharacterCard({ character, onSelect }) {
       </div>
       {fullImage && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setFullImage(null)}>
-          <img src={fullImage} className="max-w-full max-h-full rounded-lg" />
+          <div onClick={(e) => e.stopPropagation()}>
+            <img src={fullImage} className="max-w-[90vw] max-h-[90vh] rounded-lg" />
+          </div>
         </div>
       )}
     </>
