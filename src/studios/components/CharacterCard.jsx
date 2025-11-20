@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-export default function CharacterCard({ character, onSelect }) {
+export default function CharacterCard({ character, onClose }) {
   const [voices, setVoices] = useState(null);
   const [fullImage, setFullImage] = useState(null);
 
@@ -112,7 +112,7 @@ export default function CharacterCard({ character, onSelect }) {
 
   function handleClose() {
     setFullImage(null);
-    onSelect?.(null);
+    onClose?.();
   }
 
   return (
