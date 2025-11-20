@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import VoiceStep from "../interview/steps/VoiceStep.jsx";
+import CharacterCard from "./components/CharacterCard.jsx";
 
 const STORAGE_KEY = "sceneme.characters";
 
@@ -13,6 +14,7 @@ export default function CharacterStudioDemo() {
   const [characters, setCharacters] = useState([]);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [activeCharacter, setActiveCharacter] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
@@ -919,7 +921,9 @@ export default function CharacterStudioDemo() {
                           border: "1px solid #E5E7EB",
                           background: "#0F172A",
                           flexShrink: 0,
+                          cursor: "pointer",
                         }}
+                        onClick={() => setActiveCharacter(c)}
                       >
                         <img
                           src={c.referenceImageUrl}
@@ -1043,6 +1047,13 @@ export default function CharacterStudioDemo() {
           </div>
         )}
       </section>
+    {/* CharacterCard modal */}
+    {activeCharacter && (
+      <CharacterCard
+        character={activeCharacter}
+        onClose={() => setActiveCharacter(null)}
+      />
+    )}
     </div>
   );
 }
