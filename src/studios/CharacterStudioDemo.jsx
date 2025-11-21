@@ -396,17 +396,23 @@ export default function CharacterStudioDemo() {
   // For now, "Generate new character" is a UX affordance that could later
   // wire into an image / model endpoint. Here it just validates base prompt.
   const handleGeneratePreview = async () => {
-    const rawPrompt = basePrompt.trim();
+  const rawPrompt = basePrompt.trim();
 
-    if (!rawPrompt) {
-      setError("Base prompt is required before generating a new character.");
-      return;
-    }
+  if (!rawPrompt) {
+    setError("Base prompt is required before generating a new character.");
+    return;
+  }
 
-    setError("");
-    setRegisterError("");
-    setRegisterSuccess("");
-    setIsGeneratingPreview(true);
+  setError("");
+  setRegisterError("");
+  setRegisterSuccess("");
+
+  // 🔑 Clear the current preview so the loader state is visible,
+  // especially when starting from a reference image
+  setPreviewUrl("");
+
+  setIsGeneratingPreview(true);
+
 
     try {
       const res = await fetch(
