@@ -19,6 +19,7 @@ export default function CharacterStudioDemo() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
 
   // Live preview + upload state
   const [previewUrl, setPreviewUrl] = useState("");
@@ -394,13 +395,68 @@ export default function CharacterStudioDemo() {
 
   // For now, "Generate new character" is a UX affordance that could later
   // wire into an image / model endpoint. Here it just validates base prompt.
-  const handleGeneratePreview = () => {
-    if (!basePrompt.trim()) {
+  const handleGeneratePreview = async () => {
+    const rawPrompt = basePrompt.trim();
+
+    if (!rawPrompt) {
       setError("Base prompt is required before generating a new character.");
       return;
     }
+
     setError("");
-    // In the future, hook this up to your T2I / pose model.
+    setRegisterError("");
+    setRegisterSuccess("");
+    setIsGeneratingPreview(true);
+
+    try {
+      const res = await fetch(
+        "https://n8n.simplifies.click/webhook/generate-character-preview",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: rawPrompt,
+            // If you later add a character-specific negative prompt field,
+            // pass it here instead of the empty string:
+            negative_prompt: "",
+            // Let n8n decide whether to do t2i or img2img based on this
+            reference_image_url: referenceImageUrl || null,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          text || `Character preview failed with status ${res.status}`
+        );
+      }
+
+      const data = await res.json().catch(() => ({}));
+      const url =
+        data.image_url ||
+        data.imageUrl ||
+        data.url ||
+        data.output?.image_url ||
+        "";
+
+      if (!url) {
+        throw new Error("Preview completed, but no image_url was returned.");
+      }
+
+      setPreviewUrl(url);
+    } catch (err) {
+      console.error("Character preview generation failed", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate character preview. Please try again."
+      );
+    } finally {
+      setIsGeneratingPreview(false);
+    }
   };
 
   return (
@@ -500,10 +556,21 @@ export default function CharacterStudioDemo() {
                     objectFit: "contain",
                   }}
                 />
+              ) : isGeneratingPreview ? (
+                <p
+                  style={{
+                    color: "#E5E7EB",
+                    fontSize: 13,
+                    margin: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  Generating character preview…
+                </p>
               ) : (
                 <p style={{ color: "#9CA3AF", fontSize: 13, margin: 16 }}>
                   No preview yet. Upload a reference image or click{" "}
-                  <strong>Generate new character</strong> once wired into your model endpoint.
+                  <strong>Generate new character</strong> to see a live preview.
                 </p>
               )}
             </div>
@@ -864,21 +931,26 @@ export default function CharacterStudioDemo() {
               flexWrap: "wrap",
             }}
           >
-            <button
-              type="button"
-              onClick={handleGeneratePreview}
-              style={{
-                padding: "10px 16px",
-                borderRadius: 999,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#FFFFFF",
-                fontWeight: 600,
-                fontSize: 14,
-              }}
-            >
-              Generate new character
-            </button>
+          <button
+            type="button"
+            onClick={handleGeneratePreview}
+            disabled={!basePrompt.trim() || isGeneratingPreview}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 999,
+              border: "1px solid #111827",
+              background:
+                !basePrompt.trim() || isGeneratingPreview ? "#4B5563" : "#111827",
+              color: "#FFFFFF",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor:
+                !basePrompt.trim() || isGeneratingPreview ? "not-allowed" : "pointer",
+              opacity: isGeneratingPreview ? 0.85 : 1,
+            }}
+          >
+            {isGeneratingPreview ? "Generating…" : "Generate new character"}
+          </button>
           </div>
         </div>
       </section>
