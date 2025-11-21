@@ -265,12 +265,10 @@ export default function SettingsStudioDemo() {
 
     setIsGenerating(true);
     try {
-      // TODO: Replace this with your real settings preview endpoint.
-      // For example: import.meta.env.VITE_SETTINGS_PREVIEW_URL
-      const endpoint = import.meta.env.VITE_SETTINGS_PREVIEW_URL || "";
-      if (!endpoint) {
-        throw new Error("Preview endpoint is not configured (VITE_SETTINGS_PREVIEW_URL).");
-      }
+      // Prefer VITE_SETTINGS_PREVIEW_URL, otherwise fallback to n8n webhook
+      const endpoint =
+        import.meta.env.VITE_SETTINGS_PREVIEW_URL ||
+        "https://n8n.simplifies.click/webhook/generate-setting-preview";
 
       const resp = await fetch(endpoint, {
         method: "POST",
