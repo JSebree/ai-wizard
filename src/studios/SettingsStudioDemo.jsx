@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import SettingCard from "./components/SettingCard";
 
 const STORAGE_KEY = "sceneme.settings";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 export default function SettingsStudioDemo() {
   const [name, setName] = useState("");
@@ -28,18 +37,88 @@ export default function SettingsStudioDemo() {
   const [previewError, setPreviewError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Load saved settings from localStorage on mount
+  // Load saved settings from Supabase or localStorage on mount, and poll for updates
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setSettings(parsed);
+    let cancelled = false;
+
+    const loadFromLocalStorage = () => {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setSettings(parsed);
+        }
+      } catch (e) {
+        console.warn("Failed to load settings from localStorage", e);
       }
-    } catch (e) {
-      console.warn("Failed to load settings from localStorage", e);
-    }
+    };
+
+    const loadFromSupabase = async () => {
+      // If Supabase client is not configured, fall back to localStorage
+      if (!supabase) {
+        loadFromLocalStorage();
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("setting")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (!Array.isArray(data) || cancelled) return;
+
+        const mapped = data.map((row) => ({
+          id: row.id,
+          name: row.name,
+          basePrompt: row.core_prompt,
+          negativePrompt: null,
+          mood: row.mood,
+          referenceImageUrl: row.base_image_url,
+          base_image_url: row.base_image_url,
+          base_hero: row.base_hero,
+          scene_n: row.scene_n,
+          scene_ne: row.scene_ne,
+          scene_e: row.scene_e,
+          scene_se: row.scene_se,
+          scene_s: row.scene_s,
+          scene_sw: row.scene_sw,
+          scene_w: row.scene_w,
+          scene_nw: row.scene_nw,
+          establishing_overhead: row.establishing_overhead,
+          status: row.status,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+
+        setSettings(mapped);
+
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+        } catch (e) {
+          console.warn("Failed to save settings to localStorage", e);
+        }
+      } catch (err) {
+        console.error("Failed to load settings from Supabase", err);
+        // On error, fall back to whatever is in localStorage
+        loadFromLocalStorage();
+      }
+    };
+
+    // Initial load
+    loadFromSupabase();
+
+    // Poll every 20 seconds so new expanded views appear automatically
+    const intervalId = window.setInterval(() => {
+      loadFromSupabase();
+    }, 20000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const persistSettings = (next) => {

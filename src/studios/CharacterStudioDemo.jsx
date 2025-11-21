@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
 import VoiceStep from "../interview/steps/VoiceStep.jsx";
 import CharacterCard from "./components/CharacterCard.jsx";
 
 const STORAGE_KEY = "sceneme.characters";
 
+// Supabase client (anon key from .env.local)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+    
 export default function CharacterStudioDemo() {
   const [name, setName] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
@@ -60,6 +70,69 @@ export default function CharacterStudioDemo() {
       console.warn("Failed to save characters to localStorage", e);
     }
   };
+
+  // Keep characters in sync with Supabase so new expansion URLs show up automatically
+  useEffect(() => {
+    if (!supabase) return;
+
+    let cancelled = false;
+    let intervalId;
+
+    async function fetchCharactersFromSupabase() {
+      try {
+        const { data, error } = await supabase
+          .from("characters")
+          .select("*")
+          .eq("is_public", true)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        if (!cancelled && Array.isArray(data)) {
+          const mapped = data.map((row) => ({
+            id: row.id,
+            name: row.name,
+            basePrompt: row.base_prompt || "",
+            // Use base_image_url as the primary thumbnail; fall back to base_hero
+            referenceImageUrl: row.base_image_url || row.base_hero || null,
+            voiceId: row.voice_id || "",
+            voiceRefUrl: row.voice_ref_url || null,
+            createdAt: row.created_at || row.createdAt || null,
+            updatedAt: row.updated_at || row.updatedAt || null,
+
+            // Extra views used by CharacterCard gallery
+            base_image_url: row.base_image_url || null,
+            base_hero: row.base_hero || null,
+            fullbody_centered: row.fullbody_centered || null,
+            fullbody_side: row.fullbody_side || null,
+            torso_front: row.torso_front || null,
+            headshot_front: row.headshot_front || null,
+            headshot_right: row.headshot_right || null,
+            headshot_left: row.headshot_left || null,
+          }));
+
+          setCharacters(mapped);
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+          } catch (e) {
+            console.warn("Failed to cache characters from Supabase", e);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch characters from Supabase", e);
+      }
+    }
+
+    // Initial load
+    fetchCharactersFromSupabase();
+    // Poll every 15 seconds so newly-expanded image URLs show up automatically
+    intervalId = window.setInterval(fetchCharactersFromSupabase, 15000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, []);
 
   // Register character in shared Supabase registry via n8n
   const registerCharacterInRegistry = async (payload) => {
