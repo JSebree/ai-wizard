@@ -224,13 +224,48 @@ export default function SettingsStudioDemo() {
     const next = [...settings, newSetting];
     persistSettings(next);
 
-    await registerSettingInRegistry({
-      id,
-      name: safeName,
-      corePrompt: rawPrompt,
-      mood: rawMood,
-      baseImageUrl: imageUrl,
-    });
+    // 1) Register this setting in the shared registry (Supabase)
+    try {
+      await registerSettingInRegistry({
+        id,
+        name: safeName,
+        corePrompt: rawPrompt,
+        mood: rawMood,
+        baseImageUrl: imageUrl,
+      });
+    } catch (err) {
+      // registerSettingInRegistry already sets error state; don't block expansion on failure
+      console.error("Registry registration failed (continuing to expansion):", err);
+    }
+
+    // 2) Fire-and-forget expansion workflow in n8n so it can render additional views
+    try {
+      const expansionEndpoint =
+        import.meta.env.VITE_SETTING_EXPANSION_URL ||
+        "https://n8n.simplifies.click/webhook/generate-setting-expansion";
+
+      const expansionPayload = {
+        id,
+        name: safeName,
+        base_prompt: rawPrompt,
+        negative_prompt: negativePrompt.trim() || "",
+        mood: rawMood || null,
+        base_image_url: imageUrl,
+        kind: "setting",
+      };
+
+      void fetch(expansionEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(expansionPayload),
+      }).catch((err) => {
+        console.error("Failed to trigger setting expansion workflow", err);
+      });
+    } catch (err) {
+      console.error("Unexpected error while triggering setting expansion workflow", err);
+    }
 
     resetForm();
   };

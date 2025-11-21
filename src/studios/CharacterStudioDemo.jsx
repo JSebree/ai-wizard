@@ -108,6 +108,26 @@ export default function CharacterStudioDemo() {
     }
   };
 
+  // Fire-and-forget expansion workflow to fan out character assets
+  const triggerCharacterExpansion = async (payload) => {
+    try {
+      await fetch(
+        "https://n8n.simplifies.click/webhook/generate-character-expansion",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+    } catch (err) {
+      console.error("Character expansion call failed", err);
+      // We intentionally do not surface this to the user yet; the
+      // base character save + registry write are the primary UX.
+    }
+  };
+
   const resetForm = () => {
     setName("");
     setBasePrompt("");
@@ -351,6 +371,19 @@ export default function CharacterStudioDemo() {
       updatedAt: now,
     };
 
+    // Prepare a lightweight expansion payload for n8n
+    const expansionPayload = {
+      id: newCharacter.id,
+      name: safeName,
+      basePrompt: rawPrompt,
+      baseImageUrl: imageUrl,
+      // No dedicated negative prompt field in the UI yet; the
+      // expansion workflow can append its own safety suffix.
+      negativePrompt: "",
+      voiceId: voiceId.trim() || undefined,
+      voiceRefUrl: voiceRefUrl || null,
+    };
+
     const next = [...characters, newCharacter];
     persistCharacters(next);
 
@@ -363,6 +396,9 @@ export default function CharacterStudioDemo() {
       voiceId: voiceId.trim() || undefined,
       voiceRefUrl: voiceRefUrl || null,
     });
+
+    // Kick off the character expansion workflow in the background
+    triggerCharacterExpansion(expansionPayload);
 
     resetForm();
   };
