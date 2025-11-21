@@ -89,7 +89,6 @@ export default function CharacterCard({ character, onClose }) {
     { key: 'headshot_right', label: 'Headshot (right)', url: headshot_right },
     { key: 'fullbody_centered', label: 'Full body (front)', url: fullbody_centered },
     { key: 'fullbody_side', label: 'Full body (side)', url: fullbody_side },
-    { key: 'referenceImageUrl', label: 'Reference', url: referenceImageUrl },
   ].filter((entry) => !!entry.url);
 
   const galleryStatus = [
