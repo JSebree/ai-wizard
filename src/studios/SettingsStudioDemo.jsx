@@ -388,94 +388,127 @@ export default function SettingsStudioDemo() {
               </span>
             </div>
             {previewError && (
-              <p style={{ margin: 0, marginBottom: 6, fontSize: 11, color: "#B91C1C" }}>
+              <p
+                style={{
+                  margin: 0,
+                  marginBottom: 6,
+                  fontSize: 11,
+                  color: "#B91C1C",
+                }}
+              >
                 {previewError}
               </p>
             )}
-            {isGenerating && (
-              <p style={{ margin: 0, fontSize: 12, color: "#64748B" }}>
-                Generating preview image…
-              </p>
-            )}
-            {!isGenerating && (
-              <>
+
+            <div
+              style={{
+                marginTop: 6,
+                borderRadius: 8,
+                overflow: "hidden",
+                border: "1px solid #0F172A",
+                background: "#0F172A",
+                minHeight: 180,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isGenerating ? (
                 <div
                   style={{
-                    marginTop: 6,
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    border: "1px solid #0F172A",
-                    background: "#0F172A",
-                    minHeight: 180,
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
+                    gap: 8,
+                    padding: 16,
                   }}
                 >
-                  {previewImageUrl ? (
-                    <img
-                      src={previewImageUrl}
-                      alt="Setting preview"
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        height: "auto",
-                        objectFit: "contain",
-                      }}
-                    />
-                  ) : (
-                    !previewError && (
-                      <p
-                        style={{
-                          margin: 16,
-                          fontSize: 11,
-                          color: "#E5E7EB",
-                          textAlign: "center",
-                        }}
-                      >
-                        No preview yet. Enter a base prompt and click{" "}
-                        <strong>Generate new setting</strong> to see a sample render of this
-                        environment.
-                      </p>
-                    )
-                  )}
-                </div>
-                {previewImageUrl && (
                   <div
                     style={{
-                      marginTop: 8,
-                      display: "flex",
-                      justifyContent: "flex-end",
+                      width: 40,
+                      height: 40,
+                      borderRadius: "999px",
+                      border: "3px solid #1F2937",
+                      borderTopColor: "#E5E7EB",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      color: "#E5E7EB",
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={!name.trim() || !basePrompt.trim() || isRegistering}
-                      title={
-                        !name.trim()
-                          ? "Enter a setting name to add this to your library"
-                          : undefined
-                      }
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        border: "1px solid #0F172A",
-                        background: "#0F172A",
-                        color: "#FFFFFF",
-                        fontSize: 12,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontSize: 14 }}>＋</span>
-                      <span>{isRegistering ? "Saving to catalog…" : "Add to saved settings"}</span>
-                    </button>
-                  </div>
-                )}
-              </>
+                    Generating preview image…
+                  </p>
+                </div>
+              ) : previewImageUrl ? (
+                <img
+                  src={previewImageUrl}
+                  alt="Setting preview"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    height: "auto",
+                    objectFit: "contain",
+                  }}
+                />
+              ) : (
+                !previewError && (
+                  <p
+                    style={{
+                      margin: 16,
+                      fontSize: 11,
+                      color: "#E5E7EB",
+                      textAlign: "center",
+                    }}
+                  >
+                    No preview yet. Enter a base prompt and click {" "}
+                    <strong>Generate new setting</strong> to see a sample render of this
+                    environment.
+                  </p>
+                )
+              )}
+            </div>
+
+            {!isGenerating && previewImageUrl && (
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!name.trim() || !basePrompt.trim() || isRegistering}
+                  title={
+                    !name.trim()
+                      ? "Enter a setting name to add this to your library"
+                      : undefined
+                  }
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    border: "1px solid #0F172A",
+                    background: "#0F172A",
+                    color: "#FFFFFF",
+                    fontSize: 12,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>＋</span>
+                  <span>
+                    {isRegistering ? "Saving to catalog…" : "Add to saved settings"}
+                  </span>
+                </button>
+              </div>
             )}
           </div>
 
