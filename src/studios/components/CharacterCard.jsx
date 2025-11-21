@@ -73,7 +73,6 @@ export default function CharacterCard({ character, onClose }) {
   // Choose a primary image to display as the main thumbnail
   const primaryImage =
     base_image_url ||
-    base_hero ||
     referenceImageUrl ||
     fullbody_centered ||
     headshot_front ||
@@ -84,15 +83,14 @@ export default function CharacterCard({ character, onClose }) {
   // Build a lightweight gallery from any image fields that are present
   const galleryImages = [
     { key: 'base_image_url', label: 'Base', url: base_image_url },
-    { key: 'base_hero', label: 'Base hero', url: base_hero },
-    { key: 'referenceImageUrl', label: 'Reference', url: referenceImageUrl },
-    { key: 'fullbody_centered', label: 'Full body (centered)', url: fullbody_centered },
-    { key: 'fullbody_side', label: 'Full body (side)', url: fullbody_side },
-    { key: 'torso_front', label: 'Torso (front)', url: torso_front },
     { key: 'headshot_front', label: 'Headshot (front)', url: headshot_front },
-    { key: 'headshot_right', label: 'Headshot (right)', url: headshot_right },
+    { key: 'torso_front', label: 'Torso (front)', url: torso_front },
     { key: 'headshot_left', label: 'Headshot (left)', url: headshot_left },
-  ].filter(entry => !!entry.url);
+    { key: 'headshot_right', label: 'Headshot (right)', url: headshot_right },
+    { key: 'fullbody_centered', label: 'Full body (front)', url: fullbody_centered },
+    { key: 'fullbody_side', label: 'Full body (side)', url: fullbody_side },
+    { key: 'referenceImageUrl', label: 'Reference', url: referenceImageUrl },
+  ].filter((entry) => !!entry.url);
 
   const galleryStatus = [
     { key: 'base', label: 'Base', present: !!(base_image_url || base_hero || referenceImageUrl) },
@@ -150,9 +148,6 @@ export default function CharacterCard({ character, onClose }) {
             )}
             <div className="flex-1">
               <h3 className="font-semibold text-lg">{name}</h3>
-              <p className="text-xs text-gray-500">
-                Created: {new Date(createdAt || character.created_at).toLocaleString()}
-              </p>
             </div>
           </div>
 

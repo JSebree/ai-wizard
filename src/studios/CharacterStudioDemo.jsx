@@ -1155,14 +1155,6 @@ export default function CharacterStudioDemo() {
                       >
                         {c.name}
                       </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "#9CA3AF",
-                        }}
-                      >
-                        Created: {new Date(c.createdAt).toLocaleString()}
-                      </div>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
