@@ -23,23 +23,7 @@ export default function StudiosPage() {
         padding: 24,
       }}
     >
-      {/* Header / Breadcrumb */}
       <header style={{ marginBottom: 20 }}>
-        <button
-          type="button"
-          onClick={() => nav("/")}
-          style={{
-            border: "none",
-            background: "transparent",
-            padding: 0,
-            marginBottom: 8,
-            fontSize: 13,
-            color: "#64748B",
-            cursor: "pointer",
-          }}
-        >
-          ← Back to SceneMe home
-        </button>
         <h1 style={{ margin: 0 }}>SceneMe Studios (Preview)</h1>
         <p style={{ marginTop: 8, color: "#475569" }}>
           Early access tools for building reusable creative assets. Use the Character Studio to
