@@ -23,9 +23,7 @@ export default function CharacterStudioDemo() {
   const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
   const [characters, setCharacters] = useState([]);
   const [error, setError] = useState("");
-  const [expandedId, setExpandedId] = useState(null);
   const [activeCharacter, setActiveCharacter] = useState(null);
-  const [copiedId, setCopiedId] = useState(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
@@ -479,26 +477,8 @@ export default function CharacterStudioDemo() {
   const handleDelete = (id) => {
     const next = characters.filter((c) => c.id !== id);
     persistCharacters(next);
-    if (expandedId === id) {
-      setExpandedId(null);
-    }
     if (activeCharacter && activeCharacter.id === id) {
       setActiveCharacter(null);
-    }
-  };
-
-  const handleCopyJson = (character) => {
-    try {
-      const text = JSON.stringify(character, null, 2);
-      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-        setCopiedId(character.id);
-        setTimeout(() => {
-          setCopiedId((current) => (current === character.id ? null : current));
-        }, 1500);
-      }
-    } catch (e) {
-      console.warn("Failed to copy JSON to clipboard", e);
     }
   };
 
@@ -1160,38 +1140,6 @@ export default function CharacterStudioDemo() {
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     <button
                       type="button"
-                      onClick={() =>
-                        setExpandedId((prev) => (prev === c.id ? null : c.id))
-                      }
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #D1D5DB",
-                        background: "#FFFFFF",
-                        color: "#374151",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {expandedId === c.id ? "Hide JSON" : "View JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyJson(c)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #0369A1",
-                        background: "#EFF6FF",
-                        color: "#0369A1",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {copiedId === c.id ? "Copied!" : "Copy JSON"}
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => handleDelete(c.id)}
                       style={{
                         padding: "4px 8px",
@@ -1207,23 +1155,6 @@ export default function CharacterStudioDemo() {
                     </button>
                   </div>
                 </div>
-                {expandedId === c.id && (
-                  <pre
-                    style={{
-                      margin: 0,
-                      padding: 10,
-                      borderRadius: 8,
-                      border: "1px solid #E5E7EB",
-                      background: "#0F172A",
-                      color: "#E5E7EB",
-                      fontSize: 11,
-                      overflowX: "auto",
-                      whiteSpace: "pre",
-                    }}
-                  >
-                    {JSON.stringify(c, null, 2)}
-                  </pre>
-                )}
               </div>
             ))}
           </div>

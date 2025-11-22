@@ -22,8 +22,8 @@ export default function SettingsStudioDemo() {
   const [uploadError, setUploadError] = useState("");
   const [settings, setSettings] = useState([]);
   const [error, setError] = useState("");
-  const [expandedId, setExpandedId] = useState(null);
-  const [copiedId, setCopiedId] = useState(null);
+  // const [expandedId, setExpandedId] = useState(null);
+  // const [copiedId, setCopiedId] = useState(null);
   const [selectedSetting, setSelectedSetting] = useState(null);
 
   const [isRegistering, setIsRegistering] = useState(false);
@@ -354,20 +354,7 @@ export default function SettingsStudioDemo() {
     persistSettings(next);
   };
 
-  const handleCopyJson = (setting) => {
-    try {
-      const text = JSON.stringify(setting, null, 2);
-      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-        setCopiedId(setting.id);
-        setTimeout(() => {
-          setCopiedId((current) => (current === setting.id ? null : current));
-        }, 1500);
-      }
-    } catch (e) {
-      console.warn("Failed to copy JSON to clipboard", e);
-    }
-  };
+  // handleCopyJson removed
 
   const handleGeneratePreview = useCallback(async () => {
     setPreviewError("");
@@ -917,42 +904,6 @@ export default function SettingsStudioDemo() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setExpandedId((current) => (current === s.id ? null : s.id));
-                      }}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #D1D5DB",
-                        background: "#FFFFFF",
-                        color: "#374151",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {expandedId === s.id ? "Hide JSON" : "View JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCopyJson(s);
-                      }}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #0369A1",
-                        background: "#EFF6FF",
-                        color: "#0369A1",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {copiedId === s.id ? "Copied!" : "Copy JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
                         handleDelete(s.id);
                       }}
                       style={{
@@ -969,23 +920,7 @@ export default function SettingsStudioDemo() {
                     </button>
                   </div>
                 </div>
-                {expandedId === s.id && (
-                  <pre
-                    style={{
-                      margin: 0,
-                      padding: 10,
-                      borderRadius: 8,
-                      border: "1px solid #E5E7EB",
-                      background: "#0F172A",
-                      color: "#E5E7EB",
-                      fontSize: 11,
-                      overflowX: "auto",
-                      whiteSpace: "pre",
-                    }}
-                  >
-                    {JSON.stringify(s, null, 2)}
-                  </pre>
-                )}
+                {/* expandedId pre block removed */}
               </div>
             ))}
           </div>
