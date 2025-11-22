@@ -121,9 +121,6 @@ export default function SettingCard({ setting, onClose }) {
             <div className="flex-1 space-y-2">
               <div>
                 <h3 className="font-semibold text-lg">{name}</h3>
-                <p className="text-xs text-gray-500">
-                  Created: {new Date(createdAt || created_at).toLocaleString()}
-                </p>
                 {status && (
                   <p className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
                     Status: {status}
