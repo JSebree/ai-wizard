@@ -10,7 +10,7 @@ const templates = [
     kind: "Documentary",
     featured: true,
     description: "60s documentary hosted by Nikola Tesla with cinematic cutaways.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/07c21780-8dad-44d2-a190-02a0ed5a4b3f_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Tesla_upscaled.mp4",
     json: {
       "ui": {
         "scene": "A 60 second documentary about Nikola Tesla greatest accomplishments, hosted by Nikola Tesla himself. B-Roll cutaways to clips of his most famous accomplishments",
@@ -49,7 +49,7 @@ const templates = [
     kind: "Advertisement",
     featured: true,
     description: "30s car-seat testimonial that ends with a burger B‑roll cutaway + price callout.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/79fcae61-ae4c-4159-a04d-460e88051194_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Burger_Ad.mp4",
     json: {
       "ui": {
         "scene": "A 30 second testimonial advertisement staring a young woman sitting in here car discussing how delicious and affordable her burger is. end scene with a B-Roll cutaway clip of a gourmet cheeseburger when the narrator says \"the classic crusty burger, now only five ninety-nine!\"",
@@ -88,7 +88,7 @@ const templates = [
     kind: "Vlog",
     description: "Travel vlog in Tokyo with A‑roll narration, cinematic style, 30s.",
     // Preview video users can watch
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/65b20950-c34c-4d4f-97c2-b455dffd5dca_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Tokyo_Vlog.mp4",
     // The JSON used to generate the video (safe to tweak)
     json: {
       "ui": {
@@ -127,7 +127,7 @@ const templates = [
     title: "Tiny Tech Execs — Bezzie",
     kind: "Podcast",
     description: "AI news podcast hosted by Baby Jeff Bezos, 60s Photorealistic.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/0ef8e79d-aa51-4ba5-8167-4cae3c12f13a_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Lil_Bezzie.mp4",
     json: {
       "ui": {
         "scene": "A podcast about the future of AI tech hosted by Jeff Bezos as a cute cherubic baby",
@@ -165,7 +165,7 @@ const templates = [
     title: "Newscast — Baby Zuck",
     kind: "Newscast",
     description: "AI newscast with A‑roll+B‑roll cutaways, 45s.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/20e15a25-a114-49b8-afc0-e7185c23de6c_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Baby_Zuck.mp4",
     json: {
       "ui": {
         "scene": "A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day",
@@ -202,7 +202,7 @@ const templates = [
     title: "Zombs — Halloween Ghost Story",
     kind: "Storytelling",
     description: "45 second ghost story told by a teenage zombie around a campfire on Halloween night.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/9033b835-7633-4531-a196-7a26d5b1cdb6_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Storytelling_Cartoon.mp4",
     json: {
       "ui": {
         "scene": "A 45 second scary story on Halloween told by a teenage zombie in a dark sleepy haunted Halloween town",
@@ -239,7 +239,7 @@ const templates = [
     title: "Storybook — Little Bunny",
     kind: "Storybook",
     description: "60s children's storybook narration about a small white bunny finding her way home.",
-    videoUrl: "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/8f2b0d5b-8046-46ac-9c86-1ab61db3c1c5_output_0.mp4",
+    videoUrl: "https://video-generations.nyc3.digitaloceanspaces.com/upscaled/episodes/Storybook_upscaled.mp4",
     json: {
       "ui": {
         "scene": "A short 60 second children's book about a small white bunny trying to find her way home",
