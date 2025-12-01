@@ -588,9 +588,19 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           <Field label="Enabled" value={yesNo(ui?.advanced?.enabled)} />
           {ui?.advanced?.enabled ? (
             <>
+              <Field
+                label="Resolution"
+                value={safe(ui?.advanced?.resolution || "SD")}
+              />
               <Field label="Visual style" value={safe(ui?.advanced?.style)} />
-              <Field label="Music volume (0.1–1.0)" value={safe(ui?.advanced?.musicVolume)} />
-              <Field label="Voice volume (0.1–1.0)" value={safe(ui?.advanced?.voiceVolume)} />
+              <Field
+                label="Music volume (0.1–1.0)"
+                value={safe(ui?.advanced?.musicVolume)}
+              />
+              <Field
+                label="Voice volume (0.1–1.0)"
+                value={safe(ui?.advanced?.voiceVolume)}
+              />
               <Field label="Music seed" value={safe(ui?.advanced?.seed)} mono />
             </>
           ) : null}

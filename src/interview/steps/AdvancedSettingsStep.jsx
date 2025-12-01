@@ -8,6 +8,8 @@ import React from "react";
  *  - onEnabledChange?: (enabled: boolean) => void
  *  - styleValue?: string
  *  - onStyleChange?: (style: string) => void
+ *  - resolutionValue?: string
+ *  - onResolutionChange?: (resolution: string) => void
  *  - music10?: number (1..10)  [default 1]
  *  - onMusic10Change?: (n: number) => void
  *  - voice10?: number (1..10)  [default 10]
@@ -22,6 +24,8 @@ export default function AdvancedSettingsStep({
   onEnabledChange,
   styleValue = "Photorealistic",
   onStyleChange,
+  resolutionValue = "SD",
+  onResolutionChange,
   music10,
   onMusic10Change,
   voice10,
@@ -51,6 +55,9 @@ export default function AdvancedSettingsStep({
   const emitStyle = (v) => {
     if (typeof onStyleChange === "function") onStyleChange(String(v));
   };
+  const emitResolution = (v) => {
+    if (typeof onResolutionChange === "function") onResolutionChange(String(v));
+  };
   const emitMusic = (n) => {
     const clamped = clamp10(n, 1);
     if (typeof onMusic10Change === "function") onMusic10Change(clamped);
@@ -74,6 +81,8 @@ export default function AdvancedSettingsStep({
     "Comic-book",
     "Noir",
   ];
+
+  const RESOLUTION_OPTS = ["SD", "HD"];
 
   return (
     <div>
@@ -108,6 +117,25 @@ export default function AdvancedSettingsStep({
       {/* Collapsible content */}
       {show && (
         <div style={{ display: "grid", gap: 18 }}>
+          {/* Resolution */}
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Resolution</div>
+            <select
+              value={resolutionValue}
+              onChange={(e) => emitResolution(e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
+            >
+              {RESOLUTION_OPTS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <div style={{ color: "#667085", fontSize: 12, marginTop: 6 }}>
+              HD will increase processing time.
+            </div>
+          </div>
+
           {/* Visual style */}
           <div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Visual style</div>
@@ -151,6 +179,7 @@ export default function AdvancedSettingsStep({
               style={{ width: "100%" }}
             />
           </div>
+
           {/* Music seed (optional) */}
           <div>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Music seed (optional)</div>
@@ -171,7 +200,8 @@ export default function AdvancedSettingsStep({
               style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
             />
             <div style={{ color: "#667085", fontSize: 12, marginTop: 6 }}>
-              Leave blank to let the system pick a random seed. Set to <code>0</code> or any integer for deterministic results.
+              Leave blank to let the system pick a random seed. Set to <code>0</code> or any integer
+              for deterministic results.
             </div>
           </div>
         </div>

@@ -127,6 +127,7 @@ function mapTemplateToAnswers(ui, defaults) {
     advancedEnabled:
       typeof adv.enabled === "boolean" ? adv.enabled : defaults.advancedEnabled,
     stylePreset: adv.style ?? defaults.stylePreset,
+    resolution: adv.resolution ?? defaults.resolution,
     musicVolume10:
       adv.musicVolume !== undefined ? coerceVolume10(adv.musicVolume) : defaults.musicVolume10,
     voiceVolume10:
@@ -174,9 +175,10 @@ function getDefaultAnswers() {
     // Advanced settings
     advancedEnabled: true,
     stylePreset: "Photorealistic",
-    musicVolume10: 1,     // 1..10 -> 0.1..1.0
-    voiceVolume10: 10,    // 1..10 -> 0.1..1.0
-    musicIncludeVocals: undefined, // shown only if wantsMusic === true
+    resolution: "SD",
+    musicVolume10: 1,
+    voiceVolume10: 10,
+    musicIncludeVocals: undefined,
   };
 }
 
@@ -627,6 +629,7 @@ export default function InterviewPage({ onComplete }) {
       advanced: {
         enabled: Boolean(answers.advancedEnabled),
         style: req(answers.stylePreset) ? answers.stylePreset : "Photorealistic",
+        resolution: answers.resolution || "SD",
         // export ffmpeg-scale volumes (0.1–1.0)
         musicVolume: Math.max(1, Math.min(10, answers.musicVolume10 ?? 1)) / 10,
         voiceVolume: Math.max(1, Math.min(10, answers.voiceVolume10 ?? 10)) / 10,
@@ -1014,6 +1017,10 @@ export default function InterviewPage({ onComplete }) {
           styleValue={answers.stylePreset || "Photorealistic"}
           onStyleChange={(style) =>
             setAnswers((s) => ({ ...s, stylePreset: String(style || "Photorealistic") }))
+          }
+          resolutionValue={answers.resolution}
+          onResolutionChange={(v) =>
+            setAnswers((s) => ({ ...s, resolution: v }))
           }
           music10={answers.musicVolume10 ?? 1}
           onMusic10Change={(v) =>
