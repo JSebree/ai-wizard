@@ -423,7 +423,7 @@ export default function SettingsStudioDemo() {
     <div style={{ paddingBottom: 60 }}>
       {/* Header (Matching Scene Studio) */}
       <div style={{ marginBottom: 24, textAlign: "center" }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Settings Studio</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Setting Studio</h2>
         <p style={{ fontSize: 13, color: "#64748B", margin: 0 }}>
           Define reusable environments and locations. Create a base setting for your stories.
         </p>
@@ -552,18 +552,17 @@ export default function SettingsStudioDemo() {
           <div style={{ marginTop: 24 }}>
             <button
               onClick={handleGeneratePreview}
-              disabled={isGenerating || !name.trim() || !basePrompt.trim()}
-              title={(!name.trim() || !basePrompt.trim()) ? "Please enter a Name and Prompt first" : ""}
+              disabled={isGenerating}
               style={{
                 width: "100%",
                 padding: "12px",
                 borderRadius: 999,
-                background: (isGenerating || !name.trim() || !basePrompt.trim()) ? "#94A3B8" : "#000",
+                background: isGenerating ? "#94A3B8" : "#000",
                 color: "white",
                 fontWeight: 600,
                 fontSize: 14,
                 border: "none",
-                cursor: (isGenerating || !name.trim() || !basePrompt.trim()) ? "not-allowed" : "pointer",
+                cursor: isGenerating ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

@@ -86,7 +86,7 @@ export default function StudiosPage() {
               color: activeTab === "characters" ? "#111827" : "#6B7280",
             }}
           >
-            Character Studio
+            Character
           </button>
           <button
             type="button"
@@ -104,7 +104,7 @@ export default function StudiosPage() {
               color: activeTab === "settings" ? "#111827" : "#6B7280",
             }}
           >
-            Settings Studio
+            Setting
           </button>
           <button
             type="button"
@@ -122,7 +122,7 @@ export default function StudiosPage() {
               color: activeTab === "scenes" ? "#111827" : "#6B7280",
             }}
           >
-            Scene Studio
+            Scene
           </button>
         </div>
 

@@ -208,7 +208,7 @@ export default function CharacterStudioDemo() {
 
       {/* Header */}
       <div style={{ marginBottom: 24, textAlign: "center" }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Character Studios</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Character Studio</h2>
         <p style={{ fontSize: 13, color: "#64748B", margin: 0 }}>
           Define reusable characters. Capture their look and voice for use in scene generation.
         </p>
