@@ -33,6 +33,65 @@ export default function CharacterStudioDemo() {
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef(null);
 
+  // Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], `recording_${Date.now()}.webm`, { type: 'audio/webm' });
+        await uploadVoiceFile(audioFile);
+
+        // Stop all tracks to release mic
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      // You might want to show a toast or error message here
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const [voices, setVoices] = useState([]);
+
+  // Load Voices
+  useEffect(() => {
+    fetch('/voices.json')
+      .then(res => res.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : data.voices || [];
+        setVoices(list.map(v => ({
+          id: v.id || v.voice_id,
+          name: v.name,
+          previewUrl: v.preview_url || v.audio_url || v.url
+        })).filter(v => v.id));
+      })
+      .catch(console.error);
+  }, []);
+
   // Load saved characters
   useEffect(() => {
     try {
@@ -126,6 +185,33 @@ export default function CharacterStudioDemo() {
       console.error(err);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const uploadVoiceFile = async (file) => {
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("kind", "voice_clone");
+      // Use standard upload endpoint, assuming it handles audio or generic files
+      const res = await fetch("https://n8n.simplifies.click/webhook/upload-reference-image", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) throw new Error("Voice upload failed");
+      const data = await res.json();
+      const url = data.publicUrl || data.url || data.image_url;
+
+      if (url) {
+        setVoicePreviewUrl(url);
+        setVoiceId(`clone_${Date.now()}`); // Generate a temporary ID for the clone
+      }
+    } catch (err) {
+      console.error("Voice upload error", err);
+      // Optional: set error state
     }
   };
 
@@ -254,6 +340,119 @@ export default function CharacterStudioDemo() {
                 <span style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>{isUploading ? "Uploading..." : "Click to upload reference"}</span>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleReferenceUpload} style={{ display: "none" }} />
               </label>
+            </div>
+
+            {/* Voice Section */}
+            <div style={{ paddingTop: 16, borderTop: "1px solid #E2E8F0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155" }}>Voice</label>
+                <div style={{ display: "flex", background: "#F1F5F9", borderRadius: 6, padding: 2 }}>
+                  <button
+                    onClick={() => setVoiceKind("preset")}
+                    style={{
+                      padding: "4px 12px", borderRadius: 4, fontSize: 12, fontWeight: 500, border: "none", cursor: "pointer",
+                      background: voiceKind === "preset" ? "#FFFFFF" : "transparent",
+                      color: voiceKind === "preset" ? "#0F172A" : "#64748B",
+                      boxShadow: voiceKind === "preset" ? "0 1px 2px rgba(0,0,0,0.05)" : "none"
+                    }}
+                  >
+                    Library
+                  </button>
+                  <button
+                    onClick={() => setVoiceKind("clone")}
+                    style={{
+                      padding: "4px 12px", borderRadius: 4, fontSize: 12, fontWeight: 500, border: "none", cursor: "pointer",
+                      background: voiceKind === "clone" ? "#FFFFFF" : "transparent",
+                      color: voiceKind === "clone" ? "#0F172A" : "#64748B",
+                      boxShadow: voiceKind === "clone" ? "0 1px 2px rgba(0,0,0,0.05)" : "none"
+                    }}
+                  >
+                    Clone
+                  </button>
+                </div>
+              </div>
+
+              {voiceKind === "preset" ? (
+                <div>
+                  <select
+                    value={voiceId}
+                    onChange={(e) => {
+                      setVoiceId(e.target.value);
+                      const hit = voices.find(v => v.id === e.target.value);
+                      setVoicePreviewUrl(hit ? hit.previewUrl : "");
+                    }}
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #E2E8F0",
+                      fontSize: 14, outline: "none", background: "#F8FAFC", cursor: "pointer"
+                    }}
+                  >
+                    <option value="">Select a voice...</option>
+                    {voices.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {/* Option A: Upload */}
+                  <label style={{ border: "1px dashed #CBD5E1", borderRadius: 8, padding: 16, textAlign: "center", cursor: "pointer", background: "#F8FAFC", display: "block" }}>
+                    <span style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>
+                      {voicePreviewUrl ? "✅ Audio Uploaded" : "📁 Upload Audio File (MP3/WAV)"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) uploadVoiceFile(e.target.files[0]);
+                      }}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+
+                  {/* Divider */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#94A3B8", fontSize: 11, fontWeight: 600 }}>
+                    <div style={{ height: 1, flex: 1, background: "#E2E8F0" }} /> OR <div style={{ height: 1, flex: 1, background: "#E2E8F0" }} />
+                  </div>
+
+                  {/* Option B: Record */}
+                  <button
+                    onClick={isRecording ? stopRecording : startRecording}
+                    style={{
+                      padding: "12px",
+                      borderRadius: 8,
+                      background: isRecording ? "#FEF2F2" : "#F0F9FF",
+                      border: isRecording ? "1px solid #EF4444" : "1px solid #0EA5E9",
+                      color: isRecording ? "#EF4444" : "#0284C7",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8
+                    }}
+                  >
+                    {isRecording ? (
+                      <>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#EF4444", animation: "pulse 1s infinite" }} />
+                        Stop Recording
+                      </>
+                    ) : (
+                      <>
+                        <span>🎤</span> Record Voice
+                      </>
+                    )}
+                  </button>
+                  <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`}</style>
+                </div>
+              )}
+
+              {/* Audio Preview Player */}
+              {voicePreviewUrl && (
+                <div style={{ marginTop: 12 }}>
+                  <audio controls src={voicePreviewUrl} style={{ width: "100%", height: 32 }} />
+                </div>
+              )}
             </div>
           </div>
 
