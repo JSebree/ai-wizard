@@ -1,13 +1,13 @@
-// src/studios/components/SettingCard.jsx
 import React, { useState } from 'react';
 
-export default function SettingCard({ setting, onClose }) {
+export default function SettingCard({ setting, onClose, onModify }) {
   const [fullImage, setFullImage] = useState(null);
 
   if (!setting) return null;
 
   const {
     name,
+    basePrompt,
     core_prompt,
     mood,
     base_image_url,
@@ -25,8 +25,6 @@ export default function SettingCard({ setting, onClose }) {
     scene_w,
     scene_nw,
     establishing_overhead,
-    createdAt,
-    created_at,
     status,
   } = setting;
 
@@ -41,6 +39,7 @@ export default function SettingCard({ setting, onClose }) {
 
   // Choose a primary image to display as the main thumbnail
   const primaryImage =
+    fullImage ||
     resolvedBaseImage ||
     scene_n ||
     scene_e ||
@@ -67,132 +66,172 @@ export default function SettingCard({ setting, onClose }) {
     { key: 'establishing_overhead', label: 'Overhead', url: establishing_overhead },
   ].filter((entry) => !!entry.url);
 
-  // Checkmark indicator row (same idea as CharacterCard)
-  const galleryStatus = [
-    { key: 'base', label: 'Base', present: !!resolvedBaseImage },
-    { key: 'n', label: 'N', present: !!scene_n },
-    { key: 'ne', label: 'NE', present: !!scene_ne },
-    { key: 'e', label: 'E', present: !!scene_e },
-    { key: 'se', label: 'SE', present: !!scene_se },
-    { key: 's', label: 'S', present: !!scene_s },
-    { key: 'sw', label: 'SW', present: !!scene_sw },
-    { key: 'w', label: 'W', present: !!scene_w },
-    { key: 'nw', label: 'NW', present: !!scene_nw },
-    { key: 'overhead', label: 'Overhead', present: !!establishing_overhead },
-  ];
-
-  function handleClose() {
-    setFullImage(null);
-    onClose?.();
-  }
+  const displayPrompt = basePrompt || core_prompt || "";
 
   return (
-    <>
-      {/* Outer modal */}
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.4)",
+        backdropFilter: "blur(4px)",
+        zIndex: 999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20
+      }}
+      onClick={onClose}
+    >
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center"
-        onClick={handleClose}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: "white",
+          borderRadius: "1rem",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          padding: "0",
+          width: "100%",
+          maxWidth: "1000px", // Reverted to wider modal per user feedback
+          width: "90vw",
+          position: "relative",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden"
+        }}
       >
-        <div
-          className="bg-white rounded-xl shadow-xl p-6 w-full max-w-4xl relative"
-          onClick={(e) => e.stopPropagation()}
-        >
+        {/* Header */}
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Setting Details</h2>
           <button
-            className="absolute top-3 right-3 text-gray-500 hover:text-black"
-            onClick={(e) => { e.stopPropagation(); handleClose(); }}
+            onClick={onClose}
+            style={{
+              color: "#64748B",
+              cursor: "pointer",
+              background: "none",
+              border: "none",
+              fontSize: "1.5rem",
+              lineHeight: 1,
+              padding: 0
+            }}
           >
-            ✕
+            ×
           </button>
+        </div>
 
-          <div className="flex items-start gap-6">
-            {primaryImage ? (
-              <img
-                src={primaryImage}
-                alt={name}
-                className="max-w-[380px] max-h-[320px] rounded-lg object-cover border cursor-pointer"
-                onClick={() => setFullImage(primaryImage)}
-              />
-            ) : (
-              <div className="w-72 h-60 rounded-lg border bg-slate-100 flex items-center justify-center text-xs text-slate-400">
-                No image
-              </div>
-            )}
-
-            <div className="flex-1 space-y-2">
-              <div>
-                <h3 className="font-semibold text-lg">{name}</h3>
-                {status && (
-                  <p className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                    Status: {status}
-                  </p>
+        <div style={{ padding: "24px", overflowY: "auto" }}>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-6">
+            {/* Left: Preview + Gallery */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Reduced minHeight and maxHeight to help content fit vertically */}
+              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 250, position: "relative" }}>
+                <a
+                  href={primaryImage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open full resolution"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    left: 12,
+                    textDecoration: "none",
+                    color: "white",
+                    fontSize: 18,
+                    background: "rgba(0,0,0,0.5)",
+                    width: 32,
+                    height: 32,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 4,
+                    zIndex: 10
+                  }}
+                >
+                  ⤢
+                </a>
+                {primaryImage ? (
+                  <img
+                    src={primaryImage}
+                    alt={name}
+                    style={{ width: "100%", height: "auto", display: "block", maxHeight: "40vh", objectFit: "contain" }}
+                  />
+                ) : (
+                  <div style={{ color: "#fff", padding: 20 }}>No Image</div>
                 )}
               </div>
 
-              {mood && (
-                <p className="text-xs text-gray-500">
-                  Mood: <span className="font-medium text-gray-700">{mood}</span>
-                </p>
-              )}
-
-              {core_prompt && (
-                <div className="mt-2 text-xs text-gray-600 border rounded-md p-2 bg-slate-50 max-h-32 overflow-y-auto">
-                  {core_prompt}
+              {/* Gallery Strip */}
+              {galleryImages.length > 1 && (
+                <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                  {galleryImages.map((img) => (
+                    <div
+                      key={img.key}
+                      onClick={() => setFullImage(img.url)}
+                      style={{
+                        flexShrink: 0,
+                        width: 50,
+                        height: 50,
+                        borderRadius: 6,
+                        overflow: "hidden",
+                        cursor: "pointer",
+                        border: primaryImage === img.url ? "2px solid #000" : "1px solid #E2E8F0",
+                        opacity: primaryImage === img.url ? 1 : 0.7
+                      }}
+                    >
+                      <img src={img.url} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          </div>
 
-          {galleryImages.length > 1 && (
-            <div className="mt-4">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {galleryImages.map((img) => (
-                  <img
-                    key={img.key}
-                    src={img.url}
-                    alt={`${name} - ${img.label}`}
-                    className="w-16 h-16 rounded-md object-cover border flex-shrink-0 cursor-pointer"
-                    onClick={() => setFullImage(img.url)}
-                  />
-                ))}
+            {/* Right: Metadata */}
+            <div style={{ position: "relative" }}>
+              <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 20, paddingRight: 30 }}>{name}</h3>
+
+              <div style={{ display: "grid", gap: 16 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Prompt</label>
+                  <p style={{ fontSize: 13, color: "#334155", lineHeight: 1.5, margin: 0, background: "#F8FAFC", padding: 12, borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                    {displayPrompt || "No prompt"}
+                  </p>
+                </div>
+
+                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, color: "#64748B" }}>Mood</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{mood || "None"}</span>
+                  </div>
+                </div>
+                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right" }}>
+                  <button
+                    onClick={() => {
+                      onModify?.();
+                    }}
+                    style={{
+                      padding: "8px 20px",
+                      borderRadius: 999,
+                      background: "#000",
+                      color: "white",
+                      border: "none",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                    }}
+                  >
+                    Modify Setting
+                  </button>
+                </div>
               </div>
             </div>
-          )}
-
-          {/* Checkmark indicator row */}
-          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
-            {galleryStatus.map((slot) => (
-              <span key={slot.key} className="flex items-center gap-1">
-                <span
-                  className={
-                    slot.present
-                      ? 'inline-flex h-3 w-3 items-center justify-center rounded-full bg-emerald-500 text-[9px] text-white'
-                      : 'inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[9px] text-gray-400'
-                  }
-                >
-                  {slot.present ? '✓' : '–'}
-                </span>
-                {slot.label}
-              </span>
-            ))}
           </div>
         </div>
       </div>
-
-      {/* Fullscreen image viewer */}
-      {fullImage && (
-        <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
-          onClick={() => setFullImage(null)}
-        >
-          <div onClick={(e) => e.stopPropagation()}>
-            <img
-              src={fullImage}
-              className="max-w-[90vw] max-h-[90vh] rounded-lg"
-              alt={name}
-            />
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from "react";
 
-export default function CharacterCard({ character, onClose }) {
+export default function CharacterCard({ character, onClose, onModify }) {
   const [voices, setVoices] = useState(null);
   const [fullImage, setFullImage] = useState(null);
-
-  if (!character) return null;
 
   useEffect(() => {
     let cancelled = false;
@@ -20,21 +18,8 @@ export default function CharacterCard({ character, onClose }) {
         const arr = Array.isArray(raw) ? raw : raw?.voices || [];
         const list = arr
           .map((v) => ({
-            id:
-              v.id ||
-              v.voice_id ||
-              v.tts_id ||
-              v.name ||
-              '',
-            previewUrl:
-              v.audio_url ||
-              v.preview_url ||
-              v.previewUrl ||
-              v.sample ||
-              v.demo ||
-              v.url ||
-              v.audio ||
-              null,
+            id: v.id || v.voice_id || v.tts_id || v.name || '',
+            previewUrl: v.audio_url || v.preview_url || v.previewUrl || v.sample || v.demo || v.url || v.audio || null,
           }))
           .filter((v) => v.id);
         if (!cancelled) setVoices(list);
@@ -49,6 +34,7 @@ export default function CharacterCard({ character, onClose }) {
     };
   }, []);
 
+  if (!character) return null;
 
   const {
     name,
@@ -63,47 +49,34 @@ export default function CharacterCard({ character, onClose }) {
     headshot_left,
     voiceRefUrl,
     voicePreviewUrl,
-    voiceKind,
     voiceId,
     voice_id,
-    createdAt,
-    updatedAt,
+    basePrompt
   } = character;
 
-  // Choose a primary image to display as the main thumbnail
+  // Primary Image Logic
   const primaryImage =
-    base_image_url ||
+    fullImage ||
     referenceImageUrl ||
+    base_image_url ||
+    base_hero ||
     fullbody_centered ||
     headshot_front ||
-    headshot_right ||
-    headshot_left ||
     null;
 
-  // Build a lightweight gallery from any image fields that are present
+  // Gallery
   const galleryImages = [
-    { key: 'base_image_url', label: 'Base', url: base_image_url },
-    { key: 'headshot_front', label: 'Headshot (front)', url: headshot_front },
-    { key: 'torso_front', label: 'Torso (front)', url: torso_front },
-    { key: 'headshot_left', label: 'Headshot (left)', url: headshot_left },
-    { key: 'headshot_right', label: 'Headshot (right)', url: headshot_right },
-    { key: 'fullbody_centered', label: 'Full body (front)', url: fullbody_centered },
-    { key: 'fullbody_side', label: 'Full body (side)', url: fullbody_side },
+    { key: 'base', label: 'Reference', url: referenceImageUrl || base_image_url },
+    { key: 'hero', label: 'Hero', url: base_hero },
+    { key: 'head_f', label: 'Head (F)', url: headshot_front },
+    { key: 'head_l', label: 'Head (L)', url: headshot_left },
+    { key: 'head_r', label: 'Head (R)', url: headshot_right },
+    { key: 'torso', label: 'Torso', url: torso_front },
+    { key: 'full_c', label: 'Full (C)', url: fullbody_centered },
+    { key: 'full_s', label: 'Full (S)', url: fullbody_side },
   ].filter((entry) => !!entry.url);
 
-  const galleryStatus = [
-    { key: 'base', label: 'Base', present: !!(base_image_url || base_hero || referenceImageUrl) },
-    { key: 'headshot', label: 'Headshot', present: !!headshot_front },
-    { key: 'torso', label: 'Torso', present: !!torso_front },
-    { key: 'headshot_left', label: 'Headshot (left)', present: !!headshot_left },
-    { key: 'headshot_right', label: 'Headshot (right)', present: !!headshot_right },
-    { key: 'fullbody_front', label: 'Full body (front)', present: !!fullbody_centered },
-    { key: 'fullbody_side', label: 'Full body (side)', present: !!fullbody_side },
-  ];
-
-  // Resolve voice preview:
-  // 1) character-specific voiceRefUrl wins
-  // 2) otherwise, try a global preset voice via voices.json
+  // Voice Logic
   const presetId = voiceId || voice_id || null;
   let registryPreview = null;
   if (presetId && Array.isArray(voices)) {
@@ -112,102 +85,159 @@ export default function CharacterCard({ character, onClose }) {
   }
 
   const effectiveVoiceUrl = voiceRefUrl || voicePreviewUrl || registryPreview;
-  const hasAnyVoice = !!(effectiveVoiceUrl || presetId);
-  const effectiveKind =
-    voiceKind ||
-    (voiceRefUrl ? 'character-only' : presetId ? 'preset' : null);
-
-  function handleClose() {
-    setFullImage(null);
-    onClose?.();
-  }
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={handleClose}>
-        <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl relative" onClick={(e) => e.stopPropagation()}>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0,0,0,0.8)",
+        backdropFilter: "blur(4px)",
+        zIndex: 999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 40,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 1000,
+          background: "white",
+          borderRadius: 16,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "90vh",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+          animation: "fadeIn 0.2s ease-out",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <style>{`@keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }`}</style>
+
+        {/* Header */}
+        <div style={{ padding: "20px 32px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Character Details</h2>
+          </div>
           <button
-            className="absolute top-3 right-3 text-gray-500 hover:text-black"
-            onClick={(e) => { e.stopPropagation(); handleClose(); }}
+            onClick={onClose}
+            style={{
+              background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#64748B",
+              padding: 0, lineHeight: 1
+            }}
           >
-            ✕
+            ×
           </button>
-          <div className="flex items-center gap-4">
-            {primaryImage ? (
-              <img
-                src={primaryImage}
-                alt={name}
-                className="max-w-[320px] max-h-[320px] rounded-lg object-cover border cursor-pointer"
-                onClick={() => setFullImage(primaryImage)}
-              />
-            ) : (
-              <div className="w-48 h-48 rounded-lg border bg-slate-100 flex items-center justify-center text-xs text-slate-400">
-                No image
-              </div>
-            )}
-            <div className="flex-1">
-              <h3 className="font-semibold text-lg">{name}</h3>
-            </div>
-          </div>
+        </div>
 
-          {galleryImages.length > 1 && (
-            <div className="mt-3">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {galleryImages.map((img) => (
-                  <img
-                    key={img.key}
-                    src={img.url}
-                    alt={`${name} - ${img.label}`}
-                    className="w-14 h-14 rounded-md object-cover border flex-shrink-0 cursor-pointer"
-                    onClick={() => setFullImage(img.url)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Content */}
+        <div style={{ padding: 32, overflowY: "auto" }}>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-8">
 
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
-            {galleryStatus.map((slot) => (
-              <span key={slot.key} className="flex items-center gap-1">
-                <span
-                  className={
-                    slot.present
-                      ? 'inline-flex h-3 w-3 items-center justify-center rounded-full bg-emerald-500 text-[9px] text-white'
-                      : 'inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[9px] text-gray-400'
-                  }
+            {/* Left: Visuals */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ background: "#F8FAFC", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, position: "relative", border: "1px solid #E2E8F0" }}>
+                <a
+                  href={primaryImage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => { e.stopPropagation(); }} /* ALLOW default trigger for new tab */
+                  style={{
+                    position: "absolute", top: 12, left: 12,
+                    background: "rgba(0,0,0,0.6)", color: "white",
+                    width: 32, height: 32, borderRadius: 4,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 18, textDecoration: "none", cursor: "pointer",
+                    zIndex: 10
+                  }}
+                  title="Open in new tab"
                 >
-                  {slot.present ? '✓' : '–'}
-                </span>
-                {slot.label}
-              </span>
-            ))}
-          </div>
+                  ⤢
+                </a>
+                {primaryImage ? (
+                  <img
+                    src={primaryImage}
+                    alt={name}
+                    style={{ width: "100%", height: "auto", display: "block", maxHeight: "60vh", objectFit: "contain" }}
+                  />
+                ) : (
+                  <div style={{ color: "#94A3B8" }}>No Image Created</div>
+                )}
+              </div>
 
-          {hasAnyVoice && (
-            <div className="mt-3">
-              {effectiveKind && (
-                <p className="text-xs text-gray-600 mb-1">
-                  Voice: {effectiveKind === 'character-only' ? 'Character-specific' : 'Preset voice'}
-                </p>
-              )}
-              {effectiveVoiceUrl && (
-                <audio
-                  controls
-                  src={effectiveVoiceUrl}
-                  className="w-full mt-1"
-                />
+              {/* Gallery Strip */}
+              {galleryImages.length > 1 && (
+                <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+                  {galleryImages.map(img => (
+                    <div
+                      key={img.key}
+                      onClick={() => setFullImage(img.url)}
+                      style={{
+                        flexShrink: 0, width: 70, height: 70, borderRadius: 8, overflow: "hidden",
+                        cursor: "pointer",
+                        border: primaryImage === img.url ? "2px solid #000" : "1px solid #E2E8F0",
+                        opacity: primaryImage === img.url ? 1 : 0.6
+                      }}
+                    >
+                      <img src={img.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          )}
+
+            {/* Right: Info */}
+            <div>
+              <h3 style={{ marginTop: 0, fontSize: 24, fontWeight: 800, marginBottom: 24, lineHeight: 1.2 }}>{name}</h3>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 8 }}>Base Prompt</label>
+                  <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: 0, background: "#F8FAFC", padding: 12, borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                    {basePrompt || "No prompt description."}
+                  </p>
+                </div>
+
+                {effectiveVoiceUrl && (
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 8 }}>Voice Reference</label>
+                    <audio controls src={effectiveVoiceUrl} style={{ width: "100%" }} />
+                  </div>
+                )}
+
+                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 24, marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => {
+                      onModify?.();
+                    }}
+                    style={{
+                      padding: "10px 24px",
+                      borderRadius: 999,
+                      background: "#000",
+                      color: "white",
+                      border: "none",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                    }}
+                  >
+                    Modify Character
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
-      {fullImage && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setFullImage(null)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <img src={fullImage} className="max-w-[90vw] max-h-[90vh] rounded-lg" />
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

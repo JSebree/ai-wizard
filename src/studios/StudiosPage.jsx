@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CharacterStudioDemo from "./CharacterStudioDemo.jsx";
 import SettingsStudioDemo from "./SettingsStudioDemo.jsx";
+import SceneStudioDemo from "./SceneStudioDemo.jsx";
 
 export default function StudiosPage() {
   const nav = useNavigate();
@@ -105,14 +106,34 @@ export default function StudiosPage() {
           >
             Settings Studio
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("scenes")}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              border: "none",
+              borderBottom:
+                activeTab === "scenes" ? "2px solid #111827" : "2px solid transparent",
+              background: "transparent",
+              cursor: "pointer",
+              fontWeight: activeTab === "scenes" ? 700 : 500,
+              fontSize: 14,
+              color: activeTab === "scenes" ? "#111827" : "#6B7280",
+            }}
+          >
+            Scene Studio
+          </button>
         </div>
 
         {/* Tab body */}
         <div style={{ padding: 16 }}>
           {activeTab === "characters" ? (
             <CharacterStudioDemo />
-          ) : (
+          ) : activeTab === "settings" ? (
             <SettingsStudioDemo />
+          ) : (
+            <SceneStudioDemo />
           )}
         </div>
       </section>

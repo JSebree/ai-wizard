@@ -22,8 +22,6 @@ export default function SettingsStudioDemo() {
   const [uploadError, setUploadError] = useState("");
   const [settings, setSettings] = useState([]);
   const [error, setError] = useState("");
-  // const [expandedId, setExpandedId] = useState(null);
-  // const [copiedId, setCopiedId] = useState(null);
   const [selectedSetting, setSelectedSetting] = useState(null);
 
   const [isRegistering, setIsRegistering] = useState(false);
@@ -147,6 +145,21 @@ export default function SettingsStudioDemo() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleModifySetting = (setting) => {
+    setName(setting.name || "");
+    setBasePrompt(setting.basePrompt || "");
+    setNegativePrompt(setting.negativePrompt || "");
+    setMood(setting.mood || "");
+
+    // Choose the best image to show as preview/reference
+    const img = setting.base_hero || setting.referenceImageUrl || setting.base_image_url;
+    setReferenceImageUrl(img || "");
+    setPreviewImageUrl(img || "");
+
+    setSelectedSetting(null); // Close modal if open
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const registerSettingInRegistry = async ({
@@ -354,8 +367,6 @@ export default function SettingsStudioDemo() {
     persistSettings(next);
   };
 
-  // handleCopyJson removed
-
   const handleGeneratePreview = useCallback(async () => {
     setPreviewError("");
 
@@ -366,7 +377,6 @@ export default function SettingsStudioDemo() {
 
     setIsGenerating(true);
     try {
-      // Prefer VITE_SETTINGS_PREVIEW_URL, otherwise fallback to n8n webhook
       const endpoint =
         import.meta.env.VITE_SETTINGS_PREVIEW_URL ||
         "https://n8n.simplifies.click/webhook/generate-setting-preview";
@@ -410,526 +420,292 @@ export default function SettingsStudioDemo() {
   }, [basePrompt, negativePrompt, mood, referenceImageUrl]);
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      {/* Form section */}
-      <section
-        style={{
-          border: "1px solid #E5E7EB",
-          borderRadius: 12,
-          padding: 16,
-          background: "#FFFFFF",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <div>
-            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Settings workspace</h2>
-            <p
-              style={{
-                marginTop: 0,
-                marginBottom: 0,
-                color: "#64748B",
-                fontSize: 14,
-              }}
-            >
-              Define reusable environments for your stories. These settings can later be converted
-              directly into payloads for your n8n workflows, including base prompts and negative
-              prompts for your T2I / I2I models.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={resetForm}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              border: "1px solid #E5E7EB",
-              background: "#FFFFFF",
-              color: "#4B5563",
-              fontSize: 12,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Clear form
-          </button>
-        </div>
+    <div style={{ paddingBottom: 60 }}>
+      {/* Header (Matching Scene Studio) */}
+      <div style={{ marginBottom: 24, textAlign: "center" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Settings Studio</h2>
+        <p style={{ fontSize: 13, color: "#64748B", margin: 0 }}>
+          Define reusable environments and locations. Create a base setting for your stories.
+        </p>
+      </div>
 
-        <div style={{ display: "grid", gap: 12 }}>
-          {/* Preview panel */}
-          <div
-            style={{
-              marginTop: 12,
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid #CBD5E1",
-              background: "#F9FAFB",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 6,
-              }}
-            >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
-                Live preview
-              </span>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>
-                Uses base prompt, negative prompt, and optional reference image
-              </span>
-            </div>
-            {previewError && (
-              <p
-                style={{
-                  margin: 0,
-                  marginBottom: 6,
-                  fontSize: 11,
-                  color: "#B91C1C",
-                }}
-              >
-                {previewError}
-              </p>
-            )}
-
-            <div
-              style={{
-                marginTop: 6,
-                borderRadius: 8,
-                overflow: "hidden",
-                border: "1px solid #0F172A",
-                background: "#0F172A",
-                minHeight: 180,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {isGenerating ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    padding: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "999px",
-                      border: "3px solid #1F2937",
-                      borderTopColor: "#E5E7EB",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      color: "#E5E7EB",
-                    }}
-                  >
-                    Generating preview image…
-                  </p>
-                </div>
-              ) : previewImageUrl ? (
-                <img
-                  src={previewImageUrl}
-                  alt="Setting preview"
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    height: "auto",
-                    objectFit: "contain",
-                  }}
-                />
-              ) : (
-                !previewError && (
-                  <p
-                    style={{
-                      margin: 16,
-                      fontSize: 11,
-                      color: "#E5E7EB",
-                      textAlign: "center",
-                    }}
-                  >
-                    No preview yet. Enter a base prompt and click {" "}
-                    <strong>Generate new setting</strong> to see a sample render of this
-                    environment.
-                  </p>
-                )
-              )}
-            </div>
-
-            {!isGenerating && previewImageUrl && (
-              <div
-                style={{
-                  marginTop: 8,
-                  display: "flex",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!name.trim() || !basePrompt.trim() || isRegistering}
-                  title={
-                    !name.trim()
-                      ? "Enter a setting name to add this to your library"
-                      : undefined
-                  }
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 999,
-                    border: "1px solid #0F172A",
-                    background: "#0F172A",
-                    color: "#FFFFFF",
-                    fontSize: 12,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ fontSize: 14 }}>＋</span>
-                  <span>
-                    {isRegistering ? "Saving to catalog…" : "Add to saved settings"}
-                  </span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Reference image (optional)
-            </label>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
+      <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+        {/* Form */}
+        <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Create Setting</h3>
+            {name || basePrompt ? (
               <button
                 type="button"
-                onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 999,
-                  border: "1px solid #0F172A",
-                  background: "#0F172A",
-                  color: "#F9FAFB",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
+                onClick={resetForm}
+                style={{ fontSize: 11, color: "#64748B", background: "none", border: "1px solid #E2E8F0", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}
               >
-                Choose file
+                Reset
               </button>
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleReferenceImageUpload}
-              ref={fileInputRef}
-              style={{ display: "none" }}
-            />
-            {uploadError && (
-              <p
+            ) : null}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
+                Setting Name *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Victorian Loft"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 style={{
-                  margin: "4px 0 0",
-                  fontSize: 11,
-                  color: "#B91C1C",
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #E2E8F0",
+                  fontSize: 14,
+                  outline: "none",
+                  background: "#F8FAFC"
                 }}
-              >
-                {uploadError}
-              </p>
-            )}
-          </div>
+              />
+            </div>
 
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Base prompt *
-            </label>
-            <textarea
-              rows={5}
-              placeholder="A high-ceiling loft with exposed beams, large daylight windows, a fabric sectional sofa, bookshelves, plants, framed art, and a wooden coffee table with light clutter..."
-              value={basePrompt}
-              onChange={(e) => setBasePrompt(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
+                Core Prompt *
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Describe the environment..."
+                value={basePrompt}
+                onChange={(e) => setBasePrompt(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #E2E8F0",
+                  fontSize: 14,
+                  outline: "none",
+                  resize: "vertical",
+                  background: "#F8FAFC"
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
+                Mood <span style={{ fontWeight: 400, color: "#94A3B8" }}>(Optional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Cinematic, Gloomy"
+                value={mood}
+                onChange={(e) => setMood(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #E2E8F0",
+                  fontSize: 14,
+                  outline: "none",
+                  background: "#F8FAFC"
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
+                Reference Image <span style={{ fontWeight: 400, color: "#94A3B8" }}>(Optional)</span>
+              </label>
+              <label style={{
+                border: "1px dashed #CBD5E1",
                 borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                resize: "vertical",
-              }}
-            />
+                padding: 16,
+                textAlign: "center",
+                cursor: "pointer",
+                background: "#F8FAFC",
+                display: "block"
+              }}>
+                <span style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>
+                  {uploadStatus || "Click to upload reference"}
+                </span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleReferenceImageUpload}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </div>
           </div>
 
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Negative prompt (optional)
-            </label>
-            <textarea
-              rows={3}
-              placeholder="fisheye warping, surreal lighting, cartoon colors, mirrored symmetry, clutter overload..."
-              value={negativePrompt}
-              onChange={(e) => setNegativePrompt(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                resize: "vertical",
-              }}
-            />
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Mood (optional)
-            </label>
-            <input
-              type="text"
-              placeholder="cozy, cinematic, moody, bright..."
-              value={mood}
-              onChange={(e) => setMood(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-              }}
-            />
-          </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 13,
-                fontWeight: 600,
-                marginBottom: 4,
-              }}
-            >
-              Setting name *
-            </label>
-            <input
-              type="text"
-              placeholder="Loft, Lake platform, Train station..."
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-              }}
-            />
-          </div>
-
-          {error && (
-            <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>{error}</p>
+          {/* Errors & Status */}
+          {(error || uploadError || registerError) && (
+            <div style={{ marginTop: 16, padding: "8px 12px", borderRadius: 6, background: "#FEF2F2", color: "#B91C1C", fontSize: 12 }}>
+              {error || uploadError || registerError}
+            </div>
           )}
-          {registerError && (
-            <p style={{ margin: 0, fontSize: 12, color: "#B91C1C" }}>
-              {registerError}
-            </p>
-          )}
+
           {registerSuccess && (
-            <p style={{ margin: 0, fontSize: 12, color: "#059669" }}>
+            <div style={{ marginTop: 16, padding: "8px 12px", borderRadius: 6, background: "#ECFDF5", color: "#059669", fontSize: 12 }}>
               {registerSuccess}
-            </p>
+            </div>
           )}
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              marginTop: 4,
-              alignItems: "center",
-            }}
-          >
+          <div style={{ marginTop: 24 }}>
             <button
-              type="button"
               onClick={handleGeneratePreview}
               disabled={isGenerating}
               style={{
-                padding: "10px 16px",
+                width: "100%",
+                padding: "12px",
                 borderRadius: 999,
-                border: "1px solid #0F172A",
-                background: "#0F172A",
-                color: "#FFFFFF",
-                fontWeight: 500,
-                fontSize: 13,
-                cursor: isGenerating ? "default" : "pointer",
+                background: isGenerating ? "#94A3B8" : "#000",
+                color: "white",
+                fontWeight: 600,
+                fontSize: 14,
+                border: "none",
+                cursor: isGenerating ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8
               }}
             >
-              {isGenerating ? "Generating new setting…" : "Generate new setting"}
+              {isGenerating && (
+                <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", animation: "spin 1s linear infinite" }} />
+              )}
+              {isGenerating ? "Generating..." : "Generate Preview"}
+            </button>
+
+            <style>{`
+                        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                    `}</style>
+          </div>
+        </section>
+
+        {/* Preview Box */}
+        <div style={{
+          position: "relative",
+          minHeight: 400,
+          background: "#F1F5F9",
+          borderRadius: 8,
+          overflow: "hidden",
+          border: "1px solid #E2E8F0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          {previewImageUrl ? (
+            <div style={{ width: "100%", height: "100%", position: "relative" }}>
+              <img src={previewImageUrl} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "contain", background: "black" }} />
+            </div>
+          ) : (
+            <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#CBD5E1", gap: 12 }}>
+              <div style={{ fontSize: 24 }}>🏔️</div>
+              <div style={{ fontSize: 14 }}>Preview will appear here</div>
+            </div>
+          )}
+
+          {isGenerating && (
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              flexDirection: "column",
+              gap: 12,
+              backdropFilter: "blur(2px)"
+            }}>
+              <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>AI is crafting your setting...</span>
+            </div>
+          )}
+        </div>
+
+        {/* Save Action */}
+        {previewImageUrl && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -16 }}>
+            <button
+              onClick={handleSave}
+              disabled={!name.trim() || isRegistering}
+              style={{
+                padding: "10px 24px",
+                borderRadius: 999,
+                background: !name.trim() ? "#94A3B8" : "#000",
+                color: "white",
+                fontSize: 14,
+                fontWeight: 600,
+                border: "none",
+                cursor: !name.trim() ? "not-allowed" : "pointer",
+              }}
+            >
+              {name.trim() ? "Save Setting" : "Name required"}
             </button>
           </div>
-        </div>
-      </section>
+        )}
 
-      {/* Saved settings list */}
-      <section
-        style={{
-          border: "1px solid #E5E7EB",
-          borderRadius: 12,
-          padding: 16,
-          background: "#FFFFFF",
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: 8 }}>Saved settings</h3>
-        {settings.length === 0 ? (
-          <p style={{ marginTop: 0, color: "#9CA3AF", fontSize: 13 }}>
-            No settings saved yet. Create a setting above to start your environments library.
-          </p>
-        ) : (
-          <div style={{ display: "grid", gap: 10 }}>
-            {settings.map((s) => (
-              <div key={s.id} style={{ display: "grid", gap: 4 }}>
-                <div
-                  style={{
-                    border: "1px solid #E5E7EB",
-                    borderRadius: 10,
-                    padding: 10,
-                    background: "#F9FAFB",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
+        {/* Saved Settings Grid */}
+        <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>Saved Settings</h3>
+          {settings.length === 0 ? (
+            <p style={{ fontSize: 13, color: "#94A3B8" }}>No settings saved yet.</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+              {settings.map(setting => {
+                const thumb = setting.referenceImageUrl || setting.base_hero || setting.base_image_url;
+                return (
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-                    onClick={() => setSelectedSetting(s)}
+                    key={setting.id}
+                    onClick={() => setSelectedSetting(setting)}
+                    style={{
+                      border: "1px solid #E2E8F0",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      background: "#F8FAFC",
+                      cursor: "pointer",
+                      transition: "transform 0.1s ease-in-out"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
                   >
-                    <div
-                      style={{
-                        width: 80,
-                        height: 60,
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        border: "1px solid #E5E7EB",
-                        background: "#E5E7EB",
-                        flexShrink: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {s.referenceImageUrl ? (
-                        <img
-                          src={s.referenceImageUrl}
-                          alt={s.name || "Setting thumbnail"}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                        />
+                    <div style={{ aspectRatio: "16/9", background: "#E2E8F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {thumb ? (
+                        <img src={thumb} alt={setting.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: "#9CA3AF",
-                            padding: 4,
-                            textAlign: "center",
-                          }}
-                        >
-                          No image
-                        </span>
+                        <span style={{ fontSize: 24, opacity: 0.3 }}>🏞️</span>
                       )}
                     </div>
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          fontSize: 14,
-                          marginBottom: 2,
-                        }}
-                      >
-                        {s.name}
+                    <div style={{ padding: 12 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{setting.name}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleModifySetting(setting); }}
+                          style={{ fontSize: 11, color: "#000", background: "none", border: "1px solid #E2E8F0", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+                        >
+                          Modify
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(setting.id); }}
+                          style={{ fontSize: 11, color: "#EF4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(s.id);
-                      }}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #FCA5A5",
-                        background: "#FEF2F2",
-                        color: "#B91C1C",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                {/* expandedId pre block removed */}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
       {selectedSetting && (
         <SettingCard
           setting={selectedSetting}
           onClose={() => setSelectedSetting(null)}
+          onModify={() => handleModifySetting(selectedSetting)}
         />
       )}
     </div>
