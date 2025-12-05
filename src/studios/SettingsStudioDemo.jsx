@@ -552,17 +552,18 @@ export default function SettingsStudioDemo() {
           <div style={{ marginTop: 24 }}>
             <button
               onClick={handleGeneratePreview}
-              disabled={isGenerating}
+              disabled={isGenerating || !name.trim() || !basePrompt.trim()}
+              title={(!name.trim() || !basePrompt.trim()) ? "Please enter a Name and Prompt first" : ""}
               style={{
                 width: "100%",
                 padding: "12px",
                 borderRadius: 999,
-                background: isGenerating ? "#94A3B8" : "#000",
+                background: (isGenerating || !name.trim() || !basePrompt.trim()) ? "#94A3B8" : "#000",
                 color: "white",
                 fontWeight: 600,
                 fontSize: 14,
                 border: "none",
-                cursor: isGenerating ? "not-allowed" : "pointer",
+                cursor: (isGenerating || !name.trim() || !basePrompt.trim()) ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
