@@ -747,7 +747,7 @@ export default function SceneStudioDemo() {
             {/* Scene Name Input */}
             <div style={{ marginBottom: 24 }}>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
-                    Scene Name
+                    Scene Name *
                 </label>
                 <input
                     type="text"
@@ -769,7 +769,7 @@ export default function SceneStudioDemo() {
                 {/* 1. Setting Selector */}
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                        <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>1. Setting</h3>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>1. Setting *</h3>
                         {customBgUrl && (
                             <button
                                 onClick={() => {
@@ -973,7 +973,7 @@ export default function SceneStudioDemo() {
 
                     <div style={{ marginBottom: 20 }}>
                         <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
-                            Scene Description
+                            Scene Description *
                         </label>
                         <textarea
                             rows={3}
