@@ -740,7 +740,7 @@ export default function SceneStudioDemo() {
             <div style={{ marginBottom: 24, textAlign: "center" }}>
                 <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Scene Studio</h2>
                 <p style={{ fontSize: 13, color: "#64748B", margin: 0 }}>
-                    Compose scenes by combining your Settings and Characters.
+                    Compose scene keyframes by combining your Settings, Characters, and uploading Props.
                 </p>
             </div>
 
