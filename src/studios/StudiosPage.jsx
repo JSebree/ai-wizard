@@ -127,7 +127,7 @@ export default function StudiosPage() {
               color: activeTab === "scenes" ? "#111827" : "#6B7280",
             }}
           >
-            Scene
+            Keyframe
           </button>
           <button
             type="button"
@@ -163,7 +163,7 @@ export default function StudiosPage() {
               color: activeTab === "production" ? "#111827" : "#6B7280",
             }}
           >
-            Production
+            Scene
           </button>
         </div>
 

@@ -462,12 +462,12 @@ export default function ClipStudioDemo() {
             {/* Header */}
             <div className="text-center mb-6">
                 <h2 className="text-xl font-bold mb-2">Clip Studio</h2>
-                <p className="text-gray-500 text-sm">Create standard video clips with dialogue and motion.</p>
+                <p className="text-gray-500 text-sm">Transform keyframes into video clips with dialogue and motion.</p>
             </div>
 
-            {/* SCENE SELECTION */}
+            {/* KEYFRAME SELECTION */}
             <section className="mb-12">
-                <h2 className="text-base font-bold text-gray-800 mb-4">1. Select a Scene</h2>
+                <h2 className="text-base font-bold text-gray-800 mb-4">1. Select a Keyframe</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
                     {scenes.map(scene => (
                         <div
@@ -502,7 +502,7 @@ export default function ClipStudioDemo() {
                 <div className="flex flex-col gap-6">
                     {shotList.length === 0 && (
                         <div className="text-center py-12 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
-                            No shots in workshop. Select a scene and click "Add New Shot" to begin.
+                            No clips in workshop. Select a keyframe and click "+ Add New Clip" to begin.
                         </div>
                     )}
                     {shotList.map((shot, index) => {
@@ -653,7 +653,7 @@ export default function ClipStudioDemo() {
                                                 </div>
 
                                                 <div className="flex bg-white rounded-md border border-gray-200 p-0.5">
-                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })} className={`px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"}`}>On Screen</button>
+                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })} className={`px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"}`}>Character</button>
                                                     <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"}`}>Narrator</button>
                                                 </div>
                                             </div>

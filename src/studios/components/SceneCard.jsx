@@ -164,7 +164,7 @@ export default function SceneCard({ scene, onClose, onModify }) {
                                             cursor: "pointer"
                                         }}
                                     >
-                                        Modify Scene
+                                        Modify Keyframe
                                     </button>
                                 </div>
                             </div>

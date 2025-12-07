@@ -737,17 +737,18 @@ export default function SceneStudioDemo() {
     return (
         <div style={{ paddingBottom: 60 }}>
             {/* Introduction / Header */}
-            <div style={{ marginBottom: 24, textAlign: "center" }}>
-                <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px" }}>Scene Studio</h2>
-                <p style={{ fontSize: 13, color: "#64748B", margin: 0 }}>
-                    Compose scene keyframes by combining your Settings, Characters, and uploading Props.
-                </p>
+
+
+            {/* Header */}
+            <div className="text-center mb-6">
+                <h2 className="text-xl font-bold mb-2">Keyframe Studio</h2>
+                <p className="text-gray-500 text-sm">Compose keyframes by combining your Settings, Characters, and uploading Props.</p>
             </div>
 
-            {/* Scene Name Input */}
+            {/* Keyframe Name Input */}
             <div style={{ marginBottom: 24 }}>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
-                    Scene Name *
+                    Keyframe Name *
                 </label>
                 <input
                     type="text"
@@ -787,7 +788,7 @@ export default function SceneStudioDemo() {
                                     fontWeight: 600
                                 }}
                             >
-                                Clear Scene
+                                Clear Keyframe
                             </button>
                         )}
                     </div>
@@ -805,7 +806,7 @@ export default function SceneStudioDemo() {
                                 <img src={customBgUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Custom Ref" />
                             </div>
                             <div>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: "#1E40AF" }}>Modifying {sourceSceneName || "Scene"}</div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#1E40AF" }}>Modifying {sourceSceneName || "Keyframe"}</div>
                                 <div style={{ fontSize: 11, color: "#60A5FA" }}>The Setting selection below is overridden.</div>
                             </div>
                         </div>
@@ -969,11 +970,11 @@ export default function SceneStudioDemo() {
 
                 {/* 3. Action Description */}
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>3. Describe the Scene</h3>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>3. Describe the Keyframe</h3>
 
                     <div style={{ marginBottom: 20 }}>
                         <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#334155" }}>
-                            Scene Description *
+                            Keyframe Description *
                         </label>
                         <textarea
                             rows={3}
@@ -1267,7 +1268,7 @@ export default function SceneStudioDemo() {
                             {isGenerating && (
                                 <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", animation: "spin 1s linear infinite" }} />
                             )}
-                            {isGenerating ? "Generating..." : "Generate Scene"}
+                            {isGenerating ? "Generating..." : "Generate Keyframe"}
                         </button>
                     </div>
 
@@ -1287,7 +1288,7 @@ export default function SceneStudioDemo() {
                         {/* Generated or Composite Preview */}
                         {generatedSceneUrl ? (
                             <div style={{ width: "100%", height: "100%", position: "relative" }}>
-                                <img src={generatedSceneUrl} alt="Generated Scene" style={{ width: "100%", height: "100%", objectFit: "contain", background: "black" }} />
+                                <img src={generatedSceneUrl} alt="Generated Keyframe" style={{ width: "100%", height: "100%", objectFit: "contain", background: "black" }} />
                                 <button
                                     onClick={() => setGeneratedSceneUrl("")}
                                     style={{
@@ -1351,7 +1352,7 @@ export default function SceneStudioDemo() {
                                 backdropFilter: "blur(2px)"
                             }}>
                                 <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-                                <span style={{ fontSize: 13, fontWeight: 500 }}>AI is crafting your scene...</span>
+                                <span style={{ fontSize: 13, fontWeight: 500 }}>AI is crafting your keyframe...</span>
                             </div>
                         )}
                     </div>
@@ -1378,17 +1379,16 @@ export default function SceneStudioDemo() {
                                 cursor: !name.trim() ? "not-allowed" : "pointer",
                             }}
                         >
-                            {name.trim() ? "Save Scene" : "Enter Name to Save"}
+                            {name.trim() ? "Save Keyframe" : "Enter Name to Save"}
                         </button>
                     </div>
                 )}
 
 
-                {/* Saved Scenes List */}
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>Saved Scenes</h3>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>Saved Keyframes</h3>
                     {scenes.length === 0 ? (
-                        <p style={{ fontSize: 13, color: "#94A3B8" }}>No scenes saved yet.</p>
+                        <p style={{ fontSize: 13, color: "#94A3B8" }}>No keyframes saved yet.</p>
                     ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
                             {scenes.map(scene => (
