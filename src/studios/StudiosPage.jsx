@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CharacterStudioDemo from "./CharacterStudioDemo.jsx";
 import SettingsStudioDemo from "./SettingsStudioDemo.jsx";
+
 import SceneStudioDemo from "./SceneStudioDemo.jsx";
+import ClipStudioDemo from "./ClipStudioDemo.jsx";
+import ProductionStudioDemo from "./ProductionStudioDemo.jsx";
 
 export default function StudiosPage() {
   const nav = useNavigate();
@@ -10,7 +13,9 @@ export default function StudiosPage() {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   React.useEffect(() => {
-    if (activeTab) {
+    if (activeTab === "story") {
+      setActiveTab("clips");
+    } else if (activeTab) {
       localStorage.setItem("studios.activeTab", activeTab);
     }
   }, [activeTab]);
@@ -124,6 +129,42 @@ export default function StudiosPage() {
           >
             Scene
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("clips")}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              border: "none",
+              borderBottom:
+                activeTab === "clips" ? "2px solid #111827" : "2px solid transparent",
+              background: "transparent",
+              cursor: "pointer",
+              fontWeight: activeTab === "clips" ? 700 : 500,
+              fontSize: 14,
+              color: activeTab === "clips" ? "#111827" : "#6B7280",
+            }}
+          >
+            Clip
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("production")}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              border: "none",
+              borderBottom:
+                activeTab === "production" ? "2px solid #111827" : "2px solid transparent",
+              background: "transparent",
+              cursor: "pointer",
+              fontWeight: activeTab === "production" ? 700 : 500,
+              fontSize: 14,
+              color: activeTab === "production" ? "#111827" : "#6B7280",
+            }}
+          >
+            Production
+          </button>
         </div>
 
         {/* Tab body */}
@@ -132,8 +173,12 @@ export default function StudiosPage() {
             <CharacterStudioDemo />
           ) : activeTab === "settings" ? (
             <SettingsStudioDemo />
-          ) : (
+          ) : activeTab === "scenes" ? (
             <SceneStudioDemo />
+          ) : activeTab === "clips" ? (
+            <ClipStudioDemo />
+          ) : (
+            <ProductionStudioDemo />
           )}
         </div>
       </section>
