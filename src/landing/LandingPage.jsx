@@ -288,15 +288,17 @@ export default function LandingPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [pendingTemplate, setPendingTemplate] = useState(null);
+  const [nextPath, setNextPath] = useState("/interview");
 
-  function openForm(tpl = null) {
+  function openForm(tpl = null, path = "/interview") {
     setPendingTemplate(tpl);
+    setNextPath(path);
     setShowForm(true);
   }
   function closeForm() {
     setPendingTemplate(null);
     setShowForm(false);
+    setNextPath("/interview"); // Reset
   }
 
   // Prefill if user has already visited
@@ -308,7 +310,7 @@ export default function LandingPage() {
       if (savedEmail) setEmail(savedEmail);
       if (savedFirstName) setFirstName(savedFirstName);
       if (savedLastName) setLastName(savedLastName);
-    } catch {}
+    } catch { }
   }, []);
 
   // Hide the global "Review" button ONLY on the Landing page
@@ -354,10 +356,10 @@ export default function LandingPage() {
     if (!isValidEmail(v)) return alert("Please enter a valid email.");
 
     // Persist user info
-    try { localStorage.setItem(FIRSTNAME_KEY, fName); } catch {}
-    try { localStorage.setItem(LASTNAME_KEY, lName); } catch {}
-    try { localStorage.setItem(EMAIL_KEY, v); } catch {}
-    try { localStorage.setItem("interview_step_v1", "scene"); } catch {}
+    try { localStorage.setItem(FIRSTNAME_KEY, fName); } catch { }
+    try { localStorage.setItem(LASTNAME_KEY, lName); } catch { }
+    try { localStorage.setItem(EMAIL_KEY, v); } catch { }
+    try { localStorage.setItem("interview_step_v1", "scene"); } catch { }
 
     // If a template was chosen, merge user info & proceed via existing logic
     if (pendingTemplate) {
@@ -368,15 +370,17 @@ export default function LandingPage() {
         payload.ui.userLastName = lName;
         payload.ui.userEmail = v;
       }
-      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch {}
+      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch { }
       closeForm();
-      nav("/interview");
+      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch { }
+      closeForm();
+      nav(nextPath);
       return;
     }
 
-    // No template → just go to interview
+    // No template → just go to destination
     closeForm();
-    nav("/interview");
+    nav(nextPath);
   }
 
   function handleUseTemplate(tpl) {
@@ -405,7 +409,7 @@ export default function LandingPage() {
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>SceneMe</h1>
         <p style={{ marginTop: 8, color: "#475569" }}>
-          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Explore the one‑click Express workflow below, or try the new SceneMe Studios (Preview) tools for reusable characters and settings.
+          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Explore the one‑click Express workflow below, or step into the new <strong>SceneMe Studios (Preview)</strong> to build reusable Characters, design immersive Settings, and craft cinematic multi-scene productions.
         </p>
       </header>
 
@@ -422,7 +426,7 @@ export default function LandingPage() {
         >
           <button
             type="button"
-            onClick={() => openForm(null)}
+            onClick={() => openForm(null, "/interview")}
             className="btn btn-primary"
             style={{
               padding: "12px 18px",
@@ -437,7 +441,7 @@ export default function LandingPage() {
           </button>
           <button
             type="button"
-            onClick={() => nav("/studios")}
+            onClick={() => openForm(null, "/studios")}
             className="btn btn-secondary"
             style={{
               padding: "10px 16px",
@@ -457,63 +461,63 @@ export default function LandingPage() {
 
       {/* --- Examples Gallery --- */}
       <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
-            <h2 style={{ marginTop: 0, marginBottom: 12 }}>Get inspired</h2>
-            <p style={{ marginTop: 0, color: "#475569" }}>
-              Explore examples to inspire you—or use them to jump-start your own scene.
-            </p>
+        <h2 style={{ marginTop: 0, marginBottom: 12 }}>Get inspired</h2>
+        <p style={{ marginTop: 0, color: "#475569" }}>
+          Explore examples to inspire you—or use them to jump-start your own scene.
+        </p>
 
-            <div className="examplesGrid">
-              {templates
-                .slice()
-                .sort((a, b) => {
-                  // Enforce strict global order by kind
-                  const ORDER = [
-                    "Documentary",
-                    "Vlog",
-                    "Newscast",
-                    "Podcast",
-                    "Advertisement",
-                    "Storytelling",
-                    "Storybook",
-                  ];
-                  const idx = (k) => {
-                    const i = ORDER.findIndex((s) => s.toLowerCase() === String(k || "").toLowerCase());
-                    return i === -1 ? ORDER.length : i;
-                  };
+        <div className="examplesGrid">
+          {templates
+            .slice()
+            .sort((a, b) => {
+              // Enforce strict global order by kind
+              const ORDER = [
+                "Documentary",
+                "Vlog",
+                "Newscast",
+                "Podcast",
+                "Advertisement",
+                "Storytelling",
+                "Storybook",
+              ];
+              const idx = (k) => {
+                const i = ORDER.findIndex((s) => s.toLowerCase() === String(k || "").toLowerCase());
+                return i === -1 ? ORDER.length : i;
+              };
 
-                  const ai = idx(a.kind);
-                  const bi = idx(b.kind);
-                  if (ai !== bi) return ai - bi;
+              const ai = idx(a.kind);
+              const bi = idx(b.kind);
+              if (ai !== bi) return ai - bi;
 
-                  // Within the same kind, prefer featured items first
-                  if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+              // Within the same kind, prefer featured items first
+              if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
 
-                  // Otherwise preserve original order (stable sort fallback)
-                  return 0;
-                })
-                .map((tpl) => (
-                <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
-                  <video
-                    src={tpl.videoUrl}
-                    controls
-                    style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }}
-                  />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 8px", border: "1px solid #E5E7EB", borderRadius: 999, color: "#334155" }}>
-                      {tpl.kind || "Template"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => openForm(tpl)}
-                      className="btn btn-secondary"
-                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600, fontSize: 12 }}
-                    >
-                      Use as template
-                    </button>
-                  </div>
+              // Otherwise preserve original order (stable sort fallback)
+              return 0;
+            })
+            .map((tpl) => (
+              <div key={tpl.id} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 12, background: "#fff" }}>
+                <video
+                  src={tpl.videoUrl}
+                  controls
+                  style={{ width: "100%", borderRadius: 8, background: "#000", display: "block" }}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 8px", border: "1px solid #E5E7EB", borderRadius: 999, color: "#334155" }}>
+                    {tpl.kind || "Template"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => openForm(tpl)}
+                    className="btn btn-secondary"
+                    style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600, fontSize: 12 }}
+                  >
+                    Use as template
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+        </div>
       </section>
 
 
