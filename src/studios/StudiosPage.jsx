@@ -31,11 +31,8 @@ export default function StudiosPage() {
     >
       <header style={{ marginBottom: 20 }}>
         <h1 style={{ margin: 0 }}>SceneMe Studios (Preview)</h1>
-        <p style={{ marginTop: 8, color: "#475569" }}>
-          Early access tools for building reusable creative assets. Use the Character Studio to
-          define persistent characters, and the Settings Studio to design reusable environments
-          your stories can return to. These are functional preview tools and are not yet wired
-          into the one-click Express video generator.
+        <p style={{ marginTop: 8, color: "#475569", lineHeight: "1.6" }}>
+          Welcome to your new creative workflow. Start by building consistent <b>Characters</b> and <b>Settings</b>, then bring them together into stunning <b>Keyframes</b>. Note those moments, bring them to life in the <b>Clip Studio</b>, and finally, weave it all together into a complete masterpiece in the <b>Scene Studio</b>.
         </p>
         <div
           style={{

@@ -127,8 +127,10 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete }) {
                             {/* Attributes Table */}
                             <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                    <span style={{ fontSize: 13, color: "#64748B" }}>Created</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{dateStr}</span>
+                                    <span style={{ fontSize: 13, color: "#64748B" }}>Audio Status</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: clip.has_audio ? "#16A34A" : "#94A3B8" }}>
+                                        {clip.has_audio ? "🔊 Audio Present" : "🔇 Silent"}
+                                    </span>
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                                     <span style={{ fontSize: 13, color: "#64748B" }}>Duration</span>
@@ -136,7 +138,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete }) {
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                                     <span style={{ fontSize: 13, color: "#64748B" }}>Speaker Type</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>{speakerType?.replace("_", " ")}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>
+                                        {speakerType === 'on_screen' ? 'CHARACTER' : (speakerType || '').replace("_", " ")}
+                                    </span>
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                                     <span style={{ fontSize: 13, color: "#64748B" }}>Motion</span>

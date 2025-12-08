@@ -361,27 +361,31 @@ export default function ClipStudioDemo() {
         });
 
         // Optimistic / Demo Save
-        const newClip = {
-            id: shot.id || `saved_${Date.now()}`,
-            name: shot.name?.trim() || `Untitled Clip ${savedClips.length + 1}`,
-            scene_id: shot.sceneId || selectedScene.id,
-            character_id: shot.dialogueBlocks[0]?.characterId,
-            shot_type: (shot.speakerType === "on_screen") ? "lipsync" : "cinematic",
-            speaker_type: shot.speakerType,
-            video_url: shot.videoUrl,
-            thumbnail_url: shot.sceneImageUrl || selectedScene.image_url || selectedScene.imageUrl,
+        const payload = {
+            id: shot.id || crypto.randomUUID(), // If restoring, might have ID, else new
+            name: shot.name || `Clip ${new Date().toLocaleTimeString()}`,
+            scene_id: selectedScene?.id,
+            scene_name: selectedScene?.name,
+            character_id: shot.dialogueBlocks?.[0]?.characterId || null,
+            thumbnail_url: selectedScene?.image_url || selectedScene?.imageUrl,
+            video_url: shot.videoUrl, // The final rendered video
+            raw_video_url: shot.rawVideoUrl || shot.videoUrl, // Keep raw just in case
+            audio_url: shot.stitchedAudioUrl || null, // The separate audio track if any
             prompt: shot.prompt,
-            duration: finalDuration,
             motion_type: shot.motion,
-            dialogue_blocks: enrichedBlocks, // Use enriched blocks
+            duration: parseFloat(finalDuration),
+            dialogue_blocks: shot.dialogueBlocks || [],
+            speaker_type: shot.speakerType, // 'narrator' or 'on_screen'
             status: "completed",
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            start_delay: shot.startDelay || 0,
+            has_audio: !!shot.stitchedAudioUrl // Explicit flag
         };
 
         if (supabase) {
             const dbId = uuidv4();
             const dbPayload = {
-                ...newClip,
+                ...payload, // Use the new payload
                 id: dbId,
                 created_at: new Date().toISOString(),
                 stitched_audio_url: shot.stitchedAudioUrl,
@@ -635,8 +639,8 @@ export default function ClipStudioDemo() {
 
                                         {/* Audio Controls */}
                                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <div className="flex items-center gap-4">
+                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                                                <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
                                                     <label className="text-xs font-bold text-slate-700 uppercase">{audioSectionLabel}</label>
                                                     <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1">
                                                         <span className="text-[10px] font-bold text-gray-400 uppercase">Start Delay:</span>
@@ -652,9 +656,9 @@ export default function ClipStudioDemo() {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex bg-white rounded-md border border-gray-200 p-0.5">
-                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })} className={`px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"}`}>Character</button>
-                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"}`}>Narrator</button>
+                                                <div className="flex bg-white rounded-md border border-gray-200 p-0.5 w-full md:w-auto">
+                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })} className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"}`}>Character</button>
+                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"}`}>Narrator</button>
                                                 </div>
                                             </div>
 
@@ -771,26 +775,36 @@ export default function ClipStudioDemo() {
                             onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
                             className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-sm"
                         >
-                            <div className="aspect-video bg-black relative">
+                            <div className="aspect-video bg-black relative group">
+                                {/* Badges */}
+                                <div className="absolute top-2 right-2 flex flex-col gap-1 items-end z-10">
+                                    {(clip.has_audio) && <span className="bg-green-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold">AUDIO</span>}
+                                    {(!clip.has_audio) && <span className="bg-black/60 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold">SILENT</span>}
+                                </div>
+                                <div className="absolute top-2 left-2 z-10">
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded shadow font-bold text-white ${clip.speaker_type === 'broll' ? 'bg-blue-600' : 'bg-purple-600'}`}>
+                                        {clip.speaker_type === 'broll' ? 'B-ROLL' : (clip.speaker_type === 'narrator' ? 'NARRATOR' : 'CHARACTER')}
+                                    </span>
+                                </div>
+
                                 <video src={clip.video_url} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                                 <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
-                                    {clip.duration}s
+                                    {Number(clip.duration).toFixed(1)}s
                                 </div>
                             </div>
-                            <div style={{ padding: 10 }}>
-                                <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#0F172A" }}>
-                                    {clip.name || "Untitled Clip"}
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div className="p-2">
+                                <h4 className="font-bold text-xs text-slate-800 truncate mb-2">{clip.name || "Untitled Clip"}</h4>
+                                <div className="flex justify-between items-center gap-2">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleEditClip(clip); }}
-                                        style={{ fontSize: 11, color: "#000", background: "none", border: "1px solid #E2E8F0", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+                                        className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-slate-50 transition-colors"
                                     >
                                         Modify
                                     </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleDeleteClip(clip); }}
-                                        style={{ fontSize: 11, color: "#EF4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                        className="text-[10px] font-bold text-red-500 hover:text-red-600 px-2"
                                     >
                                         Delete
                                     </button>
