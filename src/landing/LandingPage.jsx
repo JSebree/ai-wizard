@@ -288,6 +288,7 @@ export default function LandingPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState(null);
   const [nextPath, setNextPath] = useState("/interview");
 
   function openForm(tpl = null, path = "/interview") {
