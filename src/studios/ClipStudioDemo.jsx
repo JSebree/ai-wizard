@@ -460,44 +460,40 @@ export default function ClipStudioDemo() {
     const saveToBin = useCallback(async (shot, shouldRemove = true) => {
         console.log("Saving Shot to Bin:", shot);
         try {
-            try {
-                // Use totalAudioDuration if locked, ensuring we capture the full stitched length + delay
-                const finalDuration = shot.isAudioLocked
-                    ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
-                    : shot.manualDuration;
+            // Use totalAudioDuration if locked, ensuring we capture the full stitched length + delay
+            const finalDuration = shot.isAudioLocked
+                ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
+                : shot.manualDuration;
 
-                // Enrich dialogue blocks with names for the "Script" view
-                const enrichedBlocks = (shot.dialogueBlocks || []).map(b => {
-                    const char = characters.find(c => c.id === b.characterId);
-                    const regVoice = registryVoices.find(v => v.id === b.characterId);
-                    return {
-                        ...b,
-                        characterName: char?.name || regVoice?.name || "Unknown Speaker"
-                    };
-                });
-
-                // Optimistic / Demo Save
-                const payload = {
-                    id: shot.id, // Prefer existing ID (for updates)
-                    name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
-                    scene_id: selectedKeyframe?.id,
-                    scene_name: selectedKeyframe?.name,
-                    character_id: shot.dialogueBlocks?.[0]?.characterId || null,
-                    thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
-                    video_url: shot.videoUrl || null, // Might be null if pending
-                    raw_video_url: shot.rawVideoUrl || shot.videoUrl,
-                    audio_url: shot.stitchedAudioUrl || null,
-                    prompt: shot.prompt,
-                    motion_type: shot.motion,
-                    duration: parseFloat(finalDuration),
-                    dialogue_blocks: shot.dialogueBlocks || [],
-                    speaker_type: shot.speakerType,
-                    status: shot.status || "completed", // Allow passing 'rendering'
-                    created_at: new Date().toISOString(),
-                    start_delay: shot.startDelay || 0,
-                    has_audio: !!shot.stitchedAudioUrl
+            // Enrich dialogue blocks with names for the "Script" view
+            const enrichedBlocks = (shot.dialogueBlocks || []).map(b => {
+                const char = characters.find(c => c.id === b.characterId);
+                const regVoice = registryVoices.find(v => v.id === b.characterId);
+                return {
+                    ...b,
+                    characterName: char?.name || regVoice?.name || "Unknown Speaker"
                 };
+            });
 
+            // Optimistic / Demo Save
+            const payload = {
+                id: shot.id, // Prefer existing ID (for updates)
+                name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
+                scene_id: selectedKeyframe?.id,
+                scene_name: selectedKeyframe?.name,
+                character_id: shot.dialogueBlocks?.[0]?.characterId || null,
+                thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
+                video_url: shot.videoUrl || null, // Might be null if pending
+                raw_video_url: shot.rawVideoUrl || shot.videoUrl,
+                audio_url: shot.stitchedAudioUrl || null,
+                prompt: shot.prompt,
+                motion_type: shot.motion,
+                duration: parseFloat(finalDuration),
+                dialogue_blocks: shot.dialogueBlocks || [],
+                speaker_type: shot.speakerType,
+                status: shot.status || "completed", // Allow passing 'rendering'
+                created_at: new Date().toISOString(),
+                start_delay: shot.startDelay || 0,
                 has_audio: !!shot.stitchedAudioUrl // Explicit flag
             };
 
