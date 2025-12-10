@@ -41,13 +41,7 @@ export default function ProductionStudioDemo() {
 
     const videoRef = useRef(null);
 
-    // Music Categories from InterviewPage
-    const MUSIC_CATEGORIES = [
-        "Rock Instrumental", "Jazz Instrumental", "Hip-Hop / Trap Beat", "Orchestral / Cinematic",
-        "Lo-Fi / Chillhop", "EDM / House", "Ambient / Soundscape", "Reggae / Dub", "Funk / Groove",
-        "Country / Folk", "Blues", "Metal", "Techno", "Latin / Salsa", "R&B / Soul", "Gospel",
-        "Indian Classical / Sitar", "African Percussion", "Celtic / Folk", "Synthwave / Retro"
-    ];
+
 
     // Load Data (Clips + Saved Scenes)
     useEffect(() => {
@@ -236,16 +230,13 @@ export default function ProductionStudioDemo() {
     const generateAiMusic = async () => {
         try {
             const durationToUse = (typeof totalDuration === 'number' && !isNaN(totalDuration) && totalDuration > 0) ? totalDuration : 30;
-            const style = musicStyle || "Cinematic, Epic, Orchestral";
+            // Use the text area value directly as the prompt
+            const prompt = (musicStyle || "Cinematic, Epic, Orchestral").trim();
 
-            let prompt = "Cinematic";
-            try {
-                prompt = window.prompt("Enter mood/style for AI Music:", style) || style;
-            } catch (e) {
-                console.warn("Prompt failed, using default", e);
+            if (!prompt) {
+                alert("Please describe the desired music style first.");
+                return;
             }
-
-            if (!prompt) return;
 
             setIsGeneratingMusic(true);
             console.log("Generating Music...", { prompt, duration: durationToUse });
@@ -629,38 +620,33 @@ export default function ProductionStudioDemo() {
                         {/* Audio Section */}
                         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
                             <h3 className="text-xs font-bold text-gray-800 mb-2 uppercase tracking-wider">Background Music</h3>
-                            <div className="flex gap-2 mb-2">
-                                <select
-                                    className="flex-1 p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-black focus:ring-1 focus:ring-black transition-all bg-slate-50"
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setMusicStyle(val === "none" ? "" : val);
 
-                                        // If "None" is selected, explicitly clear the track.
-                                        if (val === "none") {
-                                            setAudioTrack(null);
-                                        }
-                                        // If selecting a category (not none), we might want to clear old generated track?
-                                        // Existing logic:
-                                        else if (!audioTrack || !audioTrack.id.startsWith("gen-")) {
-                                            setAudioTrack(null);
-                                        }
-                                    }}
-                                    value={musicStyle || "none"}
-                                >
-                                    <option value="none">None</option>
-                                    {MUSIC_CATEGORIES.map(cat => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                    ))}
-                                </select>
-                                <button
-                                    onClick={generateAiMusic}
-                                    disabled={isGeneratingMusic || !musicStyle}
-                                    className="bg-black text-white p-2 rounded-lg text-xs font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center min-w-[50px] transition-colors"
-                                    title={!musicStyle ? "Select a Music Style first" : "Generate AI Music based on scene duration"}
-                                >
-                                    {isGeneratingMusic ? <span className="animate-spin">◌</span> : "✨ AI"}
-                                </button>
+                            {/* Text Input for Custom Description */}
+                            <div className="flex flex-col gap-2 mb-2">
+                                <div className="flex gap-2">
+                                    <textarea
+                                        className="flex-1 p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-black focus:ring-1 focus:ring-black transition-all bg-slate-50 min-h-[60px] resize-none"
+                                        placeholder="Describe the background music (e.g., 'Sad piano melody', 'Upbeat rock', 'Lo-Fi beat for study')..."
+                                        value={musicStyle}
+                                        onChange={(e) => setMusicStyle(e.target.value)}
+                                    />
+                                    <button
+                                        onClick={generateAiMusic}
+                                        disabled={isGeneratingMusic || !musicStyle.trim()}
+                                        className="bg-black text-white p-2 rounded-lg text-xs font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center min-w-[60px] transition-colors"
+                                        title={!musicStyle.trim() ? "Describe music style first" : "Generate AI Music"}
+                                    >
+                                        {isGeneratingMusic ? <span className="animate-spin">◌</span> : "✨ Generate"}
+                                    </button>
+                                </div>
+                                {musicStyle && (
+                                    <button
+                                        onClick={() => { setMusicStyle(""); setAudioTrack(null); }}
+                                        className="self-end px-2 py-1 text-[10px] bg-red-50 hover:bg-red-100 text-red-600 rounded-full border border-red-200 transition-colors whitespace-nowrap"
+                                    >
+                                        ✕ Clear
+                                    </button>
+                                )}
                             </div>
 
                             {/* Generated Audio Player - Checking URL existence instead of just ID pattern */}
