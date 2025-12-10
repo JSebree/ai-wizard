@@ -35,6 +35,10 @@ export default function ProductionStudioDemo() {
     const [burnCaptions, setBurnCaptions] = useState(false); // Default No Captions
     const [isGeneratingMusic, setIsGeneratingMusic] = useState(false);
 
+    // Custom Delete State
+    const [sceneToDelete, setSceneToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     const videoRef = useRef(null);
 
     // Music Categories from InterviewPage
@@ -418,6 +422,34 @@ export default function ProductionStudioDemo() {
         }
     };
 
+    // DELETE HANDLERS
+    const handleDeleteScene = (scene) => {
+        setSceneToDelete(scene);
+    };
+
+    const handleConfirmDelete = async () => {
+        const scene = sceneToDelete;
+        if (!scene) return;
+
+        setIsDeleting(true);
+        try {
+            setSavedScenes(prev => prev.filter(s => s.id !== scene.id));
+            if (supabase) {
+                await supabase.from("productions").delete().eq("id", scene.id);
+            }
+            // If deleting the viewed project, close the modal
+            if (selectedViewProject && selectedViewProject.id === scene.id) {
+                setSelectedViewProject(null);
+            }
+        } catch (error) {
+            console.error("Delete Error:", error);
+            alert("Failed to delete scene.");
+        } finally {
+            setIsDeleting(false);
+            setSceneToDelete(null);
+        }
+    };
+
     // derived
     const currentClip = timeline[currentClipIndex];
 
@@ -527,14 +559,15 @@ export default function ProductionStudioDemo() {
                                     <img src={shot.thumbnailUrl} className="w-full h-full object-cover pointer-events-none" />
                                     {/* Visual Badges */}
                                     <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
-                                        {(shot.hasAudio) && <span className="bg-green-500 text-white text-[8px] px-1 rounded shadow">AUDIO</span>}
-                                        {(!shot.hasAudio) && <span className="bg-gray-800/80 text-white text-[8px] px-1 rounded shadow">SILENT</span>}
+                                        {shot.hasAudio ? (
+                                            (shot.type === 'on_screen' || shot.type === 'character')
+                                                ? <span className="bg-green-500/90 backdrop-blur-sm px-1.5 py-0.5 rounded shadow text-[12px] text-white" title="Lipsync">👄</span>
+                                                : <span className="bg-green-500/90 backdrop-blur-sm px-1.5 py-0.5 rounded shadow text-[12px] text-white" title="Narrator">🔊</span>
+                                        ) : (
+                                            <span className="bg-green-500/90 backdrop-blur-sm px-1.5 py-0.5 rounded shadow text-[12px] text-white" title="Silent">🔇</span>
+                                        )}
                                     </div>
-                                    <div className="absolute top-1 left-1">
-                                        <span className={`text-[8px] px-1 rounded shadow text-white ${shot.type === 'broll' ? 'bg-blue-600' : 'bg-purple-600'}`}>
-                                            {shot.type === 'broll' ? 'B-ROLL' : (shot.type === 'narrator' ? 'NARRATOR' : 'CHARACTER')}
-                                        </span>
-                                    </div>
+
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
                                         <span className="text-white opacity-0 group-hover:opacity-100 font-bold text-xl">+</span>
                                     </div>
@@ -797,10 +830,7 @@ export default function ProductionStudioDemo() {
                             <ProjectThumbnail
                                 key={scene.id}
                                 scene={scene}
-                                onDelete={async (id) => {
-                                    setSavedScenes(prev => prev.filter(s => s.id !== id));
-                                    if (supabase) await supabase.from("productions").delete().eq("id", id);
-                                }}
+                                onDelete={() => handleDeleteScene(scene)}
                                 onLoad={(s) => loadScene(s)}
                                 onClick={() => setSelectedViewProject(scene)}
                             />
@@ -817,14 +847,52 @@ export default function ProductionStudioDemo() {
                             loadScene(s);
                             setSelectedViewProject(null);
                         }}
-                        onDelete={async (id) => {
-                            setSavedScenes(prev => prev.filter(s => s.id !== id));
-                            if (supabase) await supabase.from("productions").delete().eq("id", id);
-                            setSelectedViewProject(null);
-                        }}
+                        onDelete={() => handleDeleteScene(selectedViewProject)}
                     />
                 )}
             </div>
+
+            {/* Custom Delete Confirmation Modal */}
+            {sceneToDelete && (
+                <div style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    background: "rgba(0,0,0,0.5)", zIndex: 100,
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                }} onClick={() => setSceneToDelete(null)}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+                        <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+                            Are you sure you want to delete this scene? This action cannot be undone.
+                        </p>
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                            <button
+                                onClick={() => setSceneToDelete(null)}
+                                disabled={isDeleting}
+                                style={{
+                                    padding: "8px 16px", borderRadius: 6,
+                                    border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                                    fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                                    opacity: isDeleting ? 0.5 : 1
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                                style={{
+                                    padding: "8px 16px", borderRadius: 6,
+                                    border: "none", background: "#EF4444", color: "white",
+                                    fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                                    opacity: isDeleting ? 0.7 : 1
+                                }}
+                            >
+                                {isDeleting ? "Deleting..." : "Delete"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

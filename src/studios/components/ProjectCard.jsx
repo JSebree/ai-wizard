@@ -167,12 +167,10 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
                                 </a>
                             )}
                             <button
-                                onClick={() => {
-                                    if (confirm("Delete this scene permanently?")) {
-                                        onDelete(id);
-                                        onClose();
-                                    }
-                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(scene.id);
+                                }}            // onClose(); // Let parent handle closing if needed, or keep. Parent handler logic closes modal if matched.
                                 className="flex-1 bg-white border border-red-200 text-red-600 font-bold py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm"
                             >
                                 <span>×</span> Delete

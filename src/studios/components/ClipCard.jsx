@@ -254,7 +254,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (confirm("Are you sure you want to delete this clip?")) onDelete(clip.id);
+                                            onDelete(clip);
                                         }}
                                         style={{
                                             padding: "8px 16px",

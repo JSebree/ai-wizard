@@ -20,6 +20,8 @@ export default function ClipStudioDemo() {
     const [shotList, setShotList] = useState([]); // Array of shots being drafted
     const [savedClips, setSavedClips] = useState([]); // Array of saved clips
     const [previewShot, setPreviewShot] = useState(null); // For modal preview
+    const [clipToDelete, setClipToDelete] = useState(null); // Custom delete workflow
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // --- Data Fetching ---
     useEffect(() => {
@@ -424,7 +426,7 @@ export default function ClipStudioDemo() {
                 scene_id: selectedKeyframe?.id,
                 scene_name: selectedKeyframe?.name,
                 character_id: shot.dialogueBlocks?.[0]?.characterId || null,
-                thumbnail_url: selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
+                thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
                 video_url: shot.videoUrl, // The final rendered video
                 raw_video_url: shot.rawVideoUrl || shot.videoUrl, // Keep raw just in case
                 audio_url: shot.stitchedAudioUrl || null, // The separate audio track if any
@@ -487,29 +489,45 @@ export default function ClipStudioDemo() {
     }, [updateShot, removeShot, selectedKeyframe, savedClips.length]);
 
     // DELETE LOGIC
-    const handleDeleteClip = async (clip) => {
-        const newSaved = savedClips.filter(c => c.id !== clip.id);
-        setSavedClips(newSaved);
+    // DELETE LOGIC
+    const handleDeleteClip = (clip) => {
+        setClipToDelete(clip);
+    };
 
-        if (supabase && clip.id && !String(clip.id).startsWith("saved_")) {
-            await supabase.from("shots").delete().eq("id", clip.id);
+    const handleConfirmDelete = async () => {
+        const clip = clipToDelete;
+        if (!clip) return;
+
+        setIsDeleting(true);
+        try {
+            const newSaved = savedClips.filter(c => c.id !== clip.id);
+            setSavedClips(newSaved);
+
+            if (supabase && clip.id && !String(clip.id).startsWith("saved_")) {
+                await supabase.from("clips").delete().eq("id", clip.id);
+            }
+        } catch (error) {
+            console.error("Delete Error:", error);
+            alert("Failed to delete clip.");
+        } finally {
+            setIsDeleting(false);
+            setClipToDelete(null);
         }
     };
 
     // EDIT LOGIC
     const handleEditClip = (clip) => {
         // Restore clip data to "workshop" (Story Studio context)
-        if (!selectedKeyframe) {
-            const scene = keyframes.find(s => s.id === clip.scene_id);
-            if (scene) setSelectedKeyframe(scene);
-        }
+        // Restore clip data to "workshop" (Story Studio context)
+        const scene = keyframes.find(s => s.id === clip.scene_id);
+        if (scene) setSelectedKeyframe(scene);
 
         const restoredShot = {
             id: `restored_${Date.now()} `,
             tempId: Date.now(),
             name: clip.name ? `${clip.name} (Remix)` : "", // Auto-append Remix
             sceneId: clip.scene_id,
-            sceneImageUrl: clip.thumbnail_url,
+            sceneImageUrl: scene?.image_url || clip.thumbnail_url || clip.image_url, // Prefer live keyframe image to "heal" broken thumbnails
             prompt: clip.prompt,
             motion: clip.motion_type || "static",
             manualDuration: clip.duration || 3,
@@ -530,7 +548,7 @@ export default function ClipStudioDemo() {
             startDelay: clip.start_delay || 0,
         };
 
-        setShotList(prev => [...prev, restoredShot]);
+        setShotList(prev => [restoredShot, ...prev]); // Prepend restored clip
         setPreviewShot(null);
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -626,13 +644,14 @@ export default function ClipStudioDemo() {
                                     />
                                 </div>
 
+
                                 <div className="flex flex-col md:flex-row gap-8 mt-4">
                                     {/* LEFT: PREVIEW & ACTIONS */}
                                     <div className="w-full md:w-1/3 flex flex-col gap-4">
                                         <div className="aspect-video bg-gray-200 rounded-lg overflow-hidden relative group">
                                             {(shot.videoUrl && (shot.status === 'preview_ready' || shot.status === 'completed')) ? (
                                                 <>
-                                                    <video src={shot.videoUrl} className="w-full h-full object-cover" />
+                                                    <video src={shot.videoUrl} poster={shot.thumbnail_url} className="w-full h-full object-cover" />
                                                     <button onClick={() => setPreviewShot(shot)} className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-4xl opacity-0 hover:opacity-100 transition-opacity">▶</button>
                                                 </>
                                             ) : (
@@ -863,7 +882,9 @@ export default function ClipStudioDemo() {
 
             {/* SAVED CLIPS */}
             <section className="mt-12 pt-12 border-t border-gray-100">
-                <h3 className="text-base font-bold mb-6">Saved Clips</h3>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-base font-bold text-gray-800">Saved Clips</h3>
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
                     {savedClips.map(clip => (
                         <div
@@ -927,112 +948,159 @@ export default function ClipStudioDemo() {
             </section>
 
             {/* PREVIEW MODAL */}
-            {previewShot && (
-                previewShot.status === 'completed' || (String(previewShot.id).startsWith("saved_") || previewShot.created_at) ? (
-                    <ClipCard
-                        clip={previewShot}
-                        onClose={() => setPreviewShot(null)}
-                        onEdit={handleEditClip}
-                        onDelete={handleDeleteClip}
-                        onGenerateKeyframe={async (clip, blob) => {
-                            // Removed confirm dialog to prevent blocking issues
-                            console.log("PARENT: onGenerateKeyframe called with blob size:", blob?.size);
+            {
+                previewShot && (
+                    previewShot.status === 'completed' || (String(previewShot.id).startsWith("saved_") || previewShot.created_at) ? (
+                        <ClipCard
+                            clip={previewShot}
+                            onClose={() => setPreviewShot(null)}
+                            onEdit={handleEditClip}
+                            onDelete={handleDeleteClip}
+                            onGenerateKeyframe={async (clip, blob) => {
+                                // Removed confirm dialog to prevent blocking issues
+                                console.log("PARENT: onGenerateKeyframe called with blob size:", blob?.size);
 
-                            if (!blob) {
-                                alert("Error: No image captured from video.");
-                                return;
-                            }
-
-                            try {
-                                const filename = `${Date.now()}_${clip.id}_end.png`;
-                                console.log("Uploading via Webhook (kind='scene'):", filename);
-
-                                const formData = new FormData();
-                                formData.append("file", blob, filename);
-                                formData.append("name", "Frame Capture: " + clip.name);
-                                formData.append("kind", "scene"); // Mapping to 'scenes' folder recommendation
-
-                                const uploadRes = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
-                                    method: "POST",
-                                    body: formData
-                                });
-
-                                if (!uploadRes.ok) {
-                                    throw new Error(`Upload Webhook Failed: ${uploadRes.status}`);
+                                if (!blob) {
+                                    alert("Error: No image captured from video.");
+                                    return;
                                 }
 
-                                const uploadData = await uploadRes.json();
-                                console.log("Upload Webhook Response:", uploadData);
+                                try {
+                                    const filename = `${Date.now()}_${clip.id}_end.png`;
+                                    console.log("Uploading via Webhook (kind='scene'):", filename);
 
-                                // Robust URL extraction
-                                const publicUrl = uploadData.publicUrl || uploadData.url || uploadData.image_url || (Array.isArray(uploadData) && uploadData[0]?.url);
+                                    const formData = new FormData();
+                                    formData.append("file", blob, filename);
+                                    formData.append("name", "Frame Capture: " + clip.name);
+                                    formData.append("kind", "scene"); // Mapping to 'scenes' folder recommendation
 
-                                if (!publicUrl) {
-                                    throw new Error("No URL returned from upload webhook");
-                                }
-                                console.log("Public URL generated:", publicUrl);
+                                    const uploadRes = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
+                                        method: "POST",
+                                        body: formData
+                                    });
 
-                                const newKeyframePayload = {
-                                    name: `${clip.name} ext`,
-                                    prompt: clip.prompt || "Captured end frame",
-                                    image_url: publicUrl,
-                                    character_id: clip.character_id,
-                                    setting_id: clip.setting_id,
-                                    created_at: new Date().toISOString()
-                                };
-                                console.log("Inserting into DB:", newKeyframePayload);
+                                    if (!uploadRes.ok) {
+                                        throw new Error(`Upload Webhook Failed: ${uploadRes.status}`);
+                                    }
 
-                                const { data: insertData, error: insertError } = await supabase
-                                    .from('keyframes')
-                                    .insert([newKeyframePayload])
-                                    .select();
+                                    const uploadData = await uploadRes.json();
+                                    console.log("Upload Webhook Response:", uploadData);
 
-                                if (insertError) {
-                                    console.error("Supabase DB Error:", insertError);
-                                    throw new Error(`Database insert failed: ${insertError.message}`);
-                                }
-                                console.log("DB Insert successful:", insertData);
+                                    // Robust URL extraction
+                                    const publicUrl = uploadData.publicUrl || uploadData.url || uploadData.image_url || (Array.isArray(uploadData) && uploadData[0]?.url);
 
-                                // alert("Success! New keyframe created."); // Fail silently/smoothly for better UX? Or toast? User said "Perfect!", assumes alert was fine, but let's make it smoother for flow.
-                                // Actually, user wants to go directly to workshop, so alert might interpret flow.
+                                    if (!publicUrl) {
+                                        throw new Error("No URL returned from upload webhook");
+                                    }
+                                    console.log("Public URL generated:", publicUrl);
 
-                                if (insertData && insertData[0]) {
-                                    const s = insertData[0];
-                                    const formattedKeyframe = {
-                                        id: s.id,
-                                        name: s.name,
-                                        image_url: s.image_url,
-                                        imageUrl: s.image_url, // Dual support
-                                        characterId: s.character_id,
-                                        description: s.prompt
+                                    const newKeyframePayload = {
+                                        name: `${clip.name} ext`,
+                                        prompt: clip.prompt || "Captured end frame",
+                                        image_url: publicUrl,
+                                        character_id: clip.character_id,
+                                        setting_id: clip.setting_id,
+                                        created_at: new Date().toISOString()
                                     };
+                                    console.log("Inserting into DB:", newKeyframePayload);
 
-                                    setKeyframes(prev => [formattedKeyframe, ...prev]);
+                                    const { data: insertData, error: insertError } = await supabase
+                                        .from('keyframes')
+                                        .insert([newKeyframePayload])
+                                        .select();
 
-                                    // AUTO-NAVIGATE WORKFLOW
-                                    setSelectedKeyframe(formattedKeyframe); // Select it for context
-                                    addShot(formattedKeyframe); // Auto-add to workshop
-                                    setPreviewShot(null); // Close the preview modal
-                                    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to workshop
+                                    if (insertError) {
+                                        console.error("Supabase DB Error:", insertError);
+                                        throw new Error(`Database insert failed: ${insertError.message}`);
+                                    }
+                                    console.log("DB Insert successful:", insertData);
+
+                                    // alert("Success! New keyframe created."); // Fail silently/smoothly for better UX? Or toast? User said "Perfect!", assumes alert was fine, but let's make it smoother for flow.
+                                    // Actually, user wants to go directly to workshop, so alert might interpret flow.
+
+                                    if (insertData && insertData[0]) {
+                                        const s = insertData[0];
+                                        const formattedKeyframe = {
+                                            id: s.id,
+                                            name: s.name,
+                                            image_url: s.image_url,
+                                            imageUrl: s.image_url, // Dual support
+                                            characterId: s.character_id,
+                                            description: s.prompt
+                                        };
+
+                                        setKeyframes(prev => [formattedKeyframe, ...prev]);
+
+                                        // AUTO-NAVIGATE WORKFLOW
+                                        setSelectedKeyframe(formattedKeyframe); // Select it for context
+                                        addShot(formattedKeyframe); // Auto-add to workshop
+                                        setPreviewShot(null); // Close the preview modal
+                                        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to workshop
+                                    }
+
+                                } catch (err) {
+                                    console.error("Error generating keyframe:", err);
+                                    alert("Failed to save keyframe: " + err.message);
                                 }
+                            }}
+                        />
+                    ) : (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewShot(null)}>
+                            <div className="w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                                <video src={previewShot.video_url || previewShot.videoUrl} controls className="w-full h-auto max-h-[80vh]" />
+                                <div className="absolute top-4 right-4">
+                                    <button onClick={() => setPreviewShot(null)} className="text-white text-2xl font-bold hover:text-gray-300">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                )
+            }
 
-                            } catch (err) {
-                                console.error("Error generating keyframe:", err);
-                                alert("Failed to save keyframe: " + err.message);
-                            }
-                        }}
-                    />
-                ) : (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewShot(null)}>
-                        <div className="w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                            <video src={previewShot.video_url || previewShot.videoUrl} controls className="w-full h-auto max-h-[80vh]" />
-                            <div className="absolute top-4 right-4">
-                                <button onClick={() => setPreviewShot(null)} className="text-white text-2xl font-bold hover:text-gray-300">×</button>
+
+            {/* Custom Delete Confirmation Modal */}
+            {
+                clipToDelete && (
+                    <div style={{
+                        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                        background: "rgba(0,0,0,0.5)", zIndex: 100,
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                    }} onClick={() => setClipToDelete(null)}>
+                        <div onClick={e => e.stopPropagation()} style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+                            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+                                Are you sure you want to delete this clip? This action cannot be undone.
+                            </p>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                                <button
+                                    onClick={() => setClipToDelete(null)}
+                                    disabled={isDeleting}
+                                    style={{
+                                        padding: "8px 16px", borderRadius: 6,
+                                        border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                                        fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                                        opacity: isDeleting ? 0.5 : 1
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmDelete}
+                                    disabled={isDeleting}
+                                    style={{
+                                        padding: "8px 16px", borderRadius: 6,
+                                        border: "none", background: "#EF4444", color: "white",
+                                        fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                                        opacity: isDeleting ? 0.7 : 1
+                                    }}
+                                >
+                                    {isDeleting ? "Deleting..." : "Delete"}
+                                </button>
                             </div>
                         </div>
                     </div>
                 )
-            )}
-        </div>
+            }
+        </div >
     );
 }

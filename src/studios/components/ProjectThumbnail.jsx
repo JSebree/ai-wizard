@@ -87,7 +87,7 @@ export default function ProjectThumbnail({ scene, onDelete, onLoad, onClick }) {
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm("Delete this scene?")) onDelete(scene.id);
+                            onDelete(scene.id);
                         }}
                         className="text-gray-400 hover:text-red-500 transition-colors p-1"
                         title="Delete Scene"
