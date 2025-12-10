@@ -479,9 +479,9 @@ export default function ClipStudioDemo() {
             const payload = {
                 id: shot.id, // Prefer existing ID (for updates)
                 name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
-                scene_id: selectedKeyframe?.id,
-                scene_name: selectedKeyframe?.name,
-                character_id: shot.dialogueBlocks?.[0]?.characterId || null,
+                scene_id: shot.sceneId || selectedKeyframe?.id,
+                scene_name: shot.sceneName || selectedKeyframe?.name || "Unknown Scene",
+                character_id: shot.dialogueBlocks?.[0]?.characterId || shot.characterId || null,
                 thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
                 video_url: shot.videoUrl || null, // Might be null if pending
                 raw_video_url: shot.rawVideoUrl || shot.videoUrl,
@@ -562,7 +562,7 @@ export default function ClipStudioDemo() {
             console.error("Save to Bin Execution Error:", err);
             alert("Unexpected error saving clip: " + err.message);
         }
-    }, [updateShot, removeShot, selectedKeyframe, savedClips.length]);
+    }, [updateShot, removeShot, selectedKeyframe, savedClips.length, characters, registryVoices]);
 
     // DELETE LOGIC
     // DELETE LOGIC
