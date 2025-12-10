@@ -1,16 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../libs/supabaseClient";
 import SettingCard from "./components/SettingCard";
+import { API_CONFIG } from "../config/api";
 
 const STORAGE_KEY = "sceneme.settings";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
 
 export default function SettingsStudioDemo() {
   const [name, setName] = useState("");
@@ -34,11 +27,12 @@ export default function SettingsStudioDemo() {
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [settingToDelete, setSettingToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load saved settings from Supabase or localStorage on mount, and poll for updates
-  useEffect(() => {
-    let cancelled = false;
-
+  // Load saved settings from Supabase or localStorage on mount, and poll for updates
+  const fetchSettings = useCallback(async () => {
     const loadFromLocalStorage = () => {
       try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -52,72 +46,63 @@ export default function SettingsStudioDemo() {
       }
     };
 
-    const loadFromSupabase = async () => {
-      // If Supabase client is not configured, fall back to localStorage
-      if (!supabase) {
-        loadFromLocalStorage();
-        return;
-      }
+    // If Supabase client is not configured, fall back to localStorage
+    if (!supabase) {
+      loadFromLocalStorage();
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("setting")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      if (!Array.isArray(data)) return;
+
+      const mapped = data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        basePrompt: row.core_prompt,
+        negativePrompt: null,
+        mood: row.mood,
+        referenceImageUrl: row.base_image_url,
+        base_image_url: row.base_image_url,
+        base_hero: row.base_hero,
+        scene_n: row.scene_n,
+        scene_ne: row.scene_ne,
+        scene_e: row.scene_e,
+        scene_se: row.scene_se,
+        scene_s: row.scene_s,
+        scene_sw: row.scene_sw,
+        scene_w: row.scene_w,
+        scene_nw: row.scene_nw,
+        establishing_overhead: row.establishing_overhead,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+
+      setSettings(mapped);
 
       try {
-        const { data, error } = await supabase
-          .from("setting")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-        if (!Array.isArray(data) || cancelled) return;
-
-        const mapped = data.map((row) => ({
-          id: row.id,
-          name: row.name,
-          basePrompt: row.core_prompt,
-          negativePrompt: null,
-          mood: row.mood,
-          referenceImageUrl: row.base_image_url,
-          base_image_url: row.base_image_url,
-          base_hero: row.base_hero,
-          scene_n: row.scene_n,
-          scene_ne: row.scene_ne,
-          scene_e: row.scene_e,
-          scene_se: row.scene_se,
-          scene_s: row.scene_s,
-          scene_sw: row.scene_sw,
-          scene_w: row.scene_w,
-          scene_nw: row.scene_nw,
-          establishing_overhead: row.establishing_overhead,
-          status: row.status,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-        }));
-
-        setSettings(mapped);
-
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
-        } catch (e) {
-          console.warn("Failed to save settings to localStorage", e);
-        }
-      } catch (err) {
-        console.error("Failed to load settings from Supabase", err);
-        // On error, fall back to whatever is in localStorage
-        loadFromLocalStorage();
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+      } catch (e) {
+        console.warn("Failed to save settings to localStorage", e);
       }
-    };
-
-    // Initial load
-    loadFromSupabase();
-
-    // Poll every 20 seconds so new expanded views appear automatically
-    const intervalId = window.setInterval(() => {
-      loadFromSupabase();
-    }, 20000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
+    } catch (err) {
+      console.error("Failed to load settings from Supabase", err);
+      // On error, fall back to whatever is in localStorage
+      loadFromLocalStorage();
+    }
   }, []);
+
+  useEffect(() => {
+    fetchSettings();
+    const intervalId = window.setInterval(fetchSettings, 20000);
+    return () => window.clearInterval(intervalId);
+  }, [fetchSettings]);
 
   const persistSettings = (next) => {
     setSettings(next);
@@ -176,7 +161,7 @@ export default function SettingsStudioDemo() {
     try {
       const endpoint =
         import.meta.env.VITE_REGISTER_SETTING_URL ||
-        "https://n8n.simplifies.click/webhook/webhook/register-setting";
+        API_CONFIG.REGISTER_SETTING;
 
       const payload = {
         id,
@@ -225,7 +210,7 @@ export default function SettingsStudioDemo() {
       try {
         const endpoint =
           import.meta.env.VITE_UPLOAD_REFERENCE_URL ||
-          "https://n8n.simplifies.click/webhook/upload-reference-image";
+          API_CONFIG.UPLOAD_REFERENCE_IMAGE;
         if (!endpoint) {
           throw new Error(
             "Upload endpoint is not configured (VITE_UPLOAD_REFERENCE_URL)."
@@ -318,23 +303,49 @@ export default function SettingsStudioDemo() {
 
     // 1) Register this setting in the shared registry (Supabase)
     try {
-      await registerSettingInRegistry({
+      // Note: registerSettingInRegistry helper might need refactoring to return ID, or we modify it here.
+      // Actually, let's verify registerSettingInRegistry implementation below. 
+      // It calls fetch but doesn't return the ID. 
+      // I will inline the fetch here or modify the helper. 
+      // Inlining is safer for this specific fix.
+
+      const endpoint = import.meta.env.VITE_REGISTER_SETTING_URL || API_CONFIG.REGISTER_SETTING;
+      const payload = {
         id,
         name: safeName,
-        corePrompt: rawPrompt,
-        mood: rawMood,
-        baseImageUrl: imageUrl,
+        core_prompt: rawPrompt,
+        mood: rawMood || null,
+        base_image_url: imageUrl,
+        kind: "setting",
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
+
+      if (!res.ok) throw new Error("Registry call failed");
+
+      const data = await res.json().catch(() => ({}));
+      const realId = data.id || data.uuid || data.setting_id;
+
+      if (realId) {
+        console.log("Received real ID from registry:", realId);
+        setSettings(prev => prev.map(s => s.id === id ? { ...s, id: realId } : s));
+      }
+
+      setRegisterSuccess("Setting successfully added.");
+
     } catch (err) {
-      // registerSettingInRegistry already sets error state; don't block expansion on failure
-      console.error("Registry registration failed (continuing to expansion):", err);
+      console.error("Registry registration failed:", err);
     }
 
-    // 2) Fire-and-forget expansion workflow in n8n so it can render additional views
+    // 2) Fire-and-forget expansion workflow
     try {
       const expansionEndpoint =
         import.meta.env.VITE_SETTING_EXPANSION_URL ||
-        "https://n8n.simplifies.click/webhook/generate-setting-expansion";
+        API_CONFIG.GENERATE_SETTING_EXPANSION;
 
       const expansionPayload = {
         id,
@@ -348,13 +359,17 @@ export default function SettingsStudioDemo() {
 
       void fetch(expansionEndpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(expansionPayload),
       }).catch((err) => {
         console.error("Failed to trigger setting expansion workflow", err);
       });
+
+      // Refresh list multiple times
+      setTimeout(fetchSettings, 1000);
+      setTimeout(fetchSettings, 3000);
+      setTimeout(fetchSettings, 5000);
+
     } catch (err) {
       console.error("Unexpected error while triggering setting expansion workflow", err);
     }
@@ -363,8 +378,72 @@ export default function SettingsStudioDemo() {
   };
 
   const handleDelete = (id) => {
-    const next = settings.filter((s) => s.id !== id);
-    persistSettings(next);
+    setSettingToDelete(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    const id = settingToDelete;
+    if (!id) return;
+
+    setIsDeleting(true);
+
+    // Optimistic update
+    const previousSettings = [...settings];
+    setSettings(prev => prev.filter(s => s.id !== id));
+
+    try {
+      // 1. Delete from Supabase
+      if (supabase) {
+        let deleteId = id;
+
+        // Lazy ID Resolution: If ID is temporary/optimistic, try to find real UUID by name
+        if (id.startsWith("setting_")) {
+          const settingName = settings.find(s => s.id === id)?.name;
+          if (settingName) {
+            const { data: lookup } = await supabase
+              .from("setting")
+              .select("id")
+              .eq("name", settingName) // Using name field which maps to settings_name in some schemas, but usually 'name' in returned data
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (lookup && lookup.id) {
+              deleteId = lookup.id;
+            } else {
+              console.warn("Could not resolve real UUID for temporary ID.");
+            }
+          }
+        }
+
+        const { data, error } = await supabase
+          .from("setting")
+          .delete()
+          .eq("id", deleteId)
+          .select();
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          console.warn("Delete op returned no data. Possible ID mismatch. ID was:", deleteId);
+        }
+      }
+
+      // 2. Persist local
+      const next = settings.filter(s => s.id !== id);
+      persistSettings(next);
+
+      // 3. Close modal if active
+      if (selectedSetting?.id === id) setSelectedSetting(null);
+
+    } catch (err) {
+      console.error("Failed to delete setting:", err);
+      setSettings(previousSettings); // Revert
+      alert("Failed to delete setting.");
+    } finally {
+      setIsDeleting(false);
+      setSettingToDelete(null);
+    }
   };
 
   const handleGeneratePreview = useCallback(async () => {
@@ -377,9 +456,9 @@ export default function SettingsStudioDemo() {
 
     setIsGenerating(true);
     try {
-      const endpoint =
-        import.meta.env.VITE_SETTINGS_PREVIEW_URL ||
-        "https://n8n.simplifies.click/webhook/generate-setting-preview";
+      const endpoint = "https://n8n.simplifies.click/webhook/generate-character-preview";
+      // import.meta.env.VITE_SETTINGS_PREVIEW_URL ||
+      // "https://n8n.simplifies.click/webhook/generate-character-preview";
 
       const resp = await fetch(endpoint, {
         method: "POST",
@@ -387,10 +466,11 @@ export default function SettingsStudioDemo() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          prompt: basePrompt.trim(),
-          negative_prompt: negativePrompt.trim() || "",
-          mood: mood.trim() || "",
-          reference_image_url: referenceImageUrl.trim() || undefined,
+          prompt: basePrompt,
+          name: name,
+          reference_image_url: referenceImageUrl || null,
+          asset_type: "setting",
+          mood: mood || null
         }),
       });
 
@@ -417,7 +497,7 @@ export default function SettingsStudioDemo() {
     } finally {
       setIsGenerating(false);
     }
-  }, [basePrompt, negativePrompt, mood, referenceImageUrl]);
+  }, [name, basePrompt, negativePrompt, mood, referenceImageUrl]);
 
   return (
     <div style={{ paddingBottom: 60 }}>
@@ -702,11 +782,54 @@ export default function SettingsStudioDemo() {
         </section>
       </div>
 
+      {/* Confirmation Modal */}
+      {settingToDelete && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)",
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <div style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+              Are you sure you want to delete this setting? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+              <button
+                onClick={() => setSettingToDelete(null)}
+                disabled={isDeleting}
+                style={{
+                  padding: "8px 16px", borderRadius: 6,
+                  border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                  fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                  opacity: isDeleting ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{
+                  padding: "8px 16px", borderRadius: 6,
+                  border: "none", background: "#EF4444", color: "white",
+                  fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                  opacity: isDeleting ? 0.7 : 1
+                }}
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedSetting && (
         <SettingCard
           setting={selectedSetting}
           onClose={() => setSelectedSetting(null)}
           onModify={() => handleModifySetting(selectedSetting)}
+          onDelete={() => handleDelete(selectedSetting.id)}
         />
       )}
     </div>

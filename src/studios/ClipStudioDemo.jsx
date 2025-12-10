@@ -1,28 +1,22 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from "../libs/supabaseClient";
+import { API_CONFIG } from "../config/api";
 import { v4 as uuidv4 } from 'uuid';
 import ClipCard from "./components/ClipCard";
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
-
 // n8n Webhooks
-const TTS_WEBHOOK = "https://n8n.simplifies.click/webhook/generate-voice-preview";
-const I2V_WEBHOOK = "https://n8n.simplifies.click/webhook/generate-video-preview";
-const LIPSYNC_WEBHOOK = "https://n8n.simplifies.click/webhook/generate-lipsync-preview";
+const TTS_WEBHOOK = API_CONFIG.GENERATE_VOICE_PREVIEW;
+const I2V_WEBHOOK = API_CONFIG.GENERATE_VIDEO_PREVIEW;
+const LIPSYNC_WEBHOOK = API_CONFIG.GENERATE_LIPSYNC_PREVIEW;
 
 // Helper to prefix IDs for local vs saved items
-const prefixId = (id) => (typeof id === 'string' && id.startsWith('saved_')) ? id : `local_${id}`;
+const prefixId = (id) => (typeof id === 'string' && id.startsWith('saved_')) ? id : `local_${id} `;
 
 export default function ClipStudioDemo() {
-    const [scenes, setScenes] = useState([]);
+    const [keyframes, setKeyframes] = useState([]);
     const [characters, setCharacters] = useState([]);
     const [registryVoices, setRegistryVoices] = useState([]);
-    const [selectedScene, setSelectedScene] = useState(null);
+    const [selectedKeyframe, setSelectedKeyframe] = useState(null);
     const [shotList, setShotList] = useState([]); // Array of shots being drafted
     const [savedClips, setSavedClips] = useState([]); // Array of saved clips
     const [previewShot, setPreviewShot] = useState(null); // For modal preview
@@ -32,8 +26,8 @@ export default function ClipStudioDemo() {
         const fetchData = async () => {
             // Load LocalStorage Mock Data first (for demo robustness)
             try {
-                const localScenes = JSON.parse(localStorage.getItem("sceneme.scenes") || "[]");
-                if (localScenes.length > 0) setScenes(localScenes);
+                const localScenes = JSON.parse(localStorage.getItem("sceneme.keyframes") || "[]");
+                if (localScenes.length > 0) setKeyframes(localScenes);
                 const localChars = JSON.parse(localStorage.getItem("sceneme.characters") || "[]");
                 if (localChars.length > 0) setCharacters(localChars);
             } catch (e) { }
@@ -53,15 +47,21 @@ export default function ClipStudioDemo() {
 
             if (!supabase) return;
 
-            // Fetch scenes from DB
-            const { data: scenesData } = await supabase.from('scenes').select('*').order('created_at', { ascending: false });
-            if (scenesData) setScenes(scenesData.map(s => ({
-                id: s.id,
-                name: s.name,
-                image_url: s.image_url,
-                characterId: s.character_id,
-                description: s.prompt
-            })));
+            // Fetch keyframes from DB
+            const { data: scenesData, error: scenesError } = await supabase.from('keyframes').select('*').order('created_at', { ascending: false });
+            if (scenesError) {
+                console.error("Error fetching keyframes:", scenesError);
+            }
+            if (scenesData) {
+                setKeyframes(scenesData.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    image_url: s.image_url,
+                    characterId: s.character_id,
+                    description: s.prompt,
+                    cameraLabel: s.camera_angle // Captured for validation
+                })));
+            }
 
             // Fetch characters
             const { data: charactersData } = await supabase.from('characters').select('*');
@@ -72,34 +72,69 @@ export default function ClipStudioDemo() {
             if (clipsError) console.error("Error loading clips:", clipsError);
             if (clipsData) {
                 console.log("Loaded clips:", clipsData);
-                setSavedClips(clipsData);
+                // Parse JSON fields (dialogue_blocks is stored as string)
+                const parsedClips = clipsData.map(c => {
+                    try {
+                        let parsedBlocks = c.dialogue_blocks;
+                        if (typeof parsedBlocks === 'string') {
+                            parsedBlocks = JSON.parse(parsedBlocks);
+                        }
+                        // Ensure it's always an array
+                        if (!Array.isArray(parsedBlocks)) {
+                            parsedBlocks = [];
+                        }
+
+                        return {
+                            ...c,
+                            dialogue_blocks: parsedBlocks
+                        };
+                    } catch (e) {
+                        console.error("Failed to parse clip JSON:", c.id, e);
+                        return { ...c, dialogue_blocks: [] }; // Fallback to empty array
+                    }
+                });
+                setSavedClips(parsedClips);
             }
         };
         fetchData();
     }, []);
 
     // --- Shot Management ---
-    const addShot = useCallback(() => {
-        if (!selectedScene) {
-            alert("Please select a scene first.");
+    const addShot = useCallback((explicitKeyframe = null) => {
+        // Safe check: If invoked via onClick, explicitKeyframe is an Event object, not a Scene.
+        const isScene = explicitKeyframe && explicitKeyframe.id;
+        const targetScene = isScene ? explicitKeyframe : selectedKeyframe;
+
+        console.log("addShot called. Explicit:", isScene ? "Scene Object" : "Event/Null", "Target:", targetScene);
+
+        if (!targetScene) {
+            alert("Please select a keyframe first.");
             return;
         }
         const newShot = {
             tempId: Date.now(), // Unique ID for local management
             name: "", // Individual Clip Name
-            sceneId: selectedScene.id,
-            sceneImageUrl: selectedScene.image_url || selectedScene.imageUrl,
+            sceneId: targetScene.id,
+            sceneImageUrl: targetScene.image_url || targetScene.imageUrl,
+
+            // Validation Props (Persisted from Scene)
+            cameraLabel: targetScene.cameraLabel,
+            characterId: targetScene.characterId,
+
             prompt: "",
             motion: "static",
             manualDuration: 3, // Default duration
-            dialogueBlocks: [{ id: uuidv4(), characterId: selectedScene.characterId || "", text: "", audioUrl: "", duration: 0, pauseDuration: 0.5, isGenerating: false }],
+            dialogueBlocks: [{ id: uuidv4(), characterId: targetScene.characterId || "", text: "", audioUrl: "", duration: 0, pauseDuration: 0.5, isGenerating: false }],
             speakerType: "on_screen", // Default speaker type
             status: "draft", // draft, generating, preview_ready, completed
             videoUrl: "",
             error: ""
         };
-        setShotList(prev => [...prev, newShot]);
-    }, [selectedScene]);
+        setShotList(prev => {
+            console.log("Updating Shot List. Previous Length:", prev.length);
+            return [newShot, ...prev]; // Prepend to top
+        });
+    }, [selectedKeyframe]);
 
     const updateShot = useCallback((tempId, updates) => {
         setShotList(prev => prev.map(shot =>
@@ -170,29 +205,49 @@ export default function ClipStudioDemo() {
                 let turn = {
                     text: block.text,
                     speaker: "Unknown",
-                    voice_id: "en_us_001",
+                    voice_id: null, // Default to null to allow Clone priorities
                     pause_duration: block.pauseDuration || 0.5
                 };
 
-                if (char) {
-                    turn.speaker = char.name;
-                    // Supabase snake_case keys
-                    const voiceId = char.voice_id || char.voiceId;
-                    const voiceRefUrl = char.voice_ref_url || char.voiceRefUrl;
-
-                    if (voiceId === "recording" && voiceRefUrl) {
-                        turn.ref_audio_urls = [voiceRefUrl];
-                        delete turn.voice_id; // Omit voice_id for clones
-                    } else {
-                        turn.voice_id = voiceId;
-                    }
-                } else if (narrator) {
+                if (narrator) {
+                    // 1. Narrator (Directly from Voice Registry)
                     turn.speaker = "Narrator";
                     turn.voice_id = narrator.id;
+                } else if (char) {
+                    // 2. Character (On-Screen OR Narrator-as-Character)
+                    turn.speaker = char.name;
+
+                    // STRICT LOGIC: Check Character Table First
+                    const dbVoiceId = char.voice_id || char.voiceId;
+                    const dbRefUrl = char.voice_ref_url || char.voiceRefUrl;
+
+                    console.log(`[Voice Logic] Char: ${char.name}, ID: ${dbVoiceId}, Ref: ${dbRefUrl}`);
+
+                    if (dbVoiceId === "recording") {
+                        // Case A: Cloned Voice
+                        if (dbRefUrl) {
+                            turn.ref_audio_urls = [dbRefUrl];
+                            delete turn.voice_id; // Use Clone Only
+                        } else {
+                            console.warn(`[Voice Logic] Character ${char.name} marked as recording but missing ref URL.`);
+                        }
+                    } else if (dbVoiceId && dbVoiceId !== "None") {
+                        // Case B: Pre-set Registry ID in Character Table
+                        turn.voice_id = dbVoiceId;
+                    }
+                    // Case C: Null/None -> Fallback
+                }
+
+                // Global Fallback
+                if (!turn.voice_id && !turn.ref_audio_urls) {
+                    console.log("[Voice Logic] No voice resolved, using default en_us_001");
+                    turn.voice_id = "en_us_001";
                 }
 
                 return turn;
             });
+
+            console.log("PAYLOAD_DEBUG:", JSON.stringify(dialoguePayload, null, 2));
 
             // n8n Webhook Call (Single Request)
             const res = await fetch(TTS_WEBHOOK, {
@@ -248,7 +303,7 @@ export default function ClipStudioDemo() {
 
         } catch (err) {
             console.error(err);
-            updateShot(shotTempId, { status: "draft", error: `Generation Failed: ${err.message}` });
+            updateShot(shotTempId, { status: "draft", error: `Generation Failed: ${err.message} ` });
         }
     }, [shotList, updateShot, characters, registryVoices]);
 
@@ -339,75 +394,97 @@ export default function ClipStudioDemo() {
 
         } catch (err) {
             console.error("Render Error:", err);
-            updateShot(shot.tempId, { status: "draft", error: `Rendering failed: ${err.message}` });
+            updateShot(shot.tempId, { status: "draft", error: `Rendering failed: ${err.message} ` });
         }
     }, [updateShot]);
 
     // --- Save to Bin ---
     const saveToBin = useCallback(async (shot) => {
-        // Use totalAudioDuration if locked, ensuring we capture the full stitched length + delay
-        const finalDuration = shot.isAudioLocked
-            ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
-            : shot.manualDuration;
+        console.log("Saving Shot to Bin:", shot);
+        try {
+            // Use totalAudioDuration if locked, ensuring we capture the full stitched length + delay
+            const finalDuration = shot.isAudioLocked
+                ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
+                : shot.manualDuration;
 
-        // Enrich dialogue blocks with names for the "Script" view
-        const enrichedBlocks = shot.dialogueBlocks.map(b => {
-            const char = characters.find(c => c.id === b.characterId);
-            const regVoice = registryVoices.find(v => v.id === b.characterId);
-            return {
-                ...b,
-                characterName: char?.name || regVoice?.name || "Unknown Speaker"
-            };
-        });
+            // Enrich dialogue blocks with names for the "Script" view
+            const enrichedBlocks = (shot.dialogueBlocks || []).map(b => {
+                const char = characters.find(c => c.id === b.characterId);
+                const regVoice = registryVoices.find(v => v.id === b.characterId);
+                return {
+                    ...b,
+                    characterName: char?.name || regVoice?.name || "Unknown Speaker"
+                };
+            });
 
-        // Optimistic / Demo Save
-        const payload = {
-            id: shot.id || crypto.randomUUID(), // If restoring, might have ID, else new
-            name: shot.name || `Clip ${new Date().toLocaleTimeString()}`,
-            scene_id: selectedScene?.id,
-            scene_name: selectedScene?.name,
-            character_id: shot.dialogueBlocks?.[0]?.characterId || null,
-            thumbnail_url: selectedScene?.image_url || selectedScene?.imageUrl,
-            video_url: shot.videoUrl, // The final rendered video
-            raw_video_url: shot.rawVideoUrl || shot.videoUrl, // Keep raw just in case
-            audio_url: shot.stitchedAudioUrl || null, // The separate audio track if any
-            prompt: shot.prompt,
-            motion_type: shot.motion,
-            duration: parseFloat(finalDuration),
-            dialogue_blocks: shot.dialogueBlocks || [],
-            speaker_type: shot.speakerType, // 'narrator' or 'on_screen'
-            status: "completed",
-            created_at: new Date().toISOString(),
-            start_delay: shot.startDelay || 0,
-            has_audio: !!shot.stitchedAudioUrl // Explicit flag
-        };
-
-        if (supabase) {
-            const dbId = uuidv4();
-            const dbPayload = {
-                ...payload, // Use the new payload
-                id: dbId,
+            // Optimistic / Demo Save
+            const payload = {
+                id: shot.id || crypto.randomUUID(), // If restoring, might have ID, else new
+                name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
+                scene_id: selectedKeyframe?.id,
+                scene_name: selectedKeyframe?.name,
+                character_id: shot.dialogueBlocks?.[0]?.characterId || null,
+                thumbnail_url: selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
+                video_url: shot.videoUrl, // The final rendered video
+                raw_video_url: shot.rawVideoUrl || shot.videoUrl, // Keep raw just in case
+                audio_url: shot.stitchedAudioUrl || null, // The separate audio track if any
+                prompt: shot.prompt,
+                motion_type: shot.motion,
+                duration: parseFloat(finalDuration),
+                dialogue_blocks: shot.dialogueBlocks || [],
+                speaker_type: shot.speakerType, // 'narrator' or 'on_screen'
+                status: "completed",
                 created_at: new Date().toISOString(),
-                stitched_audio_url: shot.stitchedAudioUrl,
-                start_delay: shot.startDelay,
-                dialogue_blocks: enrichedBlocks // Explicitly ensure this snake_case key has data
+                start_delay: shot.startDelay || 0,
+                has_audio: !!shot.stitchedAudioUrl // Explicit flag
             };
 
-            const { data, error } = await supabase.from("clips").insert([dbPayload]).select().single();
+            let finalClip = { ...payload }; // Local state version
 
-            if (error) {
-                console.error("Supabase Save Error:", error);
-                alert(`Failed to save to 'clips' table: ${error.message} (Code: ${error.code})`);
-            } else if (data) {
-                Object.assign(newClip, data);
+            if (supabase) {
+                const dbId = uuidv4();
+                const dbPayload = {
+                    ...payload,
+                    id: dbId,
+                    created_at: new Date().toISOString(),
+                    stitched_audio_url: shot.stitchedAudioUrl,
+                    start_delay: shot.startDelay,
+                    dialogue_blocks: JSON.stringify(enrichedBlocks), // Schema expects stringified JSON
+                    shot_type: shot.speakerType === 'on_screen' ? 'lipsync' : 'cinematic'
+                };
+
+                // DATA CLEANUP: Remove fields not in DB schema
+                delete dbPayload.audio_url;
+                delete dbPayload.raw_video_url;
+                delete dbPayload.scene_name; // Not in schema
+
+                const { data, error } = await supabase.from("clips").insert([dbPayload]).select().single();
+
+                if (error) {
+                    console.error("Supabase Save Error:", error);
+                    alert(`Failed to save to 'clips' table: ${error.message} (Code: ${error.code})`);
+                    return; // Stop if db save fails
+                } else if (data) {
+                    finalClip = {
+                        ...data,
+                        // Ensure local state uses the Object Array, not the DB String
+                        dialogue_blocks: typeof data.dialogue_blocks === 'string'
+                            ? JSON.parse(data.dialogue_blocks)
+                            : (data.dialogue_blocks || enrichedBlocks)
+                    };
+                }
             }
-        }
 
-        setSavedClips(prev => [newClip, ...prev]);
-        removeShot(shot.tempId);
-        setPreviewShot(null);
-        setSelectedScene(null);
-    }, [updateShot, removeShot, selectedScene, savedClips.length]);
+            setSavedClips(prev => [finalClip, ...prev]);
+            removeShot(shot.tempId);
+            setPreviewShot(null);
+            setSelectedKeyframe(null);
+
+        } catch (err) {
+            console.error("Save to Bin Execution Error:", err);
+            alert("Unexpected error saving clip: " + err.message);
+        }
+    }, [updateShot, removeShot, selectedKeyframe, savedClips.length]);
 
     // DELETE LOGIC
     const handleDeleteClip = async (clip) => {
@@ -422,13 +499,13 @@ export default function ClipStudioDemo() {
     // EDIT LOGIC
     const handleEditClip = (clip) => {
         // Restore clip data to "workshop" (Story Studio context)
-        if (!selectedScene) {
-            const scene = scenes.find(s => s.id === clip.scene_id);
-            if (scene) setSelectedScene(scene);
+        if (!selectedKeyframe) {
+            const scene = keyframes.find(s => s.id === clip.scene_id);
+            if (scene) setSelectedKeyframe(scene);
         }
 
         const restoredShot = {
-            id: `restored_${Date.now()}`,
+            id: `restored_${Date.now()} `,
             tempId: Date.now(),
             name: clip.name ? `${clip.name} (Remix)` : "", // Auto-append Remix
             sceneId: clip.scene_id,
@@ -473,17 +550,29 @@ export default function ClipStudioDemo() {
             <section className="mb-12">
                 <h2 className="text-base font-bold text-gray-800 mb-4">1. Select a Keyframe</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
-                    {scenes.map(scene => (
+                    {keyframes.map(scene => (
                         <div
                             key={scene.id}
-                            className={`relative border rounded-lg overflow-hidden cursor-pointer transition-all ${selectedScene?.id === scene.id ? 'border-black shadow-md' : 'border-gray-200 hover:border-gray-300'}`}
-                            onClick={() => setSelectedScene(scene)}
+                            className={`relative border rounded-lg overflow-hidden cursor-pointer transition-all min-h-[100px] bg-gray-50 ${selectedKeyframe?.id === scene.id ? 'border-black shadow-md' : 'border-gray-200 hover:border-gray-300'}`}
+                            onClick={() => setSelectedKeyframe(scene)}
                         >
-                            <img src={scene.image_url || scene.imageUrl} alt={scene.name} className="w-full aspect-[4/3] object-cover" />
+                            <img
+                                src={scene.image_url || scene.imageUrl || "https://placehold.co/400x300?text=No+Image"}
+                                alt={scene.name}
+                                className="w-full aspect-[4/3] object-cover bg-gray-200"
+                                onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }}
+                            />
                             <div className="p-2 bg-white">
-                                <h3 className="font-bold text-gray-800 text-xs truncate">{scene.name}</h3>
+                                <h3 className="font-bold text-gray-800 text-xs truncate">{scene.name || "Untitled"}</h3>
                             </div>
-                            {selectedScene?.id === scene.id && (
+                            {/* Lip-Sync Ready Badge */}
+                            {scene.characterId && (scene.cameraLabel === "Standard" || scene.cameraLabel === "Close & Intimate") && (
+                                <div className="absolute top-2 right-2 flex items-center gap-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold z-10 backdrop-blur-sm">
+                                    <span>👄</span>
+                                    <span>READY</span>
+                                </div>
+                            )}
+                            {selectedKeyframe?.id === scene.id && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20">
                                     <span className="text-white text-2xl">✓</span>
                                 </div>
@@ -494,7 +583,7 @@ export default function ClipStudioDemo() {
                 <button
                     onClick={addShot}
                     className="mt-6 px-4 py-2 bg-black text-white text-sm font-bold rounded-lg shadow-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!selectedScene}
+                    disabled={!selectedKeyframe}
                 >
                     + Add New Clip
                 </button>
@@ -657,8 +746,25 @@ export default function ClipStudioDemo() {
                                                 </div>
 
                                                 <div className="flex bg-white rounded-md border border-gray-200 p-0.5 w-full md:w-auto">
-                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })} className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"}`}>Character</button>
-                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"}`}>Narrator</button>
+                                                    <div className="relative group">
+                                                        <button
+                                                            onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })}
+                                                            disabled={!(shot.characterId && (shot.cameraLabel === "Standard" || shot.cameraLabel === "Close & Intimate"))}
+                                                            className={`flex - 1 md: flex - none px - 3 py - 1 text - [10px] uppercase font - bold rounded flex items - center gap - 1 ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"
+                                                                } disabled: opacity - 40 disabled: cursor - not - allowed`}
+                                                        >
+                                                            Character
+                                                            {!(shot.characterId && (shot.cameraLabel === "Standard" || shot.cameraLabel === "Close & Intimate")) && (
+                                                                <span className="text-[8px] opacity-70">⛔</span>
+                                                            )}
+                                                        </button>
+                                                        {!(shot.characterId && (shot.cameraLabel === "Standard" || shot.cameraLabel === "Close & Intimate")) && (
+                                                            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded shadow-lg z-20 pointer-events-none">
+                                                                Lip-Sync requires a 'Standard' or 'Close & Intimate' shot with a Character.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`flex - 1 md: flex - none px - 3 py - 1 text - [10px] uppercase font - bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"} `}>Narrator</button>
                                                 </div>
                                             </div>
 
@@ -720,10 +826,10 @@ export default function ClipStudioDemo() {
                                                     <button
                                                         onClick={() => generateAllDialogue(shot.tempId, true)}
                                                         disabled={shot.dialogueBlocks.some(b => !b.text || !b.text.trim())}
-                                                        className={`ml-auto px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition-all ${shot.dialogueBlocks.some(b => !b.text || !b.text.trim())
+                                                        className={`ml - auto px - 4 py - 2 text - xs font - bold rounded - lg shadow - sm transition - all ${shot.dialogueBlocks.some(b => !b.text || !b.text.trim())
                                                             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                                             : "bg-black text-white hover:bg-gray-800"
-                                                            }`}
+                                                            } `}
                                                     >
                                                         {shot.dialogueBlocks.some(b => b.audioUrl) ? "⚡ Regenerate Dialogue" : "⚡ Generate Dialogue"}
                                                     </button>
@@ -778,13 +884,13 @@ export default function ClipStudioDemo() {
                             <div className="aspect-video bg-black relative group">
                                 {/* Badges */}
                                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end z-10">
-                                    {(clip.has_audio) && <span className="bg-green-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold">AUDIO</span>}
-                                    {(!clip.has_audio) && <span className="bg-black/60 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold">SILENT</span>}
-                                </div>
-                                <div className="absolute top-2 left-2 z-10">
-                                    <span className={`text-[9px] px-1.5 py-0.5 rounded shadow font-bold text-white ${clip.speaker_type === 'broll' ? 'bg-blue-600' : 'bg-purple-600'}`}>
-                                        {clip.speaker_type === 'broll' ? 'B-ROLL' : (clip.speaker_type === 'narrator' ? 'NARRATOR' : 'CHARACTER')}
-                                    </span>
+                                    {clip.has_audio ? (
+                                        (clip.speaker_type === 'on_screen' || clip.speaker_type === 'character')
+                                            ? <span className="bg-green-500/90 backdrop-blur-sm px-1.5 py-0.5 rounded shadow text-[12px] text-white" title="Lipsync">👄</span>
+                                            : <span className="bg-green-500/90 backdrop-blur-sm px-1.5 py-0.5 rounded shadow text-[12px] text-white" title="Audio Only">🔊</span>
+                                    ) : (
+                                        <span className="bg-green-500/90 backdrop-blur-sm px-1.5 py-0.5 rounded shadow text-[12px] text-white" title="Silent">🔇</span>
+                                    )}
                                 </div>
 
                                 <video src={clip.video_url} className="w-full h-full object-cover" />
@@ -828,6 +934,93 @@ export default function ClipStudioDemo() {
                         onClose={() => setPreviewShot(null)}
                         onEdit={handleEditClip}
                         onDelete={handleDeleteClip}
+                        onGenerateKeyframe={async (clip, blob) => {
+                            // Removed confirm dialog to prevent blocking issues
+                            console.log("PARENT: onGenerateKeyframe called with blob size:", blob?.size);
+
+                            if (!blob) {
+                                alert("Error: No image captured from video.");
+                                return;
+                            }
+
+                            try {
+                                const filename = `${Date.now()}_${clip.id}_end.png`;
+                                console.log("Uploading via Webhook (kind='scene'):", filename);
+
+                                const formData = new FormData();
+                                formData.append("file", blob, filename);
+                                formData.append("name", "Frame Capture: " + clip.name);
+                                formData.append("kind", "scene"); // Mapping to 'scenes' folder recommendation
+
+                                const uploadRes = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
+                                    method: "POST",
+                                    body: formData
+                                });
+
+                                if (!uploadRes.ok) {
+                                    throw new Error(`Upload Webhook Failed: ${uploadRes.status}`);
+                                }
+
+                                const uploadData = await uploadRes.json();
+                                console.log("Upload Webhook Response:", uploadData);
+
+                                // Robust URL extraction
+                                const publicUrl = uploadData.publicUrl || uploadData.url || uploadData.image_url || (Array.isArray(uploadData) && uploadData[0]?.url);
+
+                                if (!publicUrl) {
+                                    throw new Error("No URL returned from upload webhook");
+                                }
+                                console.log("Public URL generated:", publicUrl);
+
+                                const newKeyframePayload = {
+                                    name: `${clip.name} ext`,
+                                    prompt: clip.prompt || "Captured end frame",
+                                    image_url: publicUrl,
+                                    character_id: clip.character_id,
+                                    setting_id: clip.setting_id,
+                                    created_at: new Date().toISOString()
+                                };
+                                console.log("Inserting into DB:", newKeyframePayload);
+
+                                const { data: insertData, error: insertError } = await supabase
+                                    .from('keyframes')
+                                    .insert([newKeyframePayload])
+                                    .select();
+
+                                if (insertError) {
+                                    console.error("Supabase DB Error:", insertError);
+                                    throw new Error(`Database insert failed: ${insertError.message}`);
+                                }
+                                console.log("DB Insert successful:", insertData);
+
+                                // alert("Success! New keyframe created."); // Fail silently/smoothly for better UX? Or toast? User said "Perfect!", assumes alert was fine, but let's make it smoother for flow.
+                                // Actually, user wants to go directly to workshop, so alert might interpret flow.
+
+                                if (insertData && insertData[0]) {
+                                    const s = insertData[0];
+                                    const formattedKeyframe = {
+                                        id: s.id,
+                                        name: s.name,
+                                        image_url: s.image_url,
+                                        imageUrl: s.image_url, // Dual support
+                                        characterId: s.character_id,
+                                        description: s.prompt
+                                    };
+
+                                    setKeyframes(prev => [formattedKeyframe, ...prev]);
+
+                                    // AUTO-NAVIGATE WORKFLOW
+                                    setSelectedKeyframe(formattedKeyframe); // Select it for context
+                                    addShot(formattedKeyframe); // Auto-add to workshop
+                                    setPreviewShot(null); // Close the preview modal
+                                    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to workshop
+                                }
+
+                            } catch (err) {
+                                console.error("Error generating keyframe:", err);
+                                alert("Failed to save keyframe: " + err.message);
+                            }
+                        }}
                     />
                 ) : (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewShot(null)}>

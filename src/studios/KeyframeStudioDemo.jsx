@@ -1,21 +1,18 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { createClient } from "@supabase/supabase-js";
-import SceneCard from "./components/SceneCard.jsx";
+import CharacterCard from "./components/CharacterCard.jsx";
+import SettingCard from "./components/SettingCard.jsx";
+import KeyframeCard from "./components/KeyframeCard.jsx";
+import { supabase } from "../libs/supabaseClient";
+import { API_CONFIG } from "../config/api";
 
 // Re-use storage keys from other studios to sync data
-const CHAR_STORAGE_KEY = "sceneme.characters";
+// Re-use storage keys from other studios to sync data
+const CHARACTER_STORAGE_KEY = "sceneme.characters";
 const SETTING_STORAGE_KEY = "sceneme.settings";
-const SCENE_STORAGE_KEY = "sceneme.scenes";
+const SCENE_STORAGE_KEY = "sceneme.keyframes";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabase =
-    supabaseUrl && supabaseAnonKey
-        ? createClient(supabaseUrl, supabaseAnonKey)
-        : null;
-
-const API_ENDPOINT = "https://n8n.simplifies.click/webhook/generate-scene-preview";
+const API_ENDPOINT = API_CONFIG.GENERATE_SCENE_PREVIEW;
 
 // Rich Color Grade Options
 const COLOR_GRADES = [
@@ -249,12 +246,13 @@ const getCharacterAngleLabel = (key) => {
 };
 
 
-export default function SceneStudioDemo() {
+export default function KeyframeStudioDemo() {
     const [characters, setCharacters] = useState([]);
     const [settings, setSettings] = useState([]);
-    const [scenes, setScenes] = useState([]);
-    const [name, setName] = useState(""); // Scene Name
+    const [keyframes, setKeyframes] = useState([]);
+    const [name, setName] = useState(""); // Keyframe Name
     const [activeScene, setActiveScene] = useState(null);
+    const [sceneToDelete, setSceneToDelete] = useState(null); // Added for custom delete confirmation
 
     // Selection State
     const [selectedSettingId, setSelectedSettingId] = useState("");
@@ -268,6 +266,9 @@ export default function SceneStudioDemo() {
 
     // API Generation State
     const [prompt, setPrompt] = useState("");
+    // Generation State
+    const [generationMode, setGenerationMode] = useState("create"); // "create" | "modify"
+    // const [editStrength, setEditStrength] = useState(0.6); // Removed in favor of auto-tuning
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedSceneUrl, setGeneratedSceneUrl] = useState("");
     const [error, setError] = useState("");
@@ -281,6 +282,7 @@ export default function SceneStudioDemo() {
     const [isUploadingProp, setIsUploadingProp] = useState(false);
     const [renamingPropId, setRenamingPropId] = useState(null); // Track which prop is being renamed
     const [sourceSceneName, setSourceSceneName] = useState(null); // Track name of scene being modified
+    const [sourceSceneId, setSourceSceneId] = useState(null); // Track ID for Overwrite logic
 
     // Derived State Helpers
     const activeStyle = useMemo(() => VISUAL_STYLES.find(s => s.id === visualStyleId) || VISUAL_STYLES[0], [visualStyleId]);
@@ -318,9 +320,9 @@ export default function SceneStudioDemo() {
                 setProps(mappedProps);
             }
 
-            // Load Scenes
+            // Load Keyframes
             const { data: scenesData, error: scenesError } = await supabase
-                .from("scenes")
+                .from("keyframes")
                 .select("*")
                 .order("created_at", { ascending: false });
 
@@ -354,7 +356,7 @@ export default function SceneStudioDemo() {
 
                 // Fix: Map color_grade text back to an ID if possible, or just pass it through
                 // For now, raw mapping is safer.
-                setScenes(mappedScenes);
+                setKeyframes(mappedScenes);
             }
         };
 
@@ -436,13 +438,13 @@ export default function SceneStudioDemo() {
 
     const activeCharUrl = useMemo(() => activeCharacter ? (activeCharacter[selectedCharAngle] || activeCharacter.referenceImageUrl) : null, [activeCharacter, selectedCharAngle]);
 
-    const handleSaveScene = async () => {
+    const handleSaveKeyframe = async () => {
         if (!name.trim()) {
-            setError("Please give your scene a name before saving.");
+            setError("Please give your keyframe a name before saving.");
             return;
         }
         if (!generatedSceneUrl) {
-            setError("Generate a scene first to save it.");
+            setError("Generate a keyframe first to save it.");
             return;
         }
 
@@ -457,88 +459,146 @@ export default function SceneStudioDemo() {
             prop_id: activeProp?.id,
 
             // Metadata
-            setting_name: activeSetting?.name,
-            character_name: activeCharacter?.name,
+            setting_name: activeSetting?.name || settings.find(s => s.id === selectedSettingId)?.name,
+            character_name: activeCharacter?.name || characters.find(c => c.id === selectedCharId)?.name,
             prop_name: activeProp?.name,
 
             visual_style: activeStyle.label,
             camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.label,
             color_grade: activeGrade?.label
-
-            // created_at is automatic
         };
 
-        // UI Optimistic Update (Temporary ID)
-        const tempId = `temp_${Date.now()}`;
-        const optimisticScene = {
-            ...newScenePayload,
-            id: tempId,
-            imageUrl: generatedSceneUrl, // UI expects imageUrl
-            createdAt: new Date().toISOString()
-        };
-        setScenes([optimisticScene, ...scenes]);
+        // DETERMINISTIC SAVE LOGIC
+        // If in Modify Mode AND Name matches the Original Name -> UPDATE (Overwrite)
+        // Otherwise -> INSERT (Save As New)
+        const isOverwrite = generationMode === 'modify' && sourceSceneId && name.trim() === sourceSceneName;
 
-        if (supabase) {
-            const { data, error } = await supabase
-                .from("scenes")
-                .insert([newScenePayload])
-                .select();
+        if (isOverwrite) {
+            // --- UPDATE PATH ---
+            console.log("Overwriting existing keyframe:", sourceSceneId);
 
-            if (data && data[0]) {
-                // Replace optimistic item with real one
-                setScenes(prev => [
-                    // Map DB response to UI shape
-                    {
-                        id: data[0].id,
-                        name: data[0].name,
-                        imageUrl: data[0].image_url,
-                        prompt: data[0].prompt,
-                        settingId: data[0].setting_id,
-                        characterId: data[0].character_id,
-                        prop_id: data[0].prop_id,
-                        setting_name: data[0].setting_name,
-                        character_name: data[0].character_name,
-                        prop_name: data[0].prop_name,
-                        visual_style: data[0].visual_style,
-                        camera_angle: data[0].camera_angle,
-                        color_grade: data[0].color_grade,
-                        createdAt: data[0].created_at
-                    },
-                    ...prev.filter(s => s.id !== tempId)
-                ]);
-            } else if (error) {
-                console.error("Error saving scene to Supabase:", error);
-                setError("Failed to save scene.");
-                // Revert optimistic update on error
-                setScenes(prev => prev.filter(s => s.id !== tempId));
+            // Optimistic Update
+            setKeyframes(prev => prev.map(s =>
+                s.id === sourceSceneId
+                    ? { ...s, ...newScenePayload, imageUrl: generatedSceneUrl }
+                    : s
+            ));
+
+            if (supabase) {
+                const { error } = await supabase
+                    .from("keyframes")
+                    .update(newScenePayload)
+                    .eq("id", sourceSceneId);
+
+                if (error) {
+                    console.error("Supabase UPDATE Error:", error);
+                    setError("Failed to overwrite keyframe.");
+                    // Revert optimistic update? (Hard without complex logic, simpler to alert)
+                }
+            }
+
+        } else {
+            // --- INSERT PATH (New Record) ---
+            console.log("Creating new keyframe record.");
+
+            const tempId = `temp_${Date.now()}`;
+            const optimisticScene = {
+                ...newScenePayload,
+                id: tempId,
+                imageUrl: generatedSceneUrl,
+                createdAt: new Date().toISOString()
+            };
+            setKeyframes([optimisticScene, ...keyframes]);
+
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from("keyframes")
+                    .insert([newScenePayload])
+                    .select();
+
+                if (data && data[0]) {
+                    setKeyframes(prev => [
+                        {
+                            id: data[0].id,
+                            name: data[0].name,
+                            imageUrl: data[0].image_url,
+                            prompt: data[0].prompt,
+                            settingId: data[0].setting_id,
+                            characterId: data[0].character_id,
+                            prop_id: data[0].prop_id,
+                            setting_name: data[0].setting_name,
+                            character_name: data[0].character_name,
+                            prop_name: data[0].prop_name,
+                            visual_style: data[0].visual_style,
+                            camera_angle: data[0].camera_angle,
+                            color_grade: data[0].color_grade,
+                            createdAt: data[0].created_at
+                        },
+                        ...prev.filter(s => s.id !== tempId)
+                    ]);
+                } else if (error) {
+                    console.error("Error saving scene to Supabase:", error);
+                    setError("Failed to save scene.");
+                    setKeyframes(prev => prev.filter(s => s.id !== tempId));
+                }
             }
         }
 
+        // Reset Form
         setName("");
         setGeneratedSceneUrl("");
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll back for next creation
+        setSourceSceneId(null); // Clear context
+        setSourceSceneName(null);
+        setGenerationMode("create"); // Reset to create mode
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDeleteScene = async (id) => {
-        if (!confirm("Are you sure you want to delete this scene?")) return;
+    // DELETE HANDLER
+    // DELETE HANDLER
+    // DELETE HANDLER
+    const [isDeleting, setIsDeleting] = useState(false);
 
-        // Optimistic
-        setScenes(scenes.filter(s => s.id !== id));
+    const handleDeleteScene = (id) => {
+        setSceneToDelete(id);
+    };
 
-        if (supabase) {
-            const { error } = await supabase.from("scenes").delete().match({ id });
+    const handleConfirmDelete = async () => {
+        const id = sceneToDelete;
+        if (!id) return;
+
+        setIsDeleting(true);
+        console.log("Confirm delete for ID:", id);
+
+        try {
+            const { error } = await supabase
+                .from('keyframes')
+                .delete()
+                .eq('id', id);
+
             if (error) {
-                console.error("Error deleting scene from Supabase:", error);
-                setError("Failed to delete scene.");
-                // Revert optimistic update on error (requires fetching original state or more complex logic)
-                // For simplicity, we'll just log the error for now.
+                console.error("Supabase DELETE Error:", error);
+                throw error;
             }
+
+            // Remove from local state
+            setKeyframes(prev => prev.filter(s => s.id !== id));
+
+            // Close details modal if open
+            if (activeScene && activeScene.id === id) setActiveScene(null);
+
+        } catch (err) {
+            console.error("Error deleting keyframe:", err);
+            alert("Failed to delete keyframe. Check console for details.");
+        } finally {
+            setIsDeleting(false);
+            setSceneToDelete(null); // Close confirmation modal always
         }
     };
 
     const handleModifyScene = (scene) => {
         setCustomBgUrl(scene.imageUrl);
         setSourceSceneName(scene.name);
+        setSourceSceneId(scene.id);
         setName(`${scene.name} (Remix)`);
         setPrompt(scene.prompt);
         setPrompt(scene.prompt);
@@ -547,6 +607,9 @@ export default function SceneStudioDemo() {
         if (scene.settingId) setSelectedSettingId(scene.settingId); // Optional: keep context
         setSelectedPropId("");
         if (scene.gradeId) setSelectedGradeId(scene.gradeId);
+
+        // Auto-switch to Modify Mode
+        setGenerationMode("modify");
 
         // Restore Visual Style (Label Match)
         if (scene.visual_style) {
@@ -579,26 +642,85 @@ export default function SceneStudioDemo() {
 
         setIsGenerating(true);
         setError("");
+
+        // Validation: Name is required before generation/save
+        if (!name.trim()) {
+            setError("Please name your keyframe before generating.");
+            setIsGenerating(false);
+            return;
+        }
+
         setGeneratedSceneUrl("");
 
         try {
             // Use configured webhook or fallback
             const endpoint = API_ENDPOINT;
 
-            const payload = {
-                setting_image_url: activeBgUrl,
-                character_image_url: activeCharUrl || "",
-                prompt: prompt.trim(),
-                color_grade: activeGrade.prompt || activeGrade.label,
-                // Optional context
-                name: name.trim(), // Pass scene name so backend can name the file
-                setting_name: activeSetting?.name,
-                character_name: activeCharacter?.name,
-                prop_image_url: activeProp?.imageUrl, // Add prop image URL
-                prop_description: activeProp?.name, // Add prop description
-                visual_style: activeStyle.description, // Pass description to API
-                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description, // Pass description to API
-            };
+            let payload = {};
+
+            if (generationMode === "create") {
+                // Visual Architect Payload (Creation)
+                payload = {
+                    asset_type: "scene_creation",
+                    prompt: prompt.trim(),
+                    name: name.trim(),
+                    // Context
+                    setting_image_url: activeBgUrl,
+                    character_image_url: activeCharUrl || "",
+                    prop_image_url: activeProp?.imageUrl || "",
+                    prop_description: activeProp?.name || "",
+                    // Style
+                    visual_style: activeStyle.description,
+                    camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description,
+                    color_grade: activeGrade.prompt || activeGrade.label,
+                    // References
+                    setting_name: activeSetting?.name || "",
+                    character_name: activeCharacter?.name || "", // Optional, default to empty
+                };
+            } else {
+                // Semantic Editor Payload (Modification)
+                const inputImage = generatedSceneUrl || activeBgUrl;
+                if (!inputImage) {
+                    throw new Error("No image to modify! Generate or select a scene first.");
+                }
+
+                payload = {
+                    asset_type: "scene_modification",
+                    input_image: inputImage,
+
+                    // Standard Metadata
+                    prompt: prompt.trim(),
+                    name: name.trim(),
+
+                    // References
+                    character_image_url: activeCharUrl || "",
+                    prop_image_url: activeProp?.imageUrl || "",
+                    setting_image_url: activeBgUrl || "", // Required for backend body detection
+
+                    // Context
+                    setting_name: activeSetting?.name || "",
+                    character_name: activeCharacter?.name || "",
+                    prop_name: activeProp?.name || "",
+                    prop_description: activeProp?.name || "",
+
+                    // Style
+                    visual_style: activeStyle.description,
+                    camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description,
+                    color_grade: activeGrade.prompt || activeGrade.label,
+
+                    edit_instructions: [
+                        prompt.trim(),
+                        activeStyle && activeStyle.id !== "cinematic" ? `Style: ${activeStyle.description}` : null,
+                        cameraAngle && cameraAngle !== "wide" ? `Camera Angle: ${CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description}` : null,
+                        activeGrade && activeGrade.id !== "none" ? `Color Grade: ${activeGrade.prompt}` : null
+                    ].filter(Boolean),
+
+                    parameters: {
+                        edit_strength: 0.65,
+                        preserve_size: true
+                    }
+                };
+            }
 
             const res = await fetch(endpoint, {
                 method: "POST",
@@ -612,8 +734,22 @@ export default function SceneStudioDemo() {
             }
 
             const data = await res.json();
-            // Assume standardized response format similar to other nodes
-            const url = data.image_url || data.output?.image_url || data.url || "";
+            console.log("Generation Response:", data); // DEBUG
+
+            // Robust URL extraction
+            let url = data.image_url || data.output?.image_url || data.url || "";
+
+            // Handle if URL is inside a nested object or array accidentally
+            if (typeof url === 'object') {
+                console.warn("URL is an object, attempting to extract string:", url);
+                url = url.url || url.image_url || JSON.stringify(url);
+            }
+
+            if (typeof url !== 'string' || !url.startsWith('http')) {
+                console.error("Invalid URL format:", url);
+                // Don't throw, just warn to avoid crash if possible, but we need an image
+                throw new Error("API returned invalid image URL format.");
+            }
 
             if (!url) {
                 throw new Error("No image URL returned from API.");
@@ -646,7 +782,7 @@ export default function SceneStudioDemo() {
             formData.append("kind", "prop");
 
             // Reusing the reference image upload endpoint
-            const uploadEndpoint = "https://n8n.simplifies.click/webhook/upload-reference-image";
+            const uploadEndpoint = API_CONFIG.UPLOAD_REFERENCE_IMAGE;
 
             const res = await fetch(uploadEndpoint, {
                 method: "POST",
@@ -969,6 +1105,7 @@ export default function SceneStudioDemo() {
                 </section>
 
                 {/* 3. Action Description */}
+                {/* 3. Keyframe Description */}
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>3. Describe the Keyframe</h3>
 
@@ -985,12 +1122,16 @@ export default function SceneStudioDemo() {
                                 width: "100%",
                                 padding: 12,
                                 borderRadius: 8,
-                                border: "1px solid #CBD5E1",
+                                border: "1px solid #E5E7EB",
                                 fontSize: 14,
                                 fontFamily: "inherit",
-                                resize: "vertical"
+                                resize: "none",
+                                marginBottom: 12
                             }}
                         />
+
+                        {/* Refine Options (Only show in Modify Mode) */}
+                        {/* Refine Options Removed */}
                     </div>
                 </section>
 
@@ -1268,7 +1409,7 @@ export default function SceneStudioDemo() {
                             {isGenerating && (
                                 <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", animation: "spin 1s linear infinite" }} />
                             )}
-                            {isGenerating ? "Generating..." : "Generate Keyframe"}
+                            {isGenerating ? "Processing..." : (generationMode === "create" ? "Generate Keyframe" : "Apply Changes")}
                         </button>
                     </div>
 
@@ -1353,6 +1494,7 @@ export default function SceneStudioDemo() {
                             }}>
                                 <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
                                 <span style={{ fontSize: 13, fontWeight: 500 }}>AI is crafting your keyframe...</span>
+                                <span style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>(this may take a few minutes)</span>
                             </div>
                         )}
                     </div>
@@ -1363,35 +1505,37 @@ export default function SceneStudioDemo() {
                 </section>
 
                 {/* Save Button Area (After Generation) */}
-                {generatedSceneUrl && (
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                        <button
-                            onClick={handleSaveScene}
-                            disabled={!name.trim()}
-                            style={{
-                                padding: "10px 24px",
-                                borderRadius: 999,
-                                background: !name.trim() ? "#94A3B8" : "#000",
-                                color: "white",
-                                fontSize: 14,
-                                fontWeight: 600,
-                                border: "none",
-                                cursor: !name.trim() ? "not-allowed" : "pointer",
-                            }}
-                        >
-                            {name.trim() ? "Save Keyframe" : "Enter Name to Save"}
-                        </button>
-                    </div>
-                )}
+                {
+                    generatedSceneUrl && (
+                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                            <button
+                                onClick={handleSaveKeyframe}
+                                disabled={!name.trim()}
+                                style={{
+                                    padding: "10px 24px",
+                                    borderRadius: 999,
+                                    background: !name.trim() ? "#94A3B8" : "#000",
+                                    color: "white",
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    border: "none",
+                                    cursor: !name.trim() ? "not-allowed" : "pointer",
+                                }}
+                            >
+                                {name.trim() ? "Save Keyframe" : "Enter Name to Save"}
+                            </button>
+                        </div>
+                    )
+                }
 
 
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>Saved Keyframes</h3>
-                    {scenes.length === 0 ? (
+                    {keyframes.length === 0 ? (
                         <p style={{ fontSize: 13, color: "#94A3B8" }}>No keyframes saved yet.</p>
                     ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
-                            {scenes.map(scene => (
+                            {keyframes.map(scene => (
                                 <div
                                     key={scene.id}
                                     onClick={() => setActiveScene(scene)}
@@ -1406,8 +1550,30 @@ export default function SceneStudioDemo() {
                                     onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
                                     onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
                                 >
-                                    <div style={{ aspectRatio: "16/9", background: "#000" }}>
+                                    <div style={{ aspectRatio: "16/9", background: "#000", position: "relative" }}>
                                         <img src={scene.imageUrl} alt={scene.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        {/* Lip-Sync Ready Badge */}
+                                        {scene.characterId && (scene.camera_angle === "Standard" || scene.camera_angle === "Close & Intimate") && (
+                                            <div style={{
+                                                position: "absolute",
+                                                top: 6,
+                                                right: 6,
+                                                background: "rgba(16, 185, 129, 0.9)", // Emerald/Green
+                                                color: "white",
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                padding: "2px 6px",
+                                                borderRadius: 4,
+                                                boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                                                backdropFilter: "blur(2px)",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 3
+                                            }}>
+                                                <span>👄</span>
+                                                <span>LIP-SYNC READY</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <div style={{ padding: 12 }}>
                                         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scene.name}</div>
@@ -1419,7 +1585,10 @@ export default function SceneStudioDemo() {
                                                 Modify
                                             </button>
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteScene(scene.id); }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteScene(scene.id);
+                                                }}
                                                 style={{ fontSize: 11, color: "#EF4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                                             >
                                                 Delete
@@ -1432,16 +1601,63 @@ export default function SceneStudioDemo() {
                     )}
                 </section>
 
-            </div>
+            </div >
 
-            {/* Scene Card Modal */}
-            {activeScene && (
-                <SceneCard
-                    scene={activeScene}
-                    onClose={() => setActiveScene(null)}
-                    onModify={() => handleModifyScene(activeScene)}
-                />
-            )}
-        </div>
+            {/* Custom Delete Confirmation Modal */}
+            {
+                sceneToDelete && (
+                    <div style={{
+                        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                        background: "rgba(0,0,0,0.5)", zIndex: 100,
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                    }}>
+                        <div style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+                            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+                                Are you sure you want to delete this keyframe? This action cannot be undone.
+                            </p>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                                <button
+                                    onClick={() => setSceneToDelete(null)}
+                                    disabled={isDeleting}
+                                    style={{
+                                        padding: "8px 16px", borderRadius: 6,
+                                        border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                                        fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                                        opacity: isDeleting ? 0.5 : 1
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmDelete}
+                                    disabled={isDeleting}
+                                    style={{
+                                        padding: "8px 16px", borderRadius: 6,
+                                        border: "none", background: "#EF4444", color: "white",
+                                        fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                                        opacity: isDeleting ? 0.7 : 1
+                                    }}
+                                >
+                                    {isDeleting ? "Deleting..." : "Delete"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Keyframe Card Modal */}
+            {
+                activeScene && (
+                    <KeyframeCard
+                        scene={activeScene}
+                        onClose={() => setActiveScene(null)}
+                        onModify={() => handleModifyScene(activeScene)}
+                        onDelete={() => handleDeleteScene(activeScene.id)}
+                    />
+                )
+            }
+        </div >
     );
 }

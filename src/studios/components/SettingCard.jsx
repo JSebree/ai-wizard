@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function SettingCard({ setting, onClose, onModify }) {
+export default function SettingCard({ setting, onClose, onModify, onDelete }) {
   const [fullImage, setFullImage] = useState(null);
 
   if (!setting) return null;
@@ -207,7 +207,27 @@ export default function SettingCard({ setting, onClose, onModify }) {
                     <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{mood || "None"}</span>
                   </div>
                 </div>
-                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right" }}>
+                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                  {onDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                      }}
+                      style={{
+                        padding: "8px 20px",
+                        borderRadius: 999,
+                        background: "white",
+                        color: "#EF4444",
+                        border: "1px solid #EF4444",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete Setting
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       onModify?.();

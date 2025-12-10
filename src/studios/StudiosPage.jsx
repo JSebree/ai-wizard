@@ -1,16 +1,30 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import CharacterStudioDemo from "./CharacterStudioDemo.jsx";
 import SettingsStudioDemo from "./SettingsStudioDemo.jsx";
 
-import SceneStudioDemo from "./SceneStudioDemo.jsx";
+import KeyframeStudioDemo from "./KeyframeStudioDemo.jsx";
 import ClipStudioDemo from "./ClipStudioDemo.jsx";
 import ProductionStudioDemo from "./ProductionStudioDemo.jsx";
 
 export default function StudiosPage() {
   const nav = useNavigate();
-  const initialTab = localStorage.getItem("studios.activeTab") || "characters";
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const location = useLocation(); // Hook to get current path
+
+  // Determine default tab based on URL or LocalStorage
+  const getInitialTab = () => {
+    if (location.pathname === "/clip-studio-demo") return "clips";
+    return localStorage.getItem("studios.activeTab") || "characters";
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab());
+
+  // Update tab if location changes (e.g. navigation)
+  React.useEffect(() => {
+    if (location.pathname === "/clip-studio-demo") {
+      setActiveTab("clips");
+    }
+  }, [location.pathname]);
 
   React.useEffect(() => {
     if (activeTab === "story") {
@@ -171,7 +185,7 @@ export default function StudiosPage() {
           ) : activeTab === "settings" ? (
             <SettingsStudioDemo />
           ) : activeTab === "scenes" ? (
-            <SceneStudioDemo />
+            <KeyframeStudioDemo />
           ) : activeTab === "clips" ? (
             <ClipStudioDemo />
           ) : (

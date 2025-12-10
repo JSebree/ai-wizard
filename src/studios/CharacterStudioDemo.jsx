@@ -1,16 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
-import CharacterCard from "./components/CharacterCard.jsx";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { supabase } from "../libs/supabaseClient";
+import { API_CONFIG } from "../config/api";
+import CharacterCard from "./components/CharacterCard";
 
 const STORAGE_KEY = "sceneme.characters";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
 
 export default function CharacterStudioDemo() {
   const [name, setName] = useState("");
@@ -30,6 +23,8 @@ export default function CharacterStudioDemo() {
   // Live preview + upload state
   const [previewUrl, setPreviewUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [characterToDelete, setCharacterToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef(null);
 
@@ -108,40 +103,41 @@ export default function CharacterStudioDemo() {
   };
 
   // Sync Supabase
-  useEffect(() => {
+  const fetchSupabase = useCallback(async () => {
     if (!supabase) return;
-    let cancelled = false;
-    async function fetchSupabase() {
-      try {
-        const { data, error } = await supabase.from("characters").select("*").order("created_at", { ascending: false });
-        if (data && !cancelled) {
-          const mapped = data.map(row => ({
-            id: row.id,
-            name: row.name,
-            basePrompt: row.base_prompt,
-            referenceImageUrl: row.base_image_url || row.base_hero,
-            voiceId: row.voice_id,
-            voiceRefUrl: row.voice_ref_url,
-            createdAt: row.created_at,
-            // Map ALL gallery fields
-            base_image_url: row.base_image_url,
-            base_hero: row.base_hero,
-            fullbody_centered: row.fullbody_centered,
-            fullbody_side: row.fullbody_side,
-            torso_front: row.torso_front,
-            headshot_front: row.headshot_front,
-            headshot_left: row.headshot_left,
-            headshot_right: row.headshot_right
-          }));
-          setCharacters(mapped);
-          persistCharacters(mapped);
-        }
-      } catch (e) { console.error(e); }
-    }
+    try {
+      const { data, error } = await supabase.from("characters").select("*").order("created_at", { ascending: false });
+      if (data) {
+        const mapped = data.map(row => ({
+          id: row.id,
+          name: row.name,
+          displayName: row.display_name,
+          basePrompt: row.base_prompt,
+          referenceImageUrl: row.base_image_url || row.base_hero,
+          voiceId: row.voice_id,
+          voiceRefUrl: row.voice_ref_url,
+          createdAt: row.created_at,
+          // Map ALL gallery fields
+          base_image_url: row.base_image_url,
+          base_hero: row.base_hero,
+          fullbody_centered: row.fullbody_centered,
+          fullbody_side: row.fullbody_side,
+          torso_front: row.torso_front,
+          headshot_front: row.headshot_front,
+          headshot_left: row.headshot_left,
+          headshot_right: row.headshot_right
+        }));
+        setCharacters(mapped);
+        persistCharacters(mapped);
+      }
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => {
     fetchSupabase();
     const interval = setInterval(fetchSupabase, 20000);
-    return () => { cancelled = true; clearInterval(interval); }
-  }, []);
+    return () => clearInterval(interval);
+  }, [fetchSupabase]);
 
   // Modify Workflow
   const handleModifyCharacter = (char) => {
@@ -169,7 +165,7 @@ export default function CharacterStudioDemo() {
       formData.append("kind", "character");
       formData.append("name", name || "Untitled");
 
-      const res = await fetch("https://n8n.simplifies.click/webhook/upload-reference-image", {
+      const res = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
         method: "POST",
         body: formData
       });
@@ -196,7 +192,7 @@ export default function CharacterStudioDemo() {
       formData.append("file", file);
       formData.append("kind", "voice_clone");
       // Use standard upload endpoint, assuming it handles audio or generic files
-      const res = await fetch("https://n8n.simplifies.click/webhook/upload-reference-image", {
+      const res = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
         method: "POST",
         body: formData
       });
@@ -207,7 +203,7 @@ export default function CharacterStudioDemo() {
 
       if (url) {
         setVoicePreviewUrl(url);
-        setVoiceId(`clone_${Date.now()}`); // Generate a temporary ID for the clone
+        setVoiceId(`clone_${Date.now()} `); // Generate a temporary ID for the clone
       }
     } catch (err) {
       console.error("Voice upload error", err);
@@ -219,12 +215,15 @@ export default function CharacterStudioDemo() {
     if (!basePrompt.trim()) return;
     setIsGeneratingPreview(true);
     try {
-      const res = await fetch("https://n8n.simplifies.click/webhook/generate-character-preview", {
+      const res = await fetch(API_CONFIG.GENERATE_ASSET_PREVIEW, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: basePrompt,
-          reference_image_url: referenceImageUrl || null
+          name: name,
+          reference_image_url: referenceImageUrl || null,
+          asset_type: "character",
+          mood: null
         })
       });
       const data = await res.json();
@@ -243,7 +242,7 @@ export default function CharacterStudioDemo() {
     const imageUrl = previewUrl || referenceImageUrl;
     if (!imageUrl) { setError("Image required"); return; }
 
-    const id = `char_${Date.now()}`;
+    const id = `char_${Date.now()} `;
     const newChar = {
       id,
       name,
@@ -260,7 +259,7 @@ export default function CharacterStudioDemo() {
 
     // Supabase Register
     try {
-      await fetch("https://n8n.simplifies.click/webhook/webhook/register-character", {
+      const res = await fetch(API_CONFIG.REGISTER_CHARACTER, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -268,12 +267,27 @@ export default function CharacterStudioDemo() {
         })
       });
 
+      // Attempt to retrieve real UUID from response
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const realId = data.id || data.uuid || data.character_id;
+        if (realId) {
+          console.log("Received real ID from registry:", realId);
+          setCharacters(prev => prev.map(c => c.id === id ? { ...c, id: realId } : c));
+        }
+      }
+
       // Trigger Expansion
-      void fetch("https://n8n.simplifies.click/webhook/generate-character-expansion", {
+      void fetch(API_CONFIG.GENERATE_CHARACTER_EXPANSION, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, name, base_prompt: basePrompt, base_image_url: imageUrl, kind: "character" })
       }).catch(console.error);
+
+      // Refresh list multiple times to ensure we catch the DB write
+      setTimeout(fetchSupabase, 1000);
+      setTimeout(fetchSupabase, 3000);
+      setTimeout(fetchSupabase, 5000);
 
     } catch (e) { console.error("Registration failed", e); }
 
@@ -284,8 +298,73 @@ export default function CharacterStudioDemo() {
   };
 
   const handleDelete = (id) => {
-    const next = characters.filter(c => c.id !== id);
-    persistCharacters(next);
+    setCharacterToDelete(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    const id = characterToDelete;
+    if (!id) return;
+
+    setIsDeleting(true);
+
+    // Optimistic update
+    const previousCharacters = [...characters];
+    setCharacters(prev => prev.filter(c => c.id !== id));
+
+    try {
+      // 1. Delete from Supabase if client exists
+      if (supabase) {
+        let deleteId = id;
+
+        // Lazy ID Resolution: If ID is temporary/optimistic, try to find real UUID by name
+        if (id.startsWith("char_")) {
+          const charName = characters.find(c => c.id === id)?.name;
+          if (charName) {
+            const { data: lookup } = await supabase
+              .from("characters")
+              .select("id")
+              .eq("name", charName)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (lookup && lookup.id) {
+              deleteId = lookup.id;
+            } else {
+              console.warn("Could not resolve real UUID for temporary ID. Deletion might fail if row exists.");
+            }
+          }
+        }
+
+        const { data, error } = await supabase
+          .from("characters")
+          .delete()
+          .eq("id", deleteId)
+          .select();
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          console.warn("Delete op returned no data. Possible ID mismatch or row already gone. ID was:", deleteId);
+        }
+      }
+
+      // 2. Persist local
+      const next = characters.filter(c => c.id !== id);
+      persistCharacters(next);
+
+      // 3. Close modal if active
+      if (activeCharacter?.id === id) setActiveCharacter(null);
+
+    } catch (err) {
+      console.error("Failed to delete character:", err);
+      // Revert optimistic
+      setCharacters(previousCharacters);
+      alert("Failed to delete character. See console for details.");
+    } finally {
+      setIsDeleting(false);
+      setCharacterToDelete(null);
+    }
   };
 
 
@@ -443,7 +522,7 @@ export default function CharacterStudioDemo() {
                       </>
                     )}
                   </button>
-                  <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`}</style>
+                  <style>{`@keyframes pulse { 0 % { opacity: 1; } 50 % { opacity: 0.5; } 100 % { opacity: 1; } } `}</style>
                 </div>
               )}
 
@@ -522,7 +601,7 @@ export default function CharacterStudioDemo() {
                     <img src={char.referenceImageUrl || char.base_image_url || char.base_hero} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
                   <div style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{char.name}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{char.displayName || char.name}</div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleModifyCharacter(char); }}
@@ -542,7 +621,56 @@ export default function CharacterStudioDemo() {
 
       </div>
 
-      {activeCharacter && <CharacterCard character={activeCharacter} onClose={() => setActiveCharacter(null)} onModify={() => handleModifyCharacter(activeCharacter)} />}
+      {/* Confirmation Modal */}
+      {characterToDelete && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)",
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <div style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+              Are you sure you want to delete this character? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+              <button
+                onClick={() => setCharacterToDelete(null)}
+                disabled={isDeleting}
+                style={{
+                  padding: "8px 16px", borderRadius: 6,
+                  border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                  fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                  opacity: isDeleting ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{
+                  padding: "8px 16px", borderRadius: 6,
+                  border: "none", background: "#EF4444", color: "white",
+                  fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
+                  opacity: isDeleting ? 0.7 : 1
+                }}
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeCharacter && (
+        <CharacterCard
+          character={activeCharacter}
+          onClose={() => setActiveCharacter(null)}
+          onModify={() => handleModifyCharacter(activeCharacter)}
+          onDelete={() => handleDelete(activeCharacter.id)}
+        />
+      )}
     </div>
   );
 }

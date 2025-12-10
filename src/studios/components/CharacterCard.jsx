@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-export default function CharacterCard({ character, onClose, onModify }) {
+export default function CharacterCard({ character, onClose, onModify, onDelete }) {
   const [voices, setVoices] = useState(null);
   const [fullImage, setFullImage] = useState(null);
 
@@ -38,6 +38,7 @@ export default function CharacterCard({ character, onClose, onModify }) {
 
   const {
     name,
+    displayName,
     base_image_url,
     referenceImageUrl,
     base_hero,
@@ -195,7 +196,7 @@ export default function CharacterCard({ character, onClose, onModify }) {
 
             {/* Right: Info */}
             <div>
-              <h3 style={{ marginTop: 0, fontSize: 24, fontWeight: 800, marginBottom: 24, lineHeight: 1.2 }}>{name}</h3>
+              <h3 style={{ marginTop: 0, fontSize: 24, fontWeight: 800, marginBottom: 24, lineHeight: 1.2 }}>{displayName || name}</h3>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 <div>
@@ -212,7 +213,27 @@ export default function CharacterCard({ character, onClose, onModify }) {
                   </div>
                 )}
 
-                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 24, marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 24, marginTop: 8, display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                  {onDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                      }}
+                      style={{
+                        padding: "10px 24px",
+                        borderRadius: 999,
+                        background: "white",
+                        color: "#EF4444",
+                        border: "1px solid #EF4444",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete Character
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       onModify?.();

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function SceneCard({ scene, onClose, onModify }) {
+export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
     const [fullImage, setFullImage] = useState(null);
 
     if (!scene) return null;
@@ -68,10 +68,41 @@ export default function SceneCard({ scene, onClose, onModify }) {
                             cursor: "pointer",
                             background: "none",
                             border: "none",
-                            fontSize: "1.25rem"
+                            fontSize: "1.25rem",
+                            zIndex: 10
                         }}
                     >
                         ✕
+                    </button>
+
+                    {/* Delete Button (Trash Icon) */}
+                    <button
+                        className="absolute top-3 right-12 text-gray-400 hover:text-red-500"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onDelete) {
+                                onDelete();
+                                // Close is triggered by parent state update usually, but just in case
+                            }
+                        }}
+                        title="Delete Keyframe"
+                        style={{
+                            position: "absolute",
+                            top: "0.75rem",
+                            right: "3rem", // Left of close button
+                            color: "#9CA3AF",
+                            cursor: "pointer",
+                            background: "none",
+                            border: "none",
+                            fontSize: "1.25rem",
+                            zIndex: 10,
+                            padding: 0,
+                            lineHeight: 1
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = "#EF4444"}
+                        onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
+                    >
+                        🗑️
                     </button>
 
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">

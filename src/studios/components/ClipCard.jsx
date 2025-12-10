@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 
-export default function ClipCard({ clip, onClose, onEdit, onDelete }) {
+export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKeyframe }) {
     if (!clip) return null;
 
     const {
@@ -25,6 +25,82 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete }) {
 
     // Format Date
     const dateStr = created_at ? new Date(created_at).toLocaleDateString() : "Draft";
+
+    const [isCapturing, setIsCapturing] = useState(false);
+
+    const handleCaptureFrame = async () => {
+        if (!videoSrc) return;
+        setIsCapturing(true);
+        console.log("LOG: Starting capture for", videoSrc);
+
+        try {
+            const offscreenVideo = document.createElement('video');
+            offscreenVideo.crossOrigin = "anonymous";
+            offscreenVideo.preload = "auto";
+
+            // Rewrite URL to use local proxy if it's from digitaloceanspaces
+            let captureSrc = videoSrc;
+            if (videoSrc.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
+                captureSrc = videoSrc.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
+            } else if (videoSrc.includes('video-generations.nyc3.digitaloceanspaces.com')) {
+                captureSrc = videoSrc.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
+            } else if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
+                captureSrc = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
+            }
+            console.log("LOG: Using Capture Source:", captureSrc);
+            offscreenVideo.src = captureSrc;
+
+            // Wait for metadata
+            await new Promise((resolve, reject) => {
+                offscreenVideo.onloadedmetadata = () => {
+                    console.log("LOG: Metadata loaded. Duration:", offscreenVideo.duration);
+                    resolve();
+                };
+                offscreenVideo.onerror = (e) => {
+                    console.error("LOG: Video Error (Metadata phase):", offscreenVideo.error, e);
+                    reject(offscreenVideo.error || new Error("Unknown video loading error"));
+                };
+            });
+
+            // Seek to near end
+            const seekTime = Math.max(0, offscreenVideo.duration - 0.1);
+            console.log("LOG: Seeking to:", seekTime);
+            offscreenVideo.currentTime = seekTime;
+
+            // Wait for seek
+            await new Promise((resolve, reject) => {
+                offscreenVideo.onseeked = () => {
+                    console.log("LOG: Seek completed.");
+                    resolve();
+                };
+                offscreenVideo.onerror = (e) => {
+                    console.error("LOG: Video Error (Seek phase):", offscreenVideo.error, e);
+                    reject(offscreenVideo.error);
+                };
+            });
+
+            // Draw
+            const canvas = document.createElement('canvas');
+            canvas.width = offscreenVideo.videoWidth;
+            canvas.height = offscreenVideo.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(offscreenVideo, 0, 0);
+            console.log("LOG: Frame drawn to canvas.");
+
+            canvas.toBlob((blob) => {
+                console.log("LOG: Blob created. Size:", blob ? blob.size : 0);
+                if (blob) {
+                    onGenerateKeyframe?.(clip, blob);
+                }
+                setIsCapturing(false);
+            }, 'image/png');
+
+        } catch (err) {
+            console.error("Frame capture failed:", err);
+            setIsCapturing(false);
+            alert("Failed to capture frame: " + (err.message || "Unknown error"));
+        }
+    };
 
     // Dialogue script
     const scriptText = dBlocks?.map(d => `${d.characterName || d.speaker || "Unknown"}: ${d.text}`).join("\n\n") || "No dialogue.";
@@ -129,7 +205,11 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete }) {
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                                     <span style={{ fontSize: 13, color: "#64748B" }}>Audio Status</span>
                                     <span style={{ fontSize: 13, fontWeight: 600, color: clip.has_audio ? "#16A34A" : "#94A3B8" }}>
-                                        {clip.has_audio ? "🔊 Audio Present" : "🔇 Silent"}
+                                        {clip.has_audio ? (
+                                            (clip.speaker_type === 'on_screen' || clip.speaker_type === 'character')
+                                                ? "👄 Lipsync"
+                                                : "🔊 Audio Only"
+                                        ) : "🔇 Silent"}
                                     </span>
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
@@ -150,6 +230,26 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete }) {
 
                             {/* Action Buttons */}
                             <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleCaptureFrame(); }}
+                                    disabled={isCapturing}
+                                    style={{
+                                        padding: "8px 16px",
+                                        borderRadius: 999,
+                                        background: isCapturing ? "#94A3B8" : "#4F46E5",
+                                        color: "white",
+                                        border: "none",
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isCapturing ? "wait" : "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 6
+                                    }}
+                                >
+                                    {isCapturing ? "Capturing..." : "Extend Video"}
+                                </button>
+
                                 {onDelete && (
                                     <button
                                         onClick={(e) => {
