@@ -17,7 +17,15 @@ export default function ClipStudioDemo() {
     const [characters, setCharacters] = useState([]);
     const [registryVoices, setRegistryVoices] = useState([]);
     const [selectedKeyframe, setSelectedKeyframe] = useState(null);
-    const [shotList, setShotList] = useState([]); // Array of shots being drafted
+    const [shotList, setShotList] = useState(() => {
+        try {
+            const saved = localStorage.getItem("sceneme.shotList");
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            console.error("Failed to load shotList draft:", e);
+            return [];
+        }
+    }); // Array of shots being drafted
     const [savedClips, setSavedClips] = useState([]); // Array of saved clips
     const [previewShot, setPreviewShot] = useState(null); // For modal preview
     const [clipToDelete, setClipToDelete] = useState(null); // Custom delete workflow
@@ -100,6 +108,15 @@ export default function ClipStudioDemo() {
         };
         fetchData();
     }, []);
+
+    // PERSIST SHOTLIST
+    useEffect(() => {
+        try {
+            localStorage.setItem("sceneme.shotList", JSON.stringify(shotList));
+        } catch (e) {
+            console.error("Failed to save shotList draft:", e);
+        }
+    }, [shotList]);
 
     // --- Shot Management ---
     const addShot = useCallback((explicitKeyframe = null) => {
@@ -607,7 +624,7 @@ export default function ClipStudioDemo() {
                 </button>
             </section>
 
-            {/* SHOT WORKSHOP */}
+
             <section className="mb-12">
                 <h2 className="text-base font-bold text-gray-800 mb-4">2. Clip Workshop</h2>
                 <div className="flex flex-col gap-6">
