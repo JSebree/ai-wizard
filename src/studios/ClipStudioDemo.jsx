@@ -556,6 +556,8 @@ export default function ClipStudioDemo() {
                 setSelectedKeyframe(null);
             }
 
+            return finalClip; // Return for chaining
+
         } catch (err) {
             console.error("Save to Bin Execution Error:", err);
             alert("Unexpected error saving clip: " + err.message);
