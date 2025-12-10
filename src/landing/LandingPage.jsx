@@ -454,7 +454,7 @@ export default function LandingPage() {
               fontSize: 14,
             }}
           >
-            Try SceneMe Studios
+            SceneMe Studios
           </button>
         </div>
       </section>
