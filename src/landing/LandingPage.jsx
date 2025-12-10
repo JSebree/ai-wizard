@@ -410,7 +410,7 @@ export default function LandingPage() {
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>SceneMe</h1>
         <p style={{ marginTop: 8, color: "#475569" }}>
-          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Explore the one‑click Express workflow below, or step into the new <strong>SceneMe Studios (Preview)</strong> to build reusable Characters, design immersive Settings, and craft cinematic multi-scene productions.
+          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Explore the one‑click Express workflow below, or step into <strong>SceneMe Studios</strong> to build reusable Characters, design immersive Settings, and craft cinematic multi-scene productions.
         </p>
       </header>
 
@@ -438,7 +438,7 @@ export default function LandingPage() {
               fontWeight: 700,
             }}
           >
-            Create your own
+            Express Video
           </button>
           <button
             type="button"
@@ -454,7 +454,7 @@ export default function LandingPage() {
               fontSize: 14,
             }}
           >
-            Try SceneMe Studios (Preview)
+            Try SceneMe Studios
           </button>
         </div>
       </section>
@@ -524,87 +524,89 @@ export default function LandingPage() {
 
 
       {/* --- Intake Modal --- */}
-      {showForm && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000
-          }}
-          onClick={(e) => {
-            // close when clicking backdrop only
-            if (e.target === e.currentTarget) closeForm();
-          }}
-        >
-          <div style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
-            <h3 style={{ marginTop: 0, marginBottom: 6 }}>
-              {pendingTemplate ? "Use template" : "Create your own"}
-            </h3>
-            <p style={{ marginTop: 0, color: "#475569" }}>
-              Tell us where to send status updates and your finished video.
-            </p>
-            <form onSubmit={handleSubmitUser}>
-              <label htmlFor="firstName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>First name</label>
-              <input
-                id="firstName"
-                type="text"
-                placeholder="First name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
-                required
-              />
-              <label htmlFor="lastName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Last name</label>
-              <input
-                id="lastName"
-                type="text"
-                placeholder="Last name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
-                required
-              />
-              <label htmlFor="email" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your email</label>
-              <input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
-                required
-              />
-              <small style={{ display: "block", marginTop: 6, color: "#667085" }}>
-                We’ll use this for status updates and delivery. No spam.
-              </small>
+      {
+        showForm && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000
+            }}
+            onClick={(e) => {
+              // close when clicking backdrop only
+              if (e.target === e.currentTarget) closeForm();
+            }}
+          >
+            <div style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
+              <h3 style={{ marginTop: 0, marginBottom: 6 }}>
+                {pendingTemplate ? "Use template" : "Create your own"}
+              </h3>
+              <p style={{ marginTop: 0, color: "#475569" }}>
+                Tell us where to send status updates and your finished video.
+              </p>
+              <form onSubmit={handleSubmitUser}>
+                <label htmlFor="firstName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>First name</label>
+                <input
+                  id="firstName"
+                  type="text"
+                  placeholder="First name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
+                  required
+                />
+                <label htmlFor="lastName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Last name</label>
+                <input
+                  id="lastName"
+                  type="text"
+                  placeholder="Last name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
+                  required
+                />
+                <label htmlFor="email" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your email</label>
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
+                  required
+                />
+                <small style={{ display: "block", marginTop: 6, color: "#667085" }}>
+                  We’ll use this for status updates and delivery. No spam.
+                </small>
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  className="btn btn-secondary"
-                  style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#111827" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff" }}
-                >
-                  Continue
-                </button>
-              </div>
-            </form>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="btn btn-secondary"
+                    style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#111827" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff" }}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }

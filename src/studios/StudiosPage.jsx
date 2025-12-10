@@ -44,29 +44,11 @@ export default function StudiosPage() {
       }}
     >
       <header style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>SceneMe Studios (Preview)</h1>
+        <h1 style={{ margin: 0 }}>SceneMe Studios</h1>
         <p style={{ marginTop: 8, color: "#475569", lineHeight: "1.6" }}>
           Welcome to your new creative workflow. Start by building consistent <b>Characters</b> and <b>Settings</b>, then bring them together into stunning <b>Keyframes</b>. Note those moments, bring them to life in the <b>Clip Studio</b>, and finally, weave it all together into a complete masterpiece in the <b>Scene Studio</b>.
         </p>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            marginTop: 8,
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: "#FEF3C7",
-            color: "#92400E",
-            fontSize: 12,
-            fontWeight: 500,
-          }}
-        >
-          <span>Preview only</span>
-          <span style={{ opacity: 0.75 }}>
-            Studios run separately from the Express workflow for now.
-          </span>
-        </div>
+
       </header>
 
       {/* Tabs */}
