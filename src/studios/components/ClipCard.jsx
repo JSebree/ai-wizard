@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKeyframe }) {
+export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKeyframe, characters, registryVoices }) {
     if (!clip) return null;
 
     const {
@@ -103,7 +103,16 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
     };
 
     // Dialogue script
-    const scriptText = dBlocks?.map(d => `${d.characterName || d.speaker || "Unknown"}: ${d.text}`).join("\n\n") || "No dialogue.";
+    const scriptText = dBlocks?.map(d => {
+        let name = d.characterName || d.speaker;
+        // If name is missing or "Unknown Speaker", try to resolve via ID
+        if (!name || name === "Unknown Speaker" || name === "Unknown") {
+            const idToFind = d.characterId || d.speaker_id || clip.character_id;
+            const found = characters?.find(c => c.id === idToFind) || registryVoices?.find(v => v.id === idToFind);
+            if (found) name = found.name;
+        }
+        return `${name || "Unknown"}: ${d.text}`;
+    }).join("\n\n") || "No dialogue.";
 
     return (
         <div

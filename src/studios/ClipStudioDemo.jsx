@@ -88,7 +88,18 @@ export default function ClipStudioDemo() {
 
             // Fetch characters
             const { data: charactersData } = await supabase.from('characters').select('*');
-            if (charactersData) setCharacters(charactersData);
+            if (charactersData) {
+                // SANITIZATION: Fix corrupted voice IDs that look like query strings
+                const cleanChars = charactersData.map(c => {
+                    const isCorrupted = (val) => typeof val === 'string' && val.includes('?id=eq');
+                    return {
+                        ...c,
+                        voice_id: isCorrupted(c.voice_id) ? "en_us_001" : c.voice_id,
+                        voiceId: isCorrupted(c.voiceId) ? "en_us_001" : c.voiceId
+                    };
+                });
+                setCharacters(cleanChars);
+            }
 
             // Fetch saved clips from new table
             const { data: clipsData, error: clipsError } = await supabase.from('clips').select('*').order('created_at', { ascending: false });
@@ -107,9 +118,16 @@ export default function ClipStudioDemo() {
                             parsedBlocks = [];
                         }
 
+                        // SANITIZATION: Fix blocks
+                        const cleanBlocks = parsedBlocks.map(b => ({
+                            ...b,
+                            voice_id: (b.voice_id && b.voice_id.includes('?id=eq')) ? "en_us_001" : b.voice_id,
+                            characterId: (b.characterId && b.characterId.includes('?id=eq')) ? "" : b.characterId // Clear corrupted char IDs
+                        }));
+
                         return {
                             ...c,
-                            dialogue_blocks: parsedBlocks
+                            dialogue_blocks: cleanBlocks
                         };
                     } catch (e) {
                         console.error("Failed to parse clip JSON:", c.id, e);
@@ -339,123 +357,6 @@ export default function ClipStudioDemo() {
         }
     }, [shotList, updateShot, characters, registryVoices]);
 
-    // --- Video Rendering ---
-    // --- Video Rendering ---
-    const renderClip = useCallback(async (shot) => {
-        updateShot(shot.tempId, { status: "rendering", error: "" });
-
-        const webhookUrl = shot.speakerType === "on_screen" ? LIPSYNC_WEBHOOK : I2V_WEBHOOK;
-
-        try {
-            // 1. Create Initial DB Record (Pending/Rendering)
-            console.log("Creating initial pending record...");
-            const pendingShot = {
-                ...shot,
-                status: 'rendering',
-                videoUrl: "" // No video yet
-            };
-            const dbRecord = await saveToBin(pendingShot, false); // Returns the saved record (with ID)
-            const dbId = dbRecord?.id;
-
-            if (dbId) {
-                // Attach DB ID to workshop shot so we can update it later
-                updateShot(shot.tempId, { dbId: dbId, status: 'rendering' });
-            }
-
-            // Determine duration and frames
-            const duration = shot.isAudioLocked
-                ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
-                : shot.manualDuration;
-
-            // FramePack expects integer frames (e.g. 300 for 10s @ 30fps)
-            const numFrames = Math.ceil((duration || 3) * 30);
-
-            const res = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    clip_name: shot.name,
-                    prompt: shot.prompt,
-                    image_url: shot.sceneImageUrl,
-                    audio_url: shot.stitchedAudioUrl,
-                    motion: shot.motion || "static",
-                    num_frames: numFrames, // Explicit frame count for I2V
-                    // Passing dialogue structure in case backend supports multi-speaker face mapping
-                    dialogue: shot.dialogueBlocks.map(b => ({
-                        speaker_id: b.characterId,
-                        text: b.text
-                    }))
-                })
-            });
-
-            if (!res.ok) throw new Error("Video rendering failed.");
-
-            const data = await res.json();
-            console.log("Rendering Response Data:", JSON.stringify(data, null, 2));
-
-            // Robust Recursive URL Finder
-            const findVideoUrl = (obj) => {
-                if (!obj) return null;
-                if (Array.isArray(obj)) {
-                    for (let item of obj) {
-                        const found = findVideoUrl(item);
-                        if (found) return found;
-                    }
-                    return null;
-                }
-                if (typeof obj === 'object') {
-                    // Check likely keys first
-                    const candidates = [
-                        obj.s3_url, obj.video_url, obj.url, obj['final-url'],
-                        obj.output?.s3_url, obj.output?.video_url, obj.output?.url,
-                        obj.artifacts?.video_url, obj.output?.artifacts?.video_url
-                    ];
-                    for (let c of candidates) {
-                        if (c && typeof c === 'string' && (c.startsWith('http'))) return c;
-                    }
-                    // Deep search for any mp4
-                    for (let key in obj) {
-                        if (typeof obj[key] === 'object') {
-                            const found = findVideoUrl(obj[key]);
-                            if (found) return found;
-                        } else if (typeof obj[key] === 'string' && obj[key].match(/\.mp4(\?.*)?$/i) && obj[key].startsWith('http')) {
-                            return obj[key];
-                        }
-                    }
-                }
-                return null;
-            };
-
-            const videoUrl = findVideoUrl(data);
-            console.log("Extracted Video URL:", videoUrl);
-
-            if (!videoUrl) {
-                throw new Error("No video URL found in response.");
-            }
-
-            const updatedShot = {
-                ...shot,
-                dbId: dbId, // Pass the ID to perform an Update
-                videoUrl: videoUrl,
-                status: "preview_ready", // In Workshop
-                manualDuration: shot.isAudioLocked ? shot.totalAudioDuration : shot.manualDuration
-            };
-
-            updateShot(shot.tempId, updatedShot);
-
-            // 2. Update DB Record with Final URL
-            console.log("Updating record with video URL...");
-            // Force status to completed for the DB save
-            saveToBin({ ...updatedShot, status: 'completed' }, false);
-
-        } catch (err) {
-            console.error("Render Error:", err);
-            updateShot(shot.tempId, { status: "draft", error: `Rendering failed: ${err.message} ` });
-        }
-    }, [updateShot]); // Removed cyclic saveToBin dependency by using ref if needed, or acknowledging linter warning. 
-    // Ideally we add saveToBin to dependency array, assuming saveToBin is stable (useCallback).
-    // We will add it below in the tool call for correctness if possible, but let's stick to simple text replace first.
-
     // --- Save to Bin ---
     const saveToBin = useCallback(async (shot, shouldRemove = true) => {
         console.log("Saving Shot to Bin:", shot);
@@ -563,6 +464,133 @@ export default function ClipStudioDemo() {
             alert("Unexpected error saving clip: " + err.message);
         }
     }, [updateShot, removeShot, selectedKeyframe, savedClips.length, characters, registryVoices]);
+
+    // --- Video Rendering ---
+    // --- Video Rendering ---
+    const renderClip = useCallback(async (shot) => {
+        updateShot(shot.tempId, { status: "rendering", error: "" });
+
+        const webhookUrl = shot.speakerType === "on_screen" ? LIPSYNC_WEBHOOK : I2V_WEBHOOK;
+
+        try {
+            // 1. Create Initial DB Record (Pending/Rendering)
+            console.log("Creating initial pending record...");
+            const pendingShot = {
+                ...shot,
+                status: 'rendering',
+                videoUrl: "" // No video yet
+            };
+            const dbRecord = await saveToBin(pendingShot, false); // Returns the saved record (with ID)
+            const dbId = dbRecord?.id;
+
+            console.log("DB ID from initial save:", dbId);
+
+            if (dbId) {
+                // Attach DB ID to workshop shot so we can update it later
+                updateShot(shot.tempId, { dbId: dbId, status: 'rendering' });
+            } else {
+                console.error("WARNING: Initial saveToBin did not return an ID. Update will fail.");
+            }
+
+            // Determine duration and frames
+            const duration = shot.isAudioLocked
+                ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
+                : shot.manualDuration;
+
+            // FramePack expects integer frames (e.g. 300 for 10s @ 30fps)
+            const numFrames = Math.ceil((duration || 3) * 30);
+
+            const res = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clip_name: shot.name,
+                    // Safety Truncation: FramePack has a 75 token limit
+                    prompt: (shot.prompt || "").slice(0, 280),
+                    image_url: shot.sceneImageUrl,
+                    audio_url: shot.stitchedAudioUrl,
+                    motion: shot.motion || "static",
+                    num_frames: numFrames, // Explicit frame count for I2V
+                    // Passing dialogue structure in case backend supports multi-speaker face mapping
+                    dialogue: shot.dialogueBlocks.map(b => ({
+                        speaker_id: b.characterId,
+                        text: b.text,
+                        duration: b.duration || 0,
+                        character_name: b.characterName || "Unknown"
+                    }))
+                })
+            });
+
+            if (!res.ok) throw new Error("Video rendering failed.");
+
+            const data = await res.json();
+            console.log("Rendering Response Data:", JSON.stringify(data, null, 2));
+
+            // Robust Recursive URL Finder
+            const findVideoUrl = (obj) => {
+                if (!obj) return null;
+                if (Array.isArray(obj)) {
+                    for (let item of obj) {
+                        const found = findVideoUrl(item);
+                        if (found) return found;
+                    }
+                    return null;
+                }
+                if (typeof obj === 'object') {
+                    // Check likely keys first
+                    const candidates = [
+                        obj.s3_url, obj.video_url, obj.url, obj['final-url'],
+                        obj.output?.s3_url, obj.output?.video_url, obj.output?.url,
+                        obj.artifacts?.video_url, obj.output?.artifacts?.video_url
+                    ];
+                    for (let c of candidates) {
+                        if (c && typeof c === 'string' && (c.startsWith('http'))) return c;
+                    }
+                    // Deep search for any mp4
+                    for (let key in obj) {
+                        if (typeof obj[key] === 'object') {
+                            const found = findVideoUrl(obj[key]);
+                            if (found) return found;
+                        } else if (typeof obj[key] === 'string' && obj[key].match(/\.mp4(\?.*)?$/i) && obj[key].startsWith('http')) {
+                            return obj[key];
+                        }
+                    }
+                }
+                return null;
+            };
+
+            const videoUrl = findVideoUrl(data);
+            console.log("Extracted Video URL:", videoUrl);
+
+            if (!videoUrl) {
+                throw new Error("No video URL found in response.");
+            }
+
+            const updatedShot = {
+                ...shot,
+                dbId: dbId, // Pass the ID to perform an Update
+                videoUrl: videoUrl,
+                status: "preview_ready", // In Workshop
+                manualDuration: shot.isAudioLocked ? shot.totalAudioDuration : shot.manualDuration
+            };
+
+            updateShot(shot.tempId, updatedShot);
+
+            // 2. Update DB Record with Final URL
+            console.log("Updating record with video URL for ID:", dbId);
+            // Force status to completed for the DB save
+            saveToBin({ ...updatedShot, status: 'completed' }, false);
+
+        } catch (err) {
+            console.error("Render Error:", err);
+            updateShot(shot.tempId, { status: "draft", error: `Rendering failed: ${err.message} ` });
+        }
+    }, [updateShot, saveToBin]);
+    // Ideally we add saveToBin to dependency array, assuming saveToBin is stable (useCallback).
+    // We will add it below in the tool call for correctness if possible, but let's stick to simple text replace first.
+
+
+
 
     // DELETE LOGIC
     // DELETE LOGIC
@@ -1024,6 +1052,7 @@ export default function ClipStudioDemo() {
             </section>
 
             {/* PREVIEW MODAL */}
+            {/* PREVIEW MODAL */}
             {
                 previewShot && (
                     previewShot.status === 'completed' || (String(previewShot.id).startsWith("saved_") || previewShot.created_at) ? (
@@ -1032,8 +1061,10 @@ export default function ClipStudioDemo() {
                             onClose={() => setPreviewShot(null)}
                             onEdit={handleEditClip}
                             onDelete={handleDeleteClip}
+                            characters={characters}
+                            registryVoices={registryVoices}
                             onGenerateKeyframe={async (clip, blob) => {
-                                // Removed confirm dialog to prevent blocking issues
+                                // Removed confirm dialog
                                 console.log("PARENT: onGenerateKeyframe called with blob size:", blob?.size);
 
                                 if (!blob) {
@@ -1048,7 +1079,7 @@ export default function ClipStudioDemo() {
                                     const formData = new FormData();
                                     formData.append("file", blob, filename);
                                     formData.append("name", "Frame Capture: " + clip.name);
-                                    formData.append("kind", "scene"); // Mapping to 'scenes' folder recommendation
+                                    formData.append("kind", "scene");
 
                                     const uploadRes = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
                                         method: "POST",
@@ -1062,7 +1093,6 @@ export default function ClipStudioDemo() {
                                     const uploadData = await uploadRes.json();
                                     console.log("Upload Webhook Response:", uploadData);
 
-                                    // Robust URL extraction
                                     const publicUrl = uploadData.publicUrl || uploadData.url || uploadData.image_url || (Array.isArray(uploadData) && uploadData[0]?.url);
 
                                     if (!publicUrl) {
@@ -1091,16 +1121,13 @@ export default function ClipStudioDemo() {
                                     }
                                     console.log("DB Insert successful:", insertData);
 
-                                    // alert("Success! New keyframe created."); // Fail silently/smoothly for better UX? Or toast? User said "Perfect!", assumes alert was fine, but let's make it smoother for flow.
-                                    // Actually, user wants to go directly to workshop, so alert might interpret flow.
-
                                     if (insertData && insertData[0]) {
                                         const s = insertData[0];
                                         const formattedKeyframe = {
                                             id: s.id,
                                             name: s.name,
                                             image_url: s.image_url,
-                                            imageUrl: s.image_url, // Dual support
+                                            imageUrl: s.image_url,
                                             characterId: s.character_id,
                                             description: s.prompt
                                         };
@@ -1108,10 +1135,10 @@ export default function ClipStudioDemo() {
                                         setKeyframes(prev => [formattedKeyframe, ...prev]);
 
                                         // AUTO-NAVIGATE WORKFLOW
-                                        setSelectedKeyframe(formattedKeyframe); // Select it for context
-                                        addShot(formattedKeyframe); // Auto-add to workshop
-                                        setPreviewShot(null); // Close the preview modal
-                                        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to workshop
+                                        setSelectedKeyframe(formattedKeyframe);
+                                        addShot(formattedKeyframe);
+                                        setPreviewShot(null);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
                                     }
 
                                 } catch (err) {
