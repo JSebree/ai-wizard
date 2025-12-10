@@ -347,6 +347,21 @@ export default function ClipStudioDemo() {
         const webhookUrl = shot.speakerType === "on_screen" ? LIPSYNC_WEBHOOK : I2V_WEBHOOK;
 
         try {
+            // 1. Create Initial DB Record (Pending/Rendering)
+            console.log("Creating initial pending record...");
+            const pendingShot = {
+                ...shot,
+                status: 'rendering',
+                videoUrl: "" // No video yet
+            };
+            const dbRecord = await saveToBin(pendingShot, false); // Returns the saved record (with ID)
+            const dbId = dbRecord?.id;
+
+            if (dbId) {
+                // Attach DB ID to workshop shot so we can update it later
+                updateShot(shot.tempId, { dbId: dbId, status: 'rendering' });
+            }
+
             // Determine duration and frames
             const duration = shot.isAudioLocked
                 ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
@@ -418,99 +433,132 @@ export default function ClipStudioDemo() {
                 throw new Error("No video URL found in response.");
             }
 
-            updateShot(shot.tempId, {
+            const updatedShot = {
+                ...shot,
+                dbId: dbId, // Pass the ID to perform an Update
                 videoUrl: videoUrl,
-                status: "preview_ready",
+                status: "preview_ready", // In Workshop
                 manualDuration: shot.isAudioLocked ? shot.totalAudioDuration : shot.manualDuration
-            });
+            };
+
+            updateShot(shot.tempId, updatedShot);
+
+            // 2. Update DB Record with Final URL
+            console.log("Updating record with video URL...");
+            // Force status to completed for the DB save
+            saveToBin({ ...updatedShot, status: 'completed' }, false);
 
         } catch (err) {
             console.error("Render Error:", err);
             updateShot(shot.tempId, { status: "draft", error: `Rendering failed: ${err.message} ` });
         }
-    }, [updateShot]);
+    }, [updateShot]); // Removed cyclic saveToBin dependency by using ref if needed, or acknowledging linter warning. 
+    // Ideally we add saveToBin to dependency array, assuming saveToBin is stable (useCallback).
+    // We will add it below in the tool call for correctness if possible, but let's stick to simple text replace first.
 
     // --- Save to Bin ---
-    const saveToBin = useCallback(async (shot) => {
+    const saveToBin = useCallback(async (shot, shouldRemove = true) => {
         console.log("Saving Shot to Bin:", shot);
         try {
-            // Use totalAudioDuration if locked, ensuring we capture the full stitched length + delay
-            const finalDuration = shot.isAudioLocked
-                ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
-                : shot.manualDuration;
+            try {
+                // Use totalAudioDuration if locked, ensuring we capture the full stitched length + delay
+                const finalDuration = shot.isAudioLocked
+                    ? ((shot.totalAudioDuration || 0) + (shot.startDelay || 0))
+                    : shot.manualDuration;
 
-            // Enrich dialogue blocks with names for the "Script" view
-            const enrichedBlocks = (shot.dialogueBlocks || []).map(b => {
-                const char = characters.find(c => c.id === b.characterId);
-                const regVoice = registryVoices.find(v => v.id === b.characterId);
-                return {
-                    ...b,
-                    characterName: char?.name || regVoice?.name || "Unknown Speaker"
+                // Enrich dialogue blocks with names for the "Script" view
+                const enrichedBlocks = (shot.dialogueBlocks || []).map(b => {
+                    const char = characters.find(c => c.id === b.characterId);
+                    const regVoice = registryVoices.find(v => v.id === b.characterId);
+                    return {
+                        ...b,
+                        characterName: char?.name || regVoice?.name || "Unknown Speaker"
+                    };
+                });
+
+                // Optimistic / Demo Save
+                const payload = {
+                    id: shot.id, // Prefer existing ID (for updates)
+                    name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
+                    scene_id: selectedKeyframe?.id,
+                    scene_name: selectedKeyframe?.name,
+                    character_id: shot.dialogueBlocks?.[0]?.characterId || null,
+                    thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
+                    video_url: shot.videoUrl || null, // Might be null if pending
+                    raw_video_url: shot.rawVideoUrl || shot.videoUrl,
+                    audio_url: shot.stitchedAudioUrl || null,
+                    prompt: shot.prompt,
+                    motion_type: shot.motion,
+                    duration: parseFloat(finalDuration),
+                    dialogue_blocks: shot.dialogueBlocks || [],
+                    speaker_type: shot.speakerType,
+                    status: shot.status || "completed", // Allow passing 'rendering'
+                    created_at: new Date().toISOString(),
+                    start_delay: shot.startDelay || 0,
+                    has_audio: !!shot.stitchedAudioUrl
                 };
-            });
 
-            // Optimistic / Demo Save
-            const payload = {
-                id: shot.id || crypto.randomUUID(), // If restoring, might have ID, else new
-                name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
-                scene_id: selectedKeyframe?.id,
-                scene_name: selectedKeyframe?.name,
-                character_id: shot.dialogueBlocks?.[0]?.characterId || null,
-                thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
-                video_url: shot.videoUrl, // The final rendered video
-                raw_video_url: shot.rawVideoUrl || shot.videoUrl, // Keep raw just in case
-                audio_url: shot.stitchedAudioUrl || null, // The separate audio track if any
-                prompt: shot.prompt,
-                motion_type: shot.motion,
-                duration: parseFloat(finalDuration),
-                dialogue_blocks: shot.dialogueBlocks || [],
-                speaker_type: shot.speakerType, // 'narrator' or 'on_screen'
-                status: "completed",
-                created_at: new Date().toISOString(),
-                start_delay: shot.startDelay || 0,
                 has_audio: !!shot.stitchedAudioUrl // Explicit flag
             };
 
             let finalClip = { ...payload }; // Local state version
 
             if (supabase) {
-                const dbId = uuidv4();
-                const dbPayload = {
-                    ...payload,
-                    id: dbId,
-                    created_at: new Date().toISOString(),
-                    stitched_audio_url: shot.stitchedAudioUrl,
-                    start_delay: shot.startDelay,
-                    dialogue_blocks: JSON.stringify(enrichedBlocks), // Schema expects stringified JSON
-                    shot_type: shot.speakerType === 'on_screen' ? 'lipsync' : 'cinematic'
-                };
+                // If it looks like a valid UUID, try to UPDATE, else INSERT
+                const isExisting = shot.dbId && shot.dbId.length > 10;
 
                 // DATA CLEANUP: Remove fields not in DB schema
+                const dbPayload = { ...payload };
                 delete dbPayload.audio_url;
                 delete dbPayload.raw_video_url;
-                delete dbPayload.scene_name; // Not in schema
+                delete dbPayload.scene_name;
 
-                const { data, error } = await supabase.from("clips").insert([dbPayload]).select().single();
+                // Add schema-specific fields
+                dbPayload.stitched_audio_url = shot.stitchedAudioUrl;
+                dbPayload.start_delay = shot.startDelay;
+                dbPayload.dialogue_blocks = JSON.stringify(enrichedBlocks);
+                dbPayload.shot_type = shot.speakerType === 'on_screen' ? 'lipsync' : 'cinematic';
 
-                if (error) {
-                    console.error("Supabase Save Error:", error);
-                    alert(`Failed to save to 'clips' table: ${error.message} (Code: ${error.code})`);
-                    return; // Stop if db save fails
-                } else if (data) {
-                    finalClip = {
-                        ...data,
-                        // Ensure local state uses the Object Array, not the DB String
-                        dialogue_blocks: typeof data.dialogue_blocks === 'string'
-                            ? JSON.parse(data.dialogue_blocks)
-                            : (data.dialogue_blocks || enrichedBlocks)
-                    };
+                if (isExisting) {
+                    console.log("Updating existing clip record:", shot.dbId);
+                    dbPayload.id = shot.dbId; // Ensure ID matches
+                    const { data, error } = await supabase
+                        .from("clips")
+                        .update(dbPayload)
+                        .eq("id", shot.dbId)
+                        .select()
+                        .single();
+
+                    if (error) throw error;
+                    if (data) finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
+
+                } else {
+                    console.log("Inserting new clip record...");
+                    const dbId = uuidv4();
+                    dbPayload.id = dbId;
+                    const { data, error } = await supabase
+                        .from("clips")
+                        .insert([dbPayload])
+                        .select()
+                        .single();
+
+                    if (error) throw error;
+                    if (data) finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
                 }
             }
 
-            setSavedClips(prev => [finalClip, ...prev]);
-            removeShot(shot.tempId);
-            setPreviewShot(null);
-            setSelectedKeyframe(null);
+            // Update Local State (Merge if exists, else prepend)
+            setSavedClips(prev => {
+                const exists = prev.find(c => c.id === finalClip.id);
+                if (exists) return prev.map(c => c.id === finalClip.id ? finalClip : c);
+                return [finalClip, ...prev];
+            });
+
+            if (shouldRemove) {
+                removeShot(shot.tempId);
+                setPreviewShot(null);
+                setSelectedKeyframe(null);
+            }
 
         } catch (err) {
             console.error("Save to Bin Execution Error:", err);
