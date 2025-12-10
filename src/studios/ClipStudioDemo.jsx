@@ -20,7 +20,20 @@ export default function ClipStudioDemo() {
     const [shotList, setShotList] = useState(() => {
         try {
             const saved = localStorage.getItem("sceneme.shotList");
-            return saved ? JSON.parse(saved) : [];
+            if (!saved) return [];
+
+            const parsed = JSON.parse(saved);
+            // "Heal" stuck states on reload. If it was rendering, we lost the socket/callback.
+            // So default it back to idle or error so the user can retry.
+            return parsed.map(shot => {
+                if (shot.status === 'rendering' || shot.status === 'generating') {
+                    // Check if we arguably have a videoUrl from a previous run
+                    if (shot.videoUrl) return { ...shot, status: 'preview_ready' };
+                    // Otherwise reset to allowable retry state
+                    return { ...shot, status: 'idle' };
+                }
+                return shot;
+            });
         } catch (e) {
             console.error("Failed to load shotList draft:", e);
             return [];
