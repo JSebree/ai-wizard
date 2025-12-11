@@ -54,6 +54,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         if (lastFrameUrl) {
             console.log("LOG: [v40] Using pre-generated last frame URL:", lastFrameUrl);
             try {
+                // [v42 Debug] Verify we are trying to use it
+                // alert(`Using pre-gen URL: ${lastFrameUrl}`); 
                 const blob = await captureFromImage(lastFrameUrl);
                 if (blob) {
                     onGenerateKeyframe?.(clip, blob);
@@ -62,6 +64,12 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 }
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
+            }
+        } else {
+            // [v42 Debug] Why is it missing?
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            if (isMobile) {
+                alert(`[Debug v42] Last Frame URL Missing!\n\nClip ID: ${clip.id}\n\nKeys: ${Object.keys(clip).join(', ')}\n\nThumb: ${thumbSrc}\n\nVideo: ${videoSrc}`);
             }
         }
 
