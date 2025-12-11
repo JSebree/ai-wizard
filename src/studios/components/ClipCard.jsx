@@ -98,7 +98,18 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         } catch (err) {
             console.error("Frame capture failed:", err);
             setIsCapturing(false);
-            alert("Failed to capture frame: " + (err.message || "Unknown error"));
+            // Construct Detailed Error Message for User Debugging
+            let captureSrcDebug = videoSrc;
+            if (videoSrc.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
+                captureSrcDebug = videoSrc.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
+            } else if (videoSrc.includes('video-generations.nyc3.digitaloceanspaces.com')) {
+                captureSrcDebug = videoSrc.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
+            } else if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
+                captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
+            }
+
+            const errorMsg = `Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            alert(errorMsg);
         }
     };
 
