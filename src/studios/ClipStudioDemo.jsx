@@ -1171,30 +1171,36 @@ export default function ClipStudioDemo() {
                                         setKeyframes(prev => [formattedKeyframe, ...prev]);
 
                                         // [v47] Auto-Add to Clip Workshop (Draft)
-                                        // This mimics handleEditClip behavior but starts fresh for the new extension
-                                        const newDraftShot = {
-                                            id: `local_${uuidv4()}`, // Consistent ID format
-                                            tempId: Date.now(),
-                                            name: formattedKeyframe.name,
-                                            characterId: formattedKeyframe.characterId || "", // Preserve character if known
-                                            text: "",
-                                            audioUrl: "",
-                                            duration: 0,
-                                            pauseDuration: 0.5,
-                                            isGenerating: false,
-                                            speakerType: "on_screen",
-                                            status: "draft",
-                                            videoUrl: "",
-                                            error: "",
-                                            stitchedAudioUrl: "",
-                                            totalAudioDuration: 0,
-                                            isAudioLocked: false,
-                                            startDelay: 0,
-                                            // Link to the scene we just created
-                                            sceneId: formattedKeyframe.id,
-                                            sceneImageUrl: formattedKeyframe.image_url
-                                        };
-                                        setShotList(prev => [newDraftShot, ...prev]);
+                                        // Wrapped in try/catch to prevent white screen if initialization fails
+                                        try {
+                                            console.log("LOG: Initializing Draft Shot with:", formattedKeyframe);
+                                            const newDraftShot = {
+                                                id: `local_${uuidv4()}`,
+                                                tempId: Date.now(),
+                                                name: formattedKeyframe.name || "Untitled Extension",
+                                                characterId: formattedKeyframe.characterId || "",
+                                                text: "",
+                                                audioUrl: "",
+                                                duration: 0,
+                                                pauseDuration: 0.5,
+                                                isGenerating: false,
+                                                speakerType: "on_screen",
+                                                status: "draft",
+                                                videoUrl: "",
+                                                error: "",
+                                                stitchedAudioUrl: "",
+                                                totalAudioDuration: 0,
+                                                isAudioLocked: false,
+                                                startDelay: 0,
+                                                sceneId: formattedKeyframe.id,
+                                                sceneImageUrl: formattedKeyframe.image_url || formattedKeyframe.imageUrl
+                                            };
+                                            console.log("LOG: Created Draft Shot:", newDraftShot);
+                                            setShotList(prev => [newDraftShot, ...(prev || [])]);
+                                        } catch (err) {
+                                            console.error("CRITICAL: Failed to auto-create draft shot:", err);
+                                            // Do not rethrow, just let the flow continue (user just won't see the draft)
+                                        }
 
                                         // AUTO-NAVIGATE WORKFLOW
                                         setPreviewShot(null); // Close Modal [v24 Fix]
