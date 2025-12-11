@@ -736,6 +736,12 @@ export default function ClipStudioDemo() {
                         </div>
                     )}
                     {shotList.map((shot, index) => {
+                        // [v60] Live Metadata Lookup (Syncs with Badges)
+                        const parentScene = keyframes.find(k => k.id === shot.sceneId);
+                        const workingCharId = parentScene ? parentScene.characterId : shot.characterId;
+                        const workingCamera = parentScene ? parentScene.cameraLabel : shot.cameraLabel;
+                        const isLipSyncEligible = workingCharId && (workingCamera === "Standard" || workingCamera === "Close & Intimate");
+
                         const inputPlaceholder = shot.speakerType === "on_screen" ? "Enter dialogue..." : "Enter narration...";
                         const audioSectionLabel = shot.speakerType === "on_screen" ? "Dialogue" : "Narration";
 
