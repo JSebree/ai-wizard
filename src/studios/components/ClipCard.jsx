@@ -88,11 +88,15 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             console.log("LOG: [v35] Using direct video source (no blob download)");
             offscreenVideo.src = cacheBustedSrc;
 
-            // [v31] Metadata Wait with Timeout (5s)
+            // [v36] Explicitly start loading (mobile Safari needs this)
+            offscreenVideo.load();
+            console.log("LOG: [v36] Explicitly called video.load()");
+
+            // [v36] Metadata Wait with Timeout (15s for mobile networks)
             await new Promise((resolve, reject) => {
                 const metaTimeout = setTimeout(() => {
-                    reject(new Error("Timeout waiting for metadata"));
-                }, 5000);
+                    reject(new Error("Timeout waiting for metadata (15s)"));
+                }, 15000);
 
                 offscreenVideo.onloadedmetadata = () => {
                     clearTimeout(metaTimeout);
