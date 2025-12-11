@@ -1148,15 +1148,6 @@ export default function ClipStudioDemo() {
                                         camera_angle: inheritedCamera,
                                         created_at: new Date().toISOString()
                                     };
-                                    const newKeyframePayload = {
-                                        name: `${clip.name} ext`,
-                                        prompt: clip.prompt || sourceScene.prompt || "Captured end frame",
-                                        image_url: publicUrl,
-                                        character_id: inheritedChar,
-                                        setting_id: inheritedSetting,
-                                        camera_angle: inheritedCamera,
-                                        created_at: new Date().toISOString()
-                                    };
                                     console.log("Inserting into DB:", newKeyframePayload);
 
                                     const { data: insertData, error: insertError } = await supabase
