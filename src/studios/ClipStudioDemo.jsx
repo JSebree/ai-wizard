@@ -1131,15 +1131,21 @@ export default function ClipStudioDemo() {
                                     console.log("Public URL generated:", publicUrl);
 
                                     // Lookup original scene to inherit metadata
-                                    const sourceScene = keyframes.find(k => k.id === clip.scene_id) || {};
+                                    // Lookup original scene to inherit metadata
+                                    const sourceScene = keyframes.find(k => k.id === (clip.scene_id || clip.sceneId)) || {};
+
+                                    // [v52] Robust Metadata Inheritance for Badges
+                                    const inheritedCamera = clip.camera_angle || clip.cameraLabel || sourceScene.camera_angle || sourceScene.cameraLabel || "Standard";
+                                    const inheritedChar = clip.character_id || clip.characterId || sourceScene.character_id || sourceScene.characterId || null;
+                                    const inheritedSetting = clip.setting_id || clip.settingId || sourceScene.setting_id || sourceScene.settingId || null;
 
                                     const newKeyframePayload = {
                                         name: `${clip.name} ext`,
                                         prompt: clip.prompt || sourceScene.prompt || "Captured end frame",
                                         image_url: publicUrl,
-                                        character_id: clip.character_id || sourceScene.characterId || null,
-                                        setting_id: clip.setting_id || sourceScene.setting_id || null, // Key: Inherit setting
-                                        camera_angle: clip.cameraLabel || sourceScene.cameraLabel || "Standard",
+                                        character_id: inheritedChar,
+                                        setting_id: inheritedSetting,
+                                        camera_angle: inheritedCamera,
                                         created_at: new Date().toISOString()
                                     };
                                     console.log("Inserting into DB:", newKeyframePayload);
