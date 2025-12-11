@@ -56,7 +56,10 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
-            const captureSrc = getProxiedUrl(videoSrc);
+            // Use External CORS Proxy because our local proxy is broken by host (Index.html return)
+            // and Bucket has no CORS.
+            const encodedSrc = encodeURIComponent(videoSrc);
+            const captureSrc = `https://corsproxy.io/?${encodedSrc}`;
             console.log("LOG: Capture Source:", captureSrc);
             offscreenVideo.src = captureSrc;
 
@@ -117,7 +120,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v22 - Video Revert] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v23 - External Proxy] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
