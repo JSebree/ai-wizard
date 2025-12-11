@@ -58,22 +58,31 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
-            // [v29] Fixed Malformed URL Bug
-            // [v28] blindly appended '&_t=' which broke URLs without query params.
-            // Now checking for '?' to correctly append separator.
-            const separator = videoSrc.includes('?') ? '&' : '?';
-            const cacheBustedSrc = `${videoSrc}${separator}_t=${Date.now()}`;
-            const encodedSrc = encodeURIComponent(cacheBustedSrc);
+            // [v30] Local Proxy + Blob Strategy
+            // Reverted to Local Proxy because External Proxy is unreliable/blocked.
+            // Vite/Netlify/Vercel configs are now confirmed correct.
+            let captureSrc = videoSrc;
+            if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
+                captureSrc = getProxiedUrl(videoSrc);
+            }
 
-            const captureSrc = `https://corsproxy.io/?${encodedSrc}`;
-            console.log("LOG: [v29] Fetching Cache-Busted Blob from:", captureSrc);
+            // Append cache buster to Blob request
+            const separator = captureSrc.includes('?') ? '&' : '?';
+            const cacheBustedSrc = `${captureSrc}${separator}_t=${Date.now()}`;
 
-            const response = await fetch(captureSrc);
-            if (!response.ok) throw new Error(`Fetch Failed: ${response.status}`);
+            console.log("LOG: [v30] Fetching Blob from Local Proxy:", cacheBustedSrc);
+
+            const response = await fetch(cacheBustedSrc);
+            if (!response.ok) {
+                // Inspect error body if possible
+                const text = await response.text();
+                console.error("Local Proxy Error Body:", text.substring(0, 200));
+                throw new Error(`Fetch Failed: ${response.status}`);
+            }
             const videoBlob = await response.blob();
             const objectUrl = URL.createObjectURL(videoBlob);
 
-            console.log("LOG: [v27] Blob loaded, size:", videoBlob.size);
+            console.log("LOG: [v30] Blob loaded via Local Proxy, size:", videoBlob.size);
             offscreenVideo.src = objectUrl;
 
             await new Promise((resolve, reject) => {
@@ -146,17 +155,19 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             if (thumbSrc) {
                 console.log("Video capture failed. Attempting thumbnail fallback...");
                 try {
-                    // [v25] Use External Proxy for Thumbnail too (Local proxy is broken on host)
-                    const encodedThumb = encodeURIComponent(thumbSrc);
-                    const proxiedThumb = `https://corsproxy.io/?${encodedThumb}`;
+                    // [v30] Use Local Proxy for Thumbnail too
+                    const proxiedThumb = getProxiedUrl(thumbSrc);
+                    // Add cache buster
+                    const separator = proxiedThumb.includes('?') ? '&' : '?';
+                    const cacheBustedThumb = `${proxiedThumb}${separator}_t=${Date.now()}`;
 
-                    console.log("Fallback External Proxied Thumb:", proxiedThumb);
-                    const blob = await captureFromImage(proxiedThumb);
+                    console.log("Fallback Local Proxied Thumb:", cacheBustedThumb);
+                    const blob = await captureFromImage(cacheBustedThumb);
                     if (blob) {
                         onGenerateKeyframe?.(clip, blob);
                         setIsCapturing(false);
-                        // [v29] Alert on Fallback so user knows 'First Frame' is due to error
-                        alert(`[v29 Release] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
+                        // [v30] Alert on Fallback so user knows 'First Frame' is due to error
+                        alert(`[v30 Release] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
                         return; // Success via fallback
                     }
                 } catch (fallbackErr) {
@@ -176,7 +187,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v29 - URL Logic Fixed] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v30 - Local Proxy] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
