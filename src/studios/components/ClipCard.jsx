@@ -41,14 +41,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.playsInline = true; // Critical for iOS
 
             // Rewrite URL to use local proxy if it's from digitaloceanspaces
-            let captureSrc = videoSrc;
-            if (videoSrc.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
-                captureSrc = videoSrc.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
-            } else if (videoSrc.includes('video-generations.nyc3.digitaloceanspaces.com')) {
-                captureSrc = videoSrc.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
-            } else if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
-                captureSrc = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
-            }
+            const captureSrc = getProxiedUrl(videoSrc);
             console.log("LOG: Using Capture Source:", captureSrc);
             offscreenVideo.src = captureSrc;
 
@@ -104,7 +97,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             if (thumbSrc) {
                 console.log("Video capture failed. Attempting thumbnail fallback...");
                 try {
-                    const blob = await captureFromImage(thumbSrc);
+                    const proxiedThumb = getProxiedUrl(thumbSrc);
+                    console.log("Fallback Proxied Thumb:", proxiedThumb);
+                    const blob = await captureFromImage(proxiedThumb);
                     if (blob) {
                         onGenerateKeyframe?.(clip, blob);
                         setIsCapturing(false);
@@ -126,9 +121,23 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v3 - Mobile Fix]\n\nCapture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v4 - Proxy Fix]\n\nCapture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\nFallback URL: ${getProxiedUrl(thumbSrc)}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
+    };
+
+    // Helper: Rewrite URL to use local proxy if it's from digitaloceanspaces
+    const getProxiedUrl = (url) => {
+        if (!url) return "";
+        let newUrl = url;
+        if (url.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
+            newUrl = url.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
+        } else if (url.includes('video-generations.nyc3.digitaloceanspaces.com')) {
+            newUrl = url.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
+        } else if (url.includes('nyc3.digitaloceanspaces.com')) {
+            newUrl = url.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
+        }
+        return newUrl;
     };
 
     // Helper to capture from image (thumbnail fallback)
