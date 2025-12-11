@@ -1,0 +1,24 @@
+{
+    "rewrites": [
+        {
+            "source": "/webhook/:path*",
+            "destination": "https://n8n.simplifies.click/:path*"
+        },
+        {
+            "source": "/video-proxy/:path*",
+            "destination": "https://nyc3.digitaloceanspaces.com/:path*"
+        },
+        {
+            "source": "/media-proxy/:path*",
+            "destination": "https://media-catalog.nyc3.digitaloceanspaces.com/:path*"
+        },
+        {
+            "source": "/generations-proxy/:path*",
+            "destination": "https://video-generations.nyc3.digitaloceanspaces.com/:path*"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
