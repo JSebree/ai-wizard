@@ -48,104 +48,62 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         setIsCapturing(true);
         console.log("LOG: Starting capture for", videoSrc);
 
-        let offscreenVideo = null; // Hoist for cleanup access [v25b]
-        let objectUrl = null; // Hoist for cleanup access [v33]
-
         try {
-            // Offscreen capture
-            offscreenVideo = document.createElement('video');
-            offscreenVideo.crossOrigin = "anonymous";
-            offscreenVideo.preload = "auto";
-            offscreenVideo.muted = true;
-            offscreenVideo.playsInline = true;
-
-            // [v31] Immediate DOM Attach (Deadlock Fix)
-            // We must attach to DOM *before* waiting for metadata/loading, otherwise some browsers/network conditions
-            // will pause the resource load indefinitely (stuck on "Capturing...").
-            offscreenVideo.style.position = "absolute";
-            offscreenVideo.style.opacity = "0.01";
-            offscreenVideo.style.pointerEvents = "none";
-            document.body.appendChild(offscreenVideo);
-            console.log("LOG: [v31] Video attached to DOM.");
-
-            // [v30] Local Proxy + Blob Strategy
-            // Reverted to Local Proxy because External Proxy is unreliable/blocked.
-            // Vite/Netlify/Vercel configs are now confirmed correct.
-            let captureSrc = videoSrc;
-            if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
-                captureSrc = getProxiedUrl(videoSrc);
+            // [v37] Use the LIVE video player instead of offscreen
+            // Mobile Safari refuses to load metadata for hidden/offscreen videos
+            const liveVideo = videoRef.current;
+            if (!liveVideo) {
+                throw new Error("Video player not found");
             }
 
-            // Append cache buster to Blob request
-            const separator = captureSrc.includes('?') ? '&' : '?';
-            const cacheBustedSrc = `${captureSrc}${separator}_t=${Date.now()}`;
+            console.log("LOG: [v37] Using live video player (not offscreen)");
 
-            console.log("LOG: [v30] Fetching Blob from Local Proxy:", cacheBustedSrc);
+            // Wait for metadata if not already loaded
+            if (!liveVideo.duration || isNaN(liveVideo.duration)) {
+                console.log("LOG: [v37] Waiting for metadata...");
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error("Metadata timeout")), 5000);
+                    liveVideo.onloadedmetadata = () => {
+                        clearTimeout(timeout);
+                        console.log("LOG: [v37] Metadata loaded");
+                        resolve();
+                    };
+                });
+            }
 
-            // [v35] Skip Blob Download - Use Direct Video Source
-            // Blob strategy downloads entire file (too slow on mobile)
-            // Direct src only buffers what's needed for seeking
-            console.log("LOG: [v35] Using direct video source (no blob download)");
-            offscreenVideo.src = cacheBustedSrc;
+            const seekTime = Math.max(0, liveVideo.duration - 0.1);
+            console.log(`[v37] Seeking to: ${seekTime}s (Duration: ${liveVideo.duration}s)`);
 
-            // [v36] Explicitly start loading (mobile Safari needs this)
-            offscreenVideo.load();
-            console.log("LOG: [v36] Explicitly called video.load()");
-
-            // [v36] Metadata Wait with Timeout (15s for mobile networks)
-            await new Promise((resolve, reject) => {
-                const metaTimeout = setTimeout(() => {
-                    reject(new Error("Timeout waiting for metadata (15s)"));
-                }, 15000);
-
-                offscreenVideo.onloadedmetadata = () => {
-                    clearTimeout(metaTimeout);
-                    console.log("LOG: [v31] Metadata Loaded. Duration:", offscreenVideo.duration);
-                    resolve();
-                };
-                offscreenVideo.onerror = (e) => {
-                    clearTimeout(metaTimeout);
-                    reject(offscreenVideo.error || new Error("Metadata Load Error"));
-                };
-            });
-
-            // Seek with Timeout (Fallback to Frame 0 if seek hangs)
-            // [v26] Increased timeout to 10s because External Proxy buffering can be slow
-            const seekTime = Math.max(0, offscreenVideo.duration - 0.1);
-            console.log(`[v26] Seeking to: ${seekTime}s (Duration: ${offscreenVideo.duration}s)`);
-
-            offscreenVideo.currentTime = seekTime;
+            // Seek to end
+            liveVideo.currentTime = seekTime;
 
             await new Promise((resolve) => {
                 const timeout = setTimeout(() => {
-                    console.warn(`[v32] Seek timed out after 5s. Capturing current frame (${offscreenVideo.currentTime}s) instead.`);
-                    resolve(); // Proceed with wherever we are (likely 0)
+                    console.warn(`[v37] Seek timed out after 5s. Capturing current frame (${liveVideo.currentTime}s) instead.`);
+                    resolve();
                 }, 5000);
 
-                offscreenVideo.onseeked = () => {
+                liveVideo.onseeked = () => {
                     clearTimeout(timeout);
-                    console.log("[v32] Seek completed successfully.");
+                    console.log("[v37] Seek completed successfully.");
                     resolve();
                 };
-                offscreenVideo.onerror = () => {
+                liveVideo.onerror = () => {
                     clearTimeout(timeout);
-                    console.warn("[v32] Seek error. Capturing current frame.");
+                    console.warn("[v37] Seek error. Capturing current frame.");
                     resolve();
                 };
             });
 
-            // Draw
+            // Draw from live video
             const canvas = document.createElement('canvas');
-            canvas.width = offscreenVideo.videoWidth;
-            canvas.height = offscreenVideo.videoHeight;
+            canvas.width = liveVideo.videoWidth;
+            canvas.height = liveVideo.videoHeight;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(offscreenVideo, 0, 0);
+            ctx.drawImage(liveVideo, 0, 0);
 
             canvas.toBlob((blob) => {
                 if (blob) onGenerateKeyframe?.(clip, blob);
-
-                // Cleanup [v35] - no objectUrl to revoke with direct src
-                if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo);
                 setIsCapturing(false);
             }, 'image/png');
 
@@ -204,7 +162,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             // [v35] Enhanced error reporting
             const errorReason = err?.message || err?.name || (typeof err === 'string' ? err : JSON.stringify(err)) || "Unknown Error";
-            const errorMsg = `[v35 - Direct Src] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v37 - Live Video] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
