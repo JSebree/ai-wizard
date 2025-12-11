@@ -81,22 +81,26 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             });
 
             // Seek with Timeout (Fallback to Frame 0 if seek hangs)
+            // [v26] Increased timeout to 10s because External Proxy buffering can be slow
             const seekTime = Math.max(0, offscreenVideo.duration - 0.1);
+            console.log(`[v26] Seeking to: ${seekTime}s (Duration: ${offscreenVideo.duration}s)`);
+
             offscreenVideo.currentTime = seekTime;
 
             await new Promise((resolve) => {
                 const timeout = setTimeout(() => {
-                    console.warn("[v25] Seek timed out. Capturing current frame (start) instead.");
-                    resolve(); // Proceed with current frame
-                }, 2000);
+                    console.warn(`[v26] Seek timed out after 10s. Capturing current frame (${offscreenVideo.currentTime}s) instead.`);
+                    resolve(); // Proceed with wherever we are (likely 0)
+                }, 10000);
 
                 offscreenVideo.onseeked = () => {
                     clearTimeout(timeout);
+                    console.log("[v26] Seek completed successfully.");
                     resolve();
                 };
                 offscreenVideo.onerror = () => {
                     clearTimeout(timeout);
-                    console.warn("[v25] Seek error. Capturing current frame.");
+                    console.warn("[v26] Seek error. Capturing current frame.");
                     resolve();
                 };
             });
@@ -155,7 +159,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v25 - DOM Attach Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v26 - 10s Timeout] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
