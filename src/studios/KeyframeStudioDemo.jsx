@@ -602,10 +602,10 @@ export default function KeyframeStudioDemo() {
         setName(`${scene.name} (Remix)`);
         setPrompt(scene.prompt);
         setPrompt(scene.prompt);
-        // Default to None for Character and Prop per user request
-        setSelectedCharId("");
+        // [v54] Preserve Character and Prop on Modify (User Request)
+        if (scene.characterId) setSelectedCharId(scene.characterId);
         if (scene.settingId) setSelectedSettingId(scene.settingId); // Optional: keep context
-        setSelectedPropId("");
+        if (scene.prop_id) setSelectedPropId(scene.prop_id);
         if (scene.gradeId) setSelectedGradeId(scene.gradeId);
 
         // Auto-switch to Modify Mode
