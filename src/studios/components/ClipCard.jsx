@@ -99,6 +99,22 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
         } catch (err) {
             console.error("Frame capture failed:", err);
+
+            // FALLBACK TO THUMBNAIL
+            if (thumbSrc) {
+                console.log("Video capture failed. Attempting thumbnail fallback...");
+                try {
+                    const blob = await captureFromImage(thumbSrc);
+                    if (blob) {
+                        onGenerateKeyframe?.(clip, blob);
+                        setIsCapturing(false);
+                        return; // Success via fallback
+                    }
+                } catch (fallbackErr) {
+                    console.error("Thumbnail fallback failed:", fallbackErr);
+                }
+            }
+
             setIsCapturing(false);
             // Construct Detailed Error Message for User Debugging
             let captureSrcDebug = videoSrc;
@@ -110,9 +126,27 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v3 - Mobile Fix]\n\nCapture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
+    };
+
+    // Helper to capture from image (thumbnail fallback)
+    const captureFromImage = async (src) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob((blob) => resolve(blob), 'image/png');
+            };
+            img.onerror = (e) => reject(new Error("Thumbnail load failed"));
+            img.src = src;
+        });
     };
 
     // Dialogue script
