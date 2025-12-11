@@ -887,16 +887,16 @@ export default function ClipStudioDemo() {
                                                     <div className="relative group">
                                                         <button
                                                             onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })}
-                                                            disabled={!(shot.characterId && (shot.cameraLabel === "Standard" || shot.cameraLabel === "Close & Intimate"))}
+                                                            disabled={!isLipSyncEligible}
                                                             className={`flex - 1 md: flex - none px - 3 py - 1 text - [10px] uppercase font - bold rounded flex items - center gap - 1 ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"
                                                                 } disabled: opacity - 40 disabled: cursor - not - allowed`}
                                                         >
                                                             Character
-                                                            {!(shot.characterId && (shot.cameraLabel === "Standard" || shot.cameraLabel === "Close & Intimate")) && (
+                                                            {(!isLipSyncEligible) && (
                                                                 <span className="text-[8px] opacity-70">⛔</span>
                                                             )}
                                                         </button>
-                                                        {!(shot.characterId && (shot.cameraLabel === "Standard" || shot.cameraLabel === "Close & Intimate")) && (
+                                                        {(!isLipSyncEligible) && (
                                                             <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded shadow-lg z-20 pointer-events-none">
                                                                 Lip-Sync requires a 'Standard' or 'Close & Intimate' shot with a Character.
                                                             </div>
