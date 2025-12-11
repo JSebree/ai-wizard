@@ -81,9 +81,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             console.log("LOG: [v30] Fetching Blob from Local Proxy:", cacheBustedSrc);
 
-            // [v31] Fetch with Timeout (15s)
+            // [v32] Fetch with Timeout (5s) [Reduced from 15s]
             const controller = new AbortController();
-            const fetchTimeoutId = setTimeout(() => controller.abort(), 15000);
+            const fetchTimeoutId = setTimeout(() => controller.abort(), 5000);
 
             try {
                 const response = await fetch(cacheBustedSrc, { signal: controller.signal });
@@ -130,18 +130,18 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             await new Promise((resolve) => {
                 const timeout = setTimeout(() => {
-                    console.warn(`[v26] Seek timed out after 10s. Capturing current frame (${offscreenVideo.currentTime}s) instead.`);
+                    console.warn(`[v32] Seek timed out after 5s. Capturing current frame (${offscreenVideo.currentTime}s) instead.`);
                     resolve(); // Proceed with wherever we are (likely 0)
-                }, 10000);
+                }, 5000);
 
                 offscreenVideo.onseeked = () => {
                     clearTimeout(timeout);
-                    console.log("[v26] Seek completed successfully.");
+                    console.log("[v32] Seek completed successfully.");
                     resolve();
                 };
                 offscreenVideo.onerror = () => {
                     clearTimeout(timeout);
-                    console.warn("[v26] Seek error. Capturing current frame.");
+                    console.warn("[v32] Seek error. Capturing current frame.");
                     resolve();
                 };
             });
@@ -209,7 +209,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v31 - Deadlock Fix] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v32 - Robust] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
@@ -220,7 +220,13 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
     const captureFromImage = async (src) => {
         try {
             console.log("Fetching fallback image:", src);
-            const res = await fetch(src);
+            // [v32] Added Timeout to Fallback Fetch (5s) to prevent hangs
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 5000);
+
+            const res = await fetch(src, { signal: controller.signal });
+            clearTimeout(id);
+
             if (!res.ok) {
                 // Inspect error body [v12]
                 const text = await res.text().catch(() => "");
