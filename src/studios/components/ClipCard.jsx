@@ -82,28 +82,11 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             console.log("LOG: [v30] Fetching Blob from Local Proxy:", cacheBustedSrc);
 
-            // [v34] Fetch with Timeout (10s) [Increased for mobile networks]
-            const controller = new AbortController();
-            const fetchTimeoutId = setTimeout(() => controller.abort(), 10000);
-
-            try {
-                const response = await fetch(cacheBustedSrc, { signal: controller.signal });
-                clearTimeout(fetchTimeoutId);
-
-                if (!response.ok) {
-                    const text = await response.text();
-                    console.error("Local Proxy Error Body:", text.substring(0, 200));
-                    throw new Error(`Fetch Failed: ${response.status}`);
-                }
-                const videoBlob = await response.blob();
-                objectUrl = URL.createObjectURL(videoBlob);
-
-                console.log("LOG: [v30] Blob loaded via Local Proxy, size:", videoBlob.size);
-                offscreenVideo.src = objectUrl;
-            } catch (fetchErr) {
-                clearTimeout(fetchTimeoutId);
-                throw fetchErr;
-            }
+            // [v35] Skip Blob Download - Use Direct Video Source
+            // Blob strategy downloads entire file (too slow on mobile)
+            // Direct src only buffers what's needed for seeking
+            console.log("LOG: [v35] Using direct video source (no blob download)");
+            offscreenVideo.src = cacheBustedSrc;
 
             // [v31] Metadata Wait with Timeout (5s)
             await new Promise((resolve, reject) => {
@@ -157,8 +140,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             canvas.toBlob((blob) => {
                 if (blob) onGenerateKeyframe?.(clip, blob);
 
-                // Cleanup [v27]
-                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                // Cleanup [v35] - no objectUrl to revoke with direct src
                 if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo);
                 setIsCapturing(false);
             }, 'image/png');
@@ -173,8 +155,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 stringified: JSON.stringify(err, null, 2)
             });
 
-            // CLEANUP [v27]
-            if (objectUrl) URL.revokeObjectURL(objectUrl); // Ensure objectUrl is cleaned up on error
+            // CLEANUP [v35] - no objectUrl with direct src
             if (offscreenVideo && offscreenVideo.parentNode) {
                 document.body.removeChild(offscreenVideo);
             }
@@ -217,9 +198,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            // [v34] Enhanced error reporting
+            // [v35] Enhanced error reporting
             const errorReason = err?.message || err?.name || (typeof err === 'string' ? err : JSON.stringify(err)) || "Unknown Error";
-            const errorMsg = `[v34 - Enhanced Logs] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v35 - Direct Src] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
