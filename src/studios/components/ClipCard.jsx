@@ -145,7 +145,16 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         try {
             console.log("Fetching fallback image:", src);
             const res = await fetch(src);
-            if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+            if (!res.ok) {
+                // Inspect error body [v12]
+                const text = await res.text().catch(() => "");
+                throw new Error(`Fetch failed: ${res.status} ${res.statusText} for ${src}\nBody: ${text.substring(0, 100)}`);
+            }
+            // Check content type
+            const type = res.headers.get("content-type");
+            if (type && type.includes("text/html")) {
+                throw new Error(`Proxy Error: Received HTML instead of image from ${src}`);
+            }
             const blob = await res.blob();
             return blob;
         } catch (err) {

@@ -1089,11 +1089,11 @@ export default function ClipStudioDemo() {
                                         return;
                                     }
 
-                                    // SUSPICIOUS BLOB CHECK [v11]
+                                    // SUSPICIOUS BLOB CHECK [v12]
                                     if (blob.size < 1000) {
                                         const text = await blob.text();
                                         console.error("Small Blob Detected:", text);
-                                        alert(`[v11 Diagnostic] Capture Failed.\n\nThe server returned an error instead of an image.\n\nContent: ${text.substring(0, 500)}`);
+                                        alert(`[v12 Diagnostic] Capture Failed.\n\nThe server returned an error instead of an image.\n\nContent: ${text.substring(0, 500)}`);
                                         return;
                                     }
 
@@ -1166,13 +1166,13 @@ export default function ClipStudioDemo() {
                                         setSelectedKeyframe(formattedKeyframe);
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
 
-                                        const debugMsg = `[v11 Success]\n\nBlob Size: ${blob.size} bytes\nInherited From: ${sourceScene.name ? "Yes" : "No"}\nSetting ID: ${newKeyframePayload.setting_id}`;
+                                        const debugMsg = `[v12 Success]\n\nBlob Size: ${blob.size} bytes\nInherited From: ${sourceScene.name ? "Yes" : "No"}\nSetting ID: ${newKeyframePayload.setting_id}`;
                                         // alert(debugMsg); // Silence success if valid
                                     }
 
                                 } catch (err) {
                                     console.error("Error generating keyframe:", err);
-                                    alert(`Failed [v11]: ${err.message}`);
+                                    alert(`Failed [v12]: ${err.message}`);
                                 }
                             }}
                         />
