@@ -1110,6 +1110,7 @@ export default function ClipStudioDemo() {
 
                                     // Lookup original scene to inherit metadata
                                     const sourceScene = keyframes.find(k => k.id === clip.scene_id) || {};
+                                    console.log(`[v7 Debug] Lookup Scene ${clip.scene_id}:`, sourceScene);
 
                                     const newKeyframePayload = {
                                         name: `${clip.name} ext`,
@@ -1155,7 +1156,12 @@ export default function ClipStudioDemo() {
 
                                 } catch (err) {
                                     console.error("Error generating keyframe:", err);
-                                    alert("Failed to save keyframe: " + err.message);
+                                    const debugMsg = `Success! [v7]\\n\\nInherited Metadata from Scene: ${clip.scene_id}\\nName: ${sourceScene.name || "N/A"}\\nsetting_id: ${newKeyframePayload.setting_id}\\ncharacter_id: ${newKeyframePayload.character_id}`;
+                                    alert(debugMsg);
+
+                                } catch (err) {
+                                    console.error("Error generating keyframe:", err);
+                                    alert(`Failed to save keyframe [v7 Error]: ${err.message}`);
                                 }
                             }}
                         />
