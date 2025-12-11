@@ -58,6 +58,15 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
+            // [v31] Immediate DOM Attach (Deadlock Fix)
+            // We must attach to DOM *before* waiting for metadata/loading, otherwise some browsers/network conditions
+            // will pause the resource load indefinitely (stuck on "Capturing...").
+            offscreenVideo.style.position = "absolute";
+            offscreenVideo.style.opacity = "0.01";
+            offscreenVideo.style.pointerEvents = "none";
+            document.body.appendChild(offscreenVideo);
+            console.log("LOG: [v31] Video attached to DOM.");
+
             // [v30] Local Proxy + Blob Strategy
             // Reverted to Local Proxy because External Proxy is unreliable/blocked.
             // Vite/Netlify/Vercel configs are now confirmed correct.
@@ -72,32 +81,44 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             console.log("LOG: [v30] Fetching Blob from Local Proxy:", cacheBustedSrc);
 
-            const response = await fetch(cacheBustedSrc);
-            if (!response.ok) {
-                // Inspect error body if possible
-                const text = await response.text();
-                console.error("Local Proxy Error Body:", text.substring(0, 200));
-                throw new Error(`Fetch Failed: ${response.status}`);
+            // [v31] Fetch with Timeout (15s)
+            const controller = new AbortController();
+            const fetchTimeoutId = setTimeout(() => controller.abort(), 15000);
+
+            try {
+                const response = await fetch(cacheBustedSrc, { signal: controller.signal });
+                clearTimeout(fetchTimeoutId);
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error("Local Proxy Error Body:", text.substring(0, 200));
+                    throw new Error(`Fetch Failed: ${response.status}`);
+                }
+                const videoBlob = await response.blob();
+                objectUrl = URL.createObjectURL(videoBlob);
+
+                console.log("LOG: [v30] Blob loaded via Local Proxy, size:", videoBlob.size);
+                offscreenVideo.src = objectUrl;
+            } catch (fetchErr) {
+                clearTimeout(fetchTimeoutId);
+                throw fetchErr;
             }
-            const videoBlob = await response.blob();
-            const objectUrl = URL.createObjectURL(videoBlob);
 
-            console.log("LOG: [v30] Blob loaded via Local Proxy, size:", videoBlob.size);
-            offscreenVideo.src = objectUrl;
-
+            // [v31] Metadata Wait with Timeout (5s)
             await new Promise((resolve, reject) => {
-                offscreenVideo.onloadedmetadata = () => resolve();
-                offscreenVideo.onerror = (e) => reject(offscreenVideo.error || new Error("Metadata Load Error"));
-            });
+                const metaTimeout = setTimeout(() => {
+                    reject(new Error("Timeout waiting for metadata"));
+                }, 5000);
 
-            offscreenVideo.style.position = "absolute";
-            offscreenVideo.style.opacity = "0.01";
-            offscreenVideo.style.pointerEvents = "none";
-            document.body.appendChild(offscreenVideo); // Append to DOM to trigger loading on mobile [v25]
-
-            await new Promise((resolve, reject) => {
-                offscreenVideo.onloadedmetadata = () => resolve();
-                offscreenVideo.onerror = (e) => reject(offscreenVideo.error || new Error("Metadata Load Error"));
+                offscreenVideo.onloadedmetadata = () => {
+                    clearTimeout(metaTimeout);
+                    console.log("LOG: [v31] Metadata Loaded. Duration:", offscreenVideo.duration);
+                    resolve();
+                };
+                offscreenVideo.onerror = (e) => {
+                    clearTimeout(metaTimeout);
+                    reject(offscreenVideo.error || new Error("Metadata Load Error"));
+                };
             });
 
             // Seek with Timeout (Fallback to Frame 0 if seek hangs)
@@ -136,7 +157,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 if (blob) onGenerateKeyframe?.(clip, blob);
 
                 // Cleanup [v27]
-                URL.revokeObjectURL(objectUrl);
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
                 if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo);
                 setIsCapturing(false);
             }, 'image/png');
@@ -145,6 +166,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             console.error("Frame capture failed:", err);
 
             // CLEANUP [v27]
+            if (objectUrl) URL.revokeObjectURL(objectUrl); // Ensure objectUrl is cleaned up on error
             if (offscreenVideo && offscreenVideo.parentNode) {
                 document.body.removeChild(offscreenVideo);
             }
@@ -187,7 +209,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v30 - Local Proxy] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v31 - Deadlock Fix] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
