@@ -16,18 +16,33 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/video-proxy/, ''),
+        configure: (proxy, options) => {
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+          });
+        }
       },
       '/media-proxy': {
         target: 'https://media-catalog.nyc3.digitaloceanspaces.com',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/media-proxy/, ''),
+        configure: (proxy, options) => {
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+          });
+        }
       },
       '/generations-proxy': {
         target: 'https://video-generations.nyc3.digitaloceanspaces.com',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/generations-proxy/, ''),
+        configure: (proxy, options) => {
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+          });
+        }
       },
     },
   },
