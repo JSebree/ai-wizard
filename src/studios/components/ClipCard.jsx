@@ -37,6 +37,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             const offscreenVideo = document.createElement('video');
             offscreenVideo.crossOrigin = "anonymous";
             offscreenVideo.preload = "auto";
+            offscreenVideo.muted = true; // Critical for iOS
+            offscreenVideo.playsInline = true; // Critical for iOS
 
             // Rewrite URL to use local proxy if it's from digitaloceanspaces
             let captureSrc = videoSrc;
