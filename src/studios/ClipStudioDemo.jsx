@@ -706,7 +706,7 @@ export default function ClipStudioDemo() {
                             {scene.characterId && (scene.cameraLabel === "Standard" || scene.cameraLabel === "Close & Intimate") && (
                                 <div className="absolute top-2 right-2 flex items-center gap-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold z-10 backdrop-blur-sm">
                                     <span>👄</span>
-                                    <span>READY</span>
+                                    <span>Ready</span>
                                 </div>
                             )}
                             {selectedKeyframe?.id === scene.id && (
