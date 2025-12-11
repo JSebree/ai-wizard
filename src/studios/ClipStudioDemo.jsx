@@ -430,7 +430,7 @@ export default function ClipStudioDemo() {
                     if (data) finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
 
                 } else {
-                    console.log("Inserting new clip record...");
+                    console.log("[saveToBin] Inserting NEW clip record...");
                     const dbId = uuidv4();
                     dbPayload.id = dbId;
                     const { data, error } = await supabase
@@ -439,8 +439,14 @@ export default function ClipStudioDemo() {
                         .select()
                         .single();
 
-                    if (error) throw error;
-                    if (data) finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
+                    if (error) {
+                        console.error("[saveToBin] INSERT ERROR:", error);
+                        throw error;
+                    }
+                    if (data) {
+                        console.log("[saveToBin] INSERT SUCCESS. New ID:", data.id);
+                        finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
+                    }
                 }
             }
 
@@ -480,10 +486,11 @@ export default function ClipStudioDemo() {
                 status: 'rendering',
                 videoUrl: "" // No video yet
             };
+            console.log("[renderClip] Step 1: Initial Save (Status: rendering)");
             const dbRecord = await saveToBin(pendingShot, false); // Returns the saved record (with ID)
             const dbId = dbRecord?.id;
 
-            console.log("DB ID from initial save:", dbId);
+            console.log("[renderClip] Step 1 Result: DB ID =", dbId);
 
             if (dbId) {
                 // Attach DB ID to workshop shot so we can update it later
@@ -577,9 +584,10 @@ export default function ClipStudioDemo() {
             updateShot(shot.tempId, updatedShot);
 
             // 2. Update DB Record with Final URL
-            console.log("Updating record with video URL for ID:", dbId);
+            console.log("[renderClip] Step 2: Final Save. Updating ID:", dbId, "with Video URL:", videoUrl);
             // Force status to completed for the DB save
-            saveToBin({ ...updatedShot, status: 'completed' }, false);
+            const finalRecord = await saveToBin({ ...updatedShot, status: 'completed' }, false);
+            console.log("[renderClip] Step 2 Result: Success?", !!finalRecord);
 
         } catch (err) {
             console.error("Render Error:", err);
