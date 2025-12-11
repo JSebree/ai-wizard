@@ -48,9 +48,11 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         setIsCapturing(true);
         console.log("LOG: Starting capture for", videoSrc);
 
+        let offscreenVideo = null; // Hoist for cleanup access [v25b]
+
         try {
             // Offscreen capture
-            const offscreenVideo = document.createElement('video');
+            offscreenVideo = document.createElement('video');
             offscreenVideo.crossOrigin = "anonymous";
             offscreenVideo.preload = "auto";
             offscreenVideo.muted = true;
@@ -68,11 +70,35 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 offscreenVideo.onerror = (e) => reject(offscreenVideo.error || new Error("Metadata Load Error"));
             });
 
-            offscreenVideo.currentTime = Math.max(0, offscreenVideo.duration - 0.1);
+            offscreenVideo.style.position = "absolute";
+            offscreenVideo.style.opacity = "0.01";
+            offscreenVideo.style.pointerEvents = "none";
+            document.body.appendChild(offscreenVideo); // Append to DOM to trigger loading on mobile [v25]
 
             await new Promise((resolve, reject) => {
-                offscreenVideo.onseeked = () => resolve();
-                offscreenVideo.onerror = (e) => reject(offscreenVideo.error);
+                offscreenVideo.onloadedmetadata = () => resolve();
+                offscreenVideo.onerror = (e) => reject(offscreenVideo.error || new Error("Metadata Load Error"));
+            });
+
+            // Seek with Timeout (Fallback to Frame 0 if seek hangs)
+            const seekTime = Math.max(0, offscreenVideo.duration - 0.1);
+            offscreenVideo.currentTime = seekTime;
+
+            await new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    console.warn("[v25] Seek timed out. Capturing current frame (start) instead.");
+                    resolve(); // Proceed with current frame
+                }, 2000);
+
+                offscreenVideo.onseeked = () => {
+                    clearTimeout(timeout);
+                    resolve();
+                };
+                offscreenVideo.onerror = () => {
+                    clearTimeout(timeout);
+                    console.warn("[v25] Seek error. Capturing current frame.");
+                    resolve();
+                };
             });
 
             // Draw
@@ -84,19 +110,28 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             canvas.toBlob((blob) => {
                 if (blob) onGenerateKeyframe?.(clip, blob);
+                if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo); // Cleanup [v25b]
                 setIsCapturing(false);
             }, 'image/png');
 
         } catch (err) {
             console.error("Frame capture failed:", err);
 
+            // CLEANUP [v25b]
+            if (offscreenVideo && offscreenVideo.parentNode) {
+                document.body.removeChild(offscreenVideo);
+            }
+
             // FALLBACK TO THUMBNAIL
             let fallbackError = null;
             if (thumbSrc) {
                 console.log("Video capture failed. Attempting thumbnail fallback...");
                 try {
-                    const proxiedThumb = getProxiedUrl(thumbSrc);
-                    console.log("Fallback Proxied Thumb:", proxiedThumb);
+                    // [v25] Use External Proxy for Thumbnail too (Local proxy is broken on host)
+                    const encodedThumb = encodeURIComponent(thumbSrc);
+                    const proxiedThumb = `https://corsproxy.io/?${encodedThumb}`;
+
+                    console.log("Fallback External Proxied Thumb:", proxiedThumb);
                     const blob = await captureFromImage(proxiedThumb);
                     if (blob) {
                         onGenerateKeyframe?.(clip, blob);
@@ -120,7 +155,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v24 - Last Frame Capture] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v25 - DOM Attach Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
