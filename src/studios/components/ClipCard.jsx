@@ -57,13 +57,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             ctx.drawImage(videoRef.current, 0, 0);
             console.log("LOG: Frame drawn from live video.");
 
-            // Draw
-            const canvas = document.createElement('canvas');
-            canvas.width = offscreenVideo.videoWidth;
-            canvas.height = offscreenVideo.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(offscreenVideo, 0, 0);
-            console.log("LOG: Frame drawn to canvas.");
+
 
             canvas.toBlob((blob) => {
                 console.log("LOG: Blob created. Size:", blob ? blob.size : 0);
@@ -106,7 +100,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v17 - Production Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v18 - Syntax Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
