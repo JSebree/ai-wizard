@@ -383,7 +383,7 @@ export default function ClipStudioDemo() {
                 name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
                 scene_id: shot.sceneId || selectedKeyframe?.id,
                 scene_name: shot.sceneName || selectedKeyframe?.name || "Unknown Scene",
-                character_id: shot.dialogueBlocks?.[0]?.characterId || shot.characterId || null,
+                character_id: shot.dialogueBlocks?.[0]?.characterId || shot.characterId || selectedKeyframe?.characterId || null,
                 thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
                 video_url: shot.videoUrl || null, // Might be null if pending
                 last_frame_url: shot.lastFrameUrl || null, // Last frame from n8n
