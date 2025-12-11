@@ -121,7 +121,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v4 - Proxy Fix]\n\nCapture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\nFallback URL: ${getProxiedUrl(thumbSrc)}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v5 - Fetch Fix]\n\nCapture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\nFallback URL: ${getProxiedUrl(thumbSrc)}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
@@ -142,20 +142,15 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
     // Helper to capture from image (thumbnail fallback)
     const captureFromImage = async (src) => {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                canvas.toBlob((blob) => resolve(blob), 'image/png');
-            };
-            img.onerror = (e) => reject(new Error("Thumbnail load failed"));
-            img.src = src;
-        });
+        try {
+            console.log("Fetching fallback image:", src);
+            const res = await fetch(src);
+            if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+            const blob = await res.blob();
+            return blob;
+        } catch (err) {
+            throw new Error(`Fallback Error: ${err.message}`);
+        }
     };
 
     // Dialogue script
