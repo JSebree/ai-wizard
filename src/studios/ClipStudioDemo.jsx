@@ -1148,6 +1148,8 @@ export default function ClipStudioDemo() {
                                         camera_angle: inheritedCamera,
                                         created_at: new Date().toISOString()
                                     };
+                                    // [v55 DEBUG]
+                                    alert(`DEBUG: Extending Clip\nScene ID: ${clip.scene_id || clip.sceneId}\nFound Parent: ${sourceScene.id ? "Yes" : "NO"}\nParent Camera: ${sourceScene.cameraLabel}\nInheriting: ${inheritedCamera}`);
                                     console.log("Inserting into DB:", newKeyframePayload);
 
                                     const { data: insertData, error: insertError } = await supabase
