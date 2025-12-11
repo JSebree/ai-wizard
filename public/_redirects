@@ -1,6 +1,6 @@
-/webhook/*  https://n8n.simplifies.click/:splat  200
-/video-proxy/*  https://nyc3.digitaloceanspaces.com/:splat  200
-/media-proxy/*  https://media-catalog.nyc3.digitaloceanspaces.com/:splat  200
-/generations-proxy/*  https://video-generations.nyc3.digitaloceanspaces.com/:splat  200
+/webhook/*  https://n8n.simplifies.click/:splat  200!
+/video-proxy/*  https://nyc3.digitaloceanspaces.com/:splat  200!
+/media-proxy/*  https://media-catalog.nyc3.digitaloceanspaces.com/:splat  200!
+/generations-proxy/*  https://video-generations.nyc3.digitaloceanspaces.com/:splat  200!
 /assets/*    /assets/:splat   200
 /*           /index.html      200

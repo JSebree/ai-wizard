@@ -100,7 +100,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v20 - Production Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v21 - Proxy Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
