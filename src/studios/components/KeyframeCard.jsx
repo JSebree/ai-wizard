@@ -76,34 +76,7 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                     </button>
 
                     {/* Delete Button (Trash Icon) */}
-                    <button
-                        className="absolute top-3 right-12 text-gray-400 hover:text-red-500"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (onDelete) {
-                                onDelete();
-                                // Close is triggered by parent state update usually, but just in case
-                            }
-                        }}
-                        title="Delete Keyframe"
-                        style={{
-                            position: "absolute",
-                            top: "0.75rem",
-                            right: "3rem", // Left of close button
-                            color: "#9CA3AF",
-                            cursor: "pointer",
-                            background: "none",
-                            border: "none",
-                            fontSize: "1.25rem",
-                            zIndex: 10,
-                            padding: 0,
-                            lineHeight: 1
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = "#EF4444"}
-                        onMouseLeave={e => e.currentTarget.style.color = "#9CA3AF"}
-                    >
-                        🗑️
-                    </button>
+
 
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
                         {/* Left: Huge Preview */}
@@ -179,7 +152,33 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                                         <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{visual_style || "Photorealistic"}</span>
                                     </div>
                                 </div>
-                                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right" }}>
+                                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                                    {onDelete && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation(); // Prevent closing?
+                                                onDelete();
+                                            }}
+                                            style={{
+                                                padding: "8px 16px",
+                                                borderRadius: 999,
+                                                background: "white",
+                                                color: "#EF4444",
+                                                border: "1px solid #EF4444",
+                                                fontSize: 13,
+                                                fontWeight: 600,
+                                                cursor: "pointer"
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.background = "#FEF2F2";
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.background = "white";
+                                            }}
+                                        >
+                                            Delete Keyframe
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => {
                                             onModify?.();
