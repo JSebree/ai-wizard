@@ -1152,16 +1152,14 @@ export default function ClipStudioDemo() {
                                         addShot(formattedKeyframe);
                                         setPreviewShot(null);
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                                        const debugMsg = `Success! [v8 - Syntax Fix]\n\nInherited Metadata from Scene: ${clip.scene_id}\nName: ${sourceScene.name || "N/A"}\nsetting_id: ${newKeyframePayload.setting_id}\ncharacter_id: ${newKeyframePayload.character_id}`;
+                                        alert(debugMsg);
                                     }
 
                                 } catch (err) {
                                     console.error("Error generating keyframe:", err);
-                                    const debugMsg = `Success! [v7]\\n\\nInherited Metadata from Scene: ${clip.scene_id}\\nName: ${sourceScene.name || "N/A"}\\nsetting_id: ${newKeyframePayload.setting_id}\\ncharacter_id: ${newKeyframePayload.character_id}`;
-                                    alert(debugMsg);
-
-                                } catch (err) {
-                                    console.error("Error generating keyframe:", err);
-                                    alert(`Failed to save keyframe [v7 Error]: ${err.message}`);
+                                    alert(`Failed to save keyframe [v8 Error]: ${err.message}`);
                                 }
                             }}
                         />
