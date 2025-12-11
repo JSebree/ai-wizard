@@ -49,21 +49,38 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         console.log("LOG: Starting capture for", videoSrc);
 
         try {
+            // Offscreen capture
+            const offscreenVideo = document.createElement('video');
+            offscreenVideo.crossOrigin = "anonymous";
+            offscreenVideo.preload = "auto";
+            offscreenVideo.muted = true;
+            offscreenVideo.playsInline = true;
+
+            const captureSrc = getProxiedUrl(videoSrc);
+            console.log("LOG: Capture Source:", captureSrc);
+            offscreenVideo.src = captureSrc;
+
+            await new Promise((resolve, reject) => {
+                offscreenVideo.onloadedmetadata = () => resolve();
+                offscreenVideo.onerror = (e) => reject(offscreenVideo.error || new Error("Metadata Load Error"));
+            });
+
+            offscreenVideo.currentTime = videoRef.current ? videoRef.current.currentTime : 0;
+
+            await new Promise((resolve, reject) => {
+                offscreenVideo.onseeked = () => resolve();
+                offscreenVideo.onerror = (e) => reject(offscreenVideo.error);
+            });
+
             // Draw
             const canvas = document.createElement('canvas');
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
+            canvas.width = offscreenVideo.videoWidth;
+            canvas.height = offscreenVideo.videoHeight;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(videoRef.current, 0, 0);
-            console.log("LOG: Frame drawn from live video.");
-
-
+            ctx.drawImage(offscreenVideo, 0, 0);
 
             canvas.toBlob((blob) => {
-                console.log("LOG: Blob created. Size:", blob ? blob.size : 0);
-                if (blob) {
-                    onGenerateKeyframe?.(clip, blob);
-                }
+                if (blob) onGenerateKeyframe?.(clip, blob);
                 setIsCapturing(false);
             }, 'image/png');
 
@@ -100,7 +117,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v21 - Proxy Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v22 - Video Revert] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
@@ -200,8 +217,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                             <video
                                 ref={videoRef}
                                 controls
-                                crossOrigin="anonymous" // Critical for capture
-                                src={getProxiedUrl(videoSrc)}
+                                src={videoSrc} // DIRECT URL (Restores Playback)
                                 style={{ width: "100%", height: "auto", maxHeight: "80vh", display: "block" }}
                             />
                         ) : thumbSrc ? (
