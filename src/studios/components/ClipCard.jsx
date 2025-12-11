@@ -49,7 +49,28 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         console.log("LOG: Starting capture for", videoSrc);
 
         // [v40] Use pre-generated last frame URL if available
-        const lastFrameUrl = clip.last_frame_url || clip.lastFrameUrl;
+        // [v43] Self-Healing: Check prop, if missing, FETCH from DB
+        let lastFrameUrl = clip.last_frame_url || clip.lastFrameUrl;
+
+        if (!lastFrameUrl && clip.id && !String(clip.id).startsWith('local_')) {
+            console.log("[v43] last_frame_url missing in prop. Fetching from Supabase...");
+            try {
+                const { data, error } = await supabase
+                    .from('clips')
+                    .select('last_frame_url')
+                    .eq('id', clip.id)
+                    .single();
+
+                if (data && data.last_frame_url) {
+                    console.log("[v43] Fetched fresh last_frame_url:", data.last_frame_url);
+                    lastFrameUrl = data.last_frame_url;
+                } else {
+                    console.warn("[v43] Fetch returned no URL:", error || "Null data");
+                }
+            } catch (fetchErr) {
+                console.error("[v43] Failed to self-heal last_frame_url:", fetchErr);
+            }
+        }
 
         if (lastFrameUrl) {
             console.log("LOG: [v40] Using pre-generated last frame URL:", lastFrameUrl);
@@ -66,10 +87,26 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
             }
         } else {
-            // [v42 Debug] Why is it missing?
+            // [v43] Mobile Fallback: If still missing after fetch, allow basic thumb fallback
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             if (isMobile) {
-                alert(`[Debug v42] Last Frame URL Missing!\n\nClip ID: ${clip.id}\n\nKeys: ${Object.keys(clip).join(', ')}\n\nThumb: ${thumbSrc}\n\nVideo: ${videoSrc}`);
+                console.warn("[v43] Mobile detected & Last Frame URL missing (even after fetch). Using Thumbnail.");
+                // Fallback to thumbnail is better than crashing or alerting error
+                if (thumbSrc) {
+                    try {
+                        const proxiedThumb = getProxiedUrl(thumbSrc);
+                        const blob = await captureFromImage(proxiedThumb);
+                        if (blob) {
+                            onGenerateKeyframe?.(clip, blob);
+                            setIsCapturing(false);
+                            return;
+                        }
+                    } catch (e) { console.error("Mobile thumb fallback failed", e); }
+                }
+
+                setIsCapturing(false);
+                alert(`[v43 - Mobile] Cannot extend video.\n\nReason: No last frame found and thumbnail capture failed.\n\nPlease regenerate the clip.`);
+                return;
             }
         }
 
