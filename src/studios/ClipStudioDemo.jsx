@@ -1149,14 +1149,15 @@ export default function ClipStudioDemo() {
 
                                         // AUTO-NAVIGATE WORKFLOW
                                         setSelectedKeyframe(formattedKeyframe);
-                                        addShot(formattedKeyframe);
-                                        setPreviewShot(null);
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                                        const debugMsg = `[v10 Diagnostic]\n\nBlob Size: ${blob.size} bytes\nInherited From: ${sourceScene.name ? "Yes" : "No"} (ID: ${sourceScene.id || "N/A"})\nSetting ID: ${newKeyframePayload.setting_id}\nURL: ${publicUrl.substring(0, 50)}...`;
+                                        alert(debugMsg);
                                     }
 
                                 } catch (err) {
                                     console.error("Error generating keyframe:", err);
-                                    alert(`Failed to save keyframe: ${err.message}`);
+                                    alert(`Failed [v10]: ${err.message}`);
                                 }
                             }}
                         />
