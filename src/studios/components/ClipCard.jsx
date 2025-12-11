@@ -86,12 +86,18 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
             }
-        } else {
-            // [v43] Mobile Fallback: If still missing after fetch, allow basic thumb fallback
+            // [v45] Consolidate Fallback Logic
+            // If direct fetch failed, and we are here, we try thumbnail fallback ONE MORE TIME 
+            // (or just rely on the previous attempt if lastFrameUrl was null)
+
+            // Check if we already tried lastFrameUrl and failed...
+            // Actually, if lastFrameUrl was present but failed, we haven't tried thumbnail yet.
+            // So let's try thumbnail now if we haven't.
+
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             if (isMobile) {
-                console.warn("[v43] Mobile detected & Last Frame URL missing (even after fetch). Using Thumbnail.");
-                // Fallback to thumbnail is better than crashing or alerting error
+                console.warn("[v45] Mobile detected & Direct Capture Failed/Missing.");
+
                 if (thumbSrc) {
                     try {
                         const proxiedThumb = getProxiedUrl(thumbSrc);
@@ -101,40 +107,23 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                             setIsCapturing(false);
                             return;
                         }
-                    } catch (e) { console.error("Mobile thumb fallback failed", e); }
+                    } catch (e) {
+                        console.error("Mobile thumb fallback failed", e);
+                        alert(`[v45 - Mobile] Thumbnail Fallback Failed.\n\nError: ${e.message}`);
+                        setIsCapturing(false);
+                        return;
+                    }
                 }
 
                 setIsCapturing(false);
-                alert(`[v43 - Mobile] Cannot extend video.\n\nReason: No last frame found and thumbnail capture failed.\n\nPlease regenerate the clip.`);
+                alert(`[v45 - Mobile] Cannot extend video.\n\nReason: No last frame found and thumbnail missing.\n\nClip ID: ${clip.id}`);
                 return;
             }
-        }
+        } // End else
 
-        // [v40] Safety Net: If we are here, last_frame_url was missing or failed.
-        // On Mobile, offscreen video extraction WILL fail. Fallback immediately.
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        if (isMobile) {
-            console.warn("[v40] Mobile detected & Last Frame URL missing. Skipping offscreen extraction.");
-            if (thumbSrc) {
-                try {
-                    const proxiedThumb = getProxiedUrl(thumbSrc);
-                    const blob = await captureFromImage(proxiedThumb);
-                    if (blob) {
-                        onGenerateKeyframe?.(clip, blob);
-                        setIsCapturing(false);
-                        // Optional: Alert the user that quality might be lower
-                        // alert("Using thumbnail as fallback (Pre-generated frame missing)");
-                        return;
-                    }
-                } catch (e) {
-                    console.error("Mobile thumb fallback failed", e);
-                }
-            }
-            // If we can't even get the thumb, we let it fail or alert
-            setIsCapturing(false);
-            alert("[v40 - Mobile] Cannot expand video.\n\nReason: Pre-generated last frame is missing and mobile cannot extract frames dynamically.\n\nPlease attempt on Desktop or regenerate the clip.");
-            return;
-        }
+        // [v45] Legacy v40 block removed.
+        // If we are on Desktop, we continue to offscreen extraction below...
+
 
         let offscreenVideo = null;
 
