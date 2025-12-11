@@ -386,6 +386,7 @@ export default function ClipStudioDemo() {
                 character_id: shot.dialogueBlocks?.[0]?.characterId || shot.characterId || null,
                 thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
                 video_url: shot.videoUrl || null, // Might be null if pending
+                last_frame_url: shot.lastFrameUrl || null, // Last frame from n8n
                 raw_video_url: shot.rawVideoUrl || shot.videoUrl,
                 audio_url: shot.stitchedAudioUrl || null,
                 prompt: shot.prompt,
@@ -574,10 +575,15 @@ export default function ClipStudioDemo() {
                 throw new Error("No video URL found in response.");
             }
 
+            // Extract last frame URL if present
+            const lastFrameUrl = data?.last_frame_url || data?.lastFrameUrl || data?.output?.last_frame_url || null;
+            console.log("Extracted Last Frame URL:", lastFrameUrl);
+
             const updatedShot = {
                 ...shot,
                 dbId: dbId, // Pass the ID to perform an Update
                 videoUrl: videoUrl,
+                lastFrameUrl: lastFrameUrl, // Add last frame URL
                 status: "preview_ready", // In Workshop
                 manualDuration: shot.isAudioLocked ? shot.totalAudioDuration : shot.manualDuration
             };

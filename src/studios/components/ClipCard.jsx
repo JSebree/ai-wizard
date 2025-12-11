@@ -48,6 +48,23 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         setIsCapturing(true);
         console.log("LOG: Starting capture for", videoSrc);
 
+        // [v40] Use pre-generated last frame URL if available
+        const lastFrameUrl = clip.last_frame_url || clip.lastFrameUrl;
+
+        if (lastFrameUrl) {
+            console.log("LOG: [v40] Using pre-generated last frame URL:", lastFrameUrl);
+            try {
+                const blob = await captureFromImage(lastFrameUrl);
+                if (blob) {
+                    onGenerateKeyframe?.(clip, blob);
+                    setIsCapturing(false);
+                    return;
+                }
+            } catch (err) {
+                console.warn("Pre-generated last frame failed, falling back to extraction:", err);
+            }
+        }
+
         let offscreenVideo = null;
 
         try {
