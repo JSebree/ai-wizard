@@ -58,12 +58,12 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
-            // [v27] Blob Capture Strategy
+            // [v28] Blob Capture Strategy + Cache Busting
             // Fetch the video as a blob first to guarantee seekability.
-            // Direct proxy streaming can fail range requests, breaking seek-to-end.
+            // Added timestamp to force fresh fetch (bypass potential cache issues)
             const encodedSrc = encodeURIComponent(videoSrc);
-            const captureSrc = `https://corsproxy.io/?${encodedSrc}`;
-            console.log("LOG: [v27] Fetching Blob from:", captureSrc);
+            const captureSrc = `https://corsproxy.io/?${encodedSrc}&_t=${Date.now()}`;
+            console.log("LOG: [v28] Fetching Blob from:", captureSrc);
 
             const response = await fetch(captureSrc);
             if (!response.ok) throw new Error(`Fetch Failed: ${response.status}`);
@@ -152,6 +152,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                     if (blob) {
                         onGenerateKeyframe?.(clip, blob);
                         setIsCapturing(false);
+                        // [v28] Alert on Fallback so user knows 'First Frame' is due to error
+                        alert(`[v28 Release] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
                         return; // Success via fallback
                     }
                 } catch (fallbackErr) {
@@ -171,7 +173,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v27 - Blob Strategy] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v28 - Fallback Failed] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
