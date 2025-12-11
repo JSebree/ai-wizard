@@ -344,6 +344,27 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
                     {/* Left: Huge Preview */}
                     <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, position: "relative" }}>
+                        {/* [v64] Debug Dot for Last Frame URL */}
+                        <div
+                            title={clip.last_frame_url || clip.lastFrameUrl ? "Last Frame URL Ready" : "Last Frame URL Missing"}
+                            style={{
+                                position: "absolute",
+                                top: 10,
+                                left: 10,
+                                width: 12,
+                                height: 12,
+                                borderRadius: "50%",
+                                zIndex: 100,
+                                background: clip.last_frame_url || clip.lastFrameUrl ? "#22c55e" : "#ef4444",
+                                boxShadow: clip.last_frame_url || clip.lastFrameUrl ? "0 0 8px rgba(34, 197, 94, 0.8)" : "0 0 8px rgba(239, 68, 68, 0.8)",
+                                border: "1px solid white",
+                                cursor: "help"
+                            }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                alert(`Debug Last Frame:\n\nURL: ${clip.last_frame_url || clip.lastFrameUrl || "NULL"}\n\nID: ${clip.id}`);
+                            }}
+                        />
                         {/* If video exists, show it. Else show thumbnail or black. */}
                         {videoSrc ? (
                             <video
