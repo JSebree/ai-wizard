@@ -94,6 +94,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             console.error("Frame capture failed:", err);
 
             // FALLBACK TO THUMBNAIL
+            let fallbackError = null;
             if (thumbSrc) {
                 console.log("Video capture failed. Attempting thumbnail fallback...");
                 try {
@@ -107,6 +108,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                     }
                 } catch (fallbackErr) {
                     console.error("Thumbnail fallback failed:", fallbackErr);
+                    fallbackError = fallbackErr.message;
                 }
             }
 
@@ -121,7 +123,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
