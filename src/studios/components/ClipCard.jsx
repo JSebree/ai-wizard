@@ -100,237 +100,237 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v18 - Syntax Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v19 - Syntax Fix] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
 
-};
 
-// Helper to capture from image (thumbnail fallback)
-const captureFromImage = async (src) => {
-    try {
-        console.log("Fetching fallback image:", src);
-        const res = await fetch(src);
-        if (!res.ok) {
-            // Inspect error body [v12]
-            const text = await res.text().catch(() => "");
-            throw new Error(`Fetch failed: ${res.status} ${res.statusText} for ${src}\nBody: ${text.substring(0, 100)}`);
+
+    // Helper to capture from image (thumbnail fallback)
+    const captureFromImage = async (src) => {
+        try {
+            console.log("Fetching fallback image:", src);
+            const res = await fetch(src);
+            if (!res.ok) {
+                // Inspect error body [v12]
+                const text = await res.text().catch(() => "");
+                throw new Error(`Fetch failed: ${res.status} ${res.statusText} for ${src}\nBody: ${text.substring(0, 100)}`);
+            }
+            // Check content type
+            const type = res.headers.get("content-type");
+            if (type && type.includes("text/html")) {
+                throw new Error(`Proxy Error: Received HTML instead of image from ${src}`);
+            }
+            const blob = await res.blob();
+            return blob;
+        } catch (err) {
+            console.error("Fallback Error:", err);
+            throw err; // Re-throw to allow parent to handle [v14]
         }
-        // Check content type
-        const type = res.headers.get("content-type");
-        if (type && type.includes("text/html")) {
-            throw new Error(`Proxy Error: Received HTML instead of image from ${src}`);
+    };
+
+    // Dialogue script
+    const scriptText = dBlocks?.map(d => {
+        let name = d.characterName || d.speaker;
+        // If name is missing or "Unknown Speaker", try to resolve via ID
+        if (!name || name === "Unknown Speaker" || name === "Unknown") {
+            const idToFind = d.characterId || d.speaker_id || clip.character_id;
+            const found = characters?.find(c => c.id === idToFind) || registryVoices?.find(v => v.id === idToFind);
+            if (found) name = found.name;
         }
-        const blob = await res.blob();
-        return blob;
-    } catch (err) {
-        console.error("Fallback Error:", err);
-        throw err; // Re-throw to allow parent to handle [v14]
-    }
-};
+        return `${name || "Unknown"}: ${d.text}`;
+    }).join("\n\n") || "No dialogue.";
 
-// Dialogue script
-const scriptText = dBlocks?.map(d => {
-    let name = d.characterName || d.speaker;
-    // If name is missing or "Unknown Speaker", try to resolve via ID
-    if (!name || name === "Unknown Speaker" || name === "Unknown") {
-        const idToFind = d.characterId || d.speaker_id || clip.character_id;
-        const found = characters?.find(c => c.id === idToFind) || registryVoices?.find(v => v.id === idToFind);
-        if (found) name = found.name;
-    }
-    return `${name || "Unknown"}: ${d.text}`;
-}).join("\n\n") || "No dialogue.";
-
-return (
-    <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center"
-        onClick={onClose}
-        style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.4)",
-            backdropFilter: "blur(4px)",
-            zIndex: 50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-        }}
-    >
+    return (
         <div
-            className="bg-white rounded-xl shadow-xl p-6 w-full max-w-4xl relative"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center"
+            onClick={onClose}
             style={{
-                backgroundColor: "white",
-                borderRadius: "0.75rem",
-                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-                padding: "1.5rem",
-                width: "100%",
-                maxWidth: "56rem",
-                position: "relative",
-                maxHeight: "90vh",
-                overflowY: "auto"
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.4)",
+                backdropFilter: "blur(4px)",
+                zIndex: 50,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
             }}
         >
-            <button
-                className="absolute top-3 right-3 text-gray-500 hover:text-black"
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
+            <div
+                className="bg-white rounded-xl shadow-xl p-6 w-full max-w-4xl relative"
+                onClick={(e) => e.stopPropagation()}
                 style={{
-                    position: "absolute",
-                    top: "0.75rem",
-                    right: "0.75rem",
-                    color: "#6B7280",
-                    cursor: "pointer",
-                    background: "none",
-                    border: "none",
-                    fontSize: "1.25rem"
+                    backgroundColor: "white",
+                    borderRadius: "0.75rem",
+                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                    padding: "1.5rem",
+                    width: "100%",
+                    maxWidth: "56rem",
+                    position: "relative",
+                    maxHeight: "90vh",
+                    overflowY: "auto"
                 }}
             >
-                ✕
-            </button>
+                <button
+                    className="absolute top-3 right-3 text-gray-500 hover:text-black"
+                    onClick={(e) => { e.stopPropagation(); onClose(); }}
+                    style={{
+                        position: "absolute",
+                        top: "0.75rem",
+                        right: "0.75rem",
+                        color: "#6B7280",
+                        cursor: "pointer",
+                        background: "none",
+                        border: "none",
+                        fontSize: "1.25rem"
+                    }}
+                >
+                    ✕
+                </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
-                {/* Left: Huge Preview */}
-                <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, position: "relative" }}>
-                    {/* If video exists, show it. Else show thumbnail or black. */}
-                    {videoSrc ? (
-                        <video
-                            ref={videoRef}
-                            controls
-                            crossOrigin="anonymous" // Critical for capture
-                            src={videoSrc}
-                            style={{ width: "100%", height: "auto", maxHeight: "80vh", display: "block" }}
-                        />
-                    ) : thumbSrc ? (
-                        <img
-                            src={thumbSrc}
-                            alt="Clip thumbnail"
-                            style={{ width: "100%", height: "auto", display: "block", maxHeight: "80vh", objectFit: "contain" }}
-                        />
-                    ) : (
-                        <div style={{ color: "#fff", padding: 20 }}>No Video</div>
-                    )}
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
+                    {/* Left: Huge Preview */}
+                    <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, position: "relative" }}>
+                        {/* If video exists, show it. Else show thumbnail or black. */}
+                        {videoSrc ? (
+                            <video
+                                ref={videoRef}
+                                controls
+                                crossOrigin="anonymous" // Critical for capture
+                                src={videoSrc}
+                                style={{ width: "100%", height: "auto", maxHeight: "80vh", display: "block" }}
+                            />
+                        ) : thumbSrc ? (
+                            <img
+                                src={thumbSrc}
+                                alt="Clip thumbnail"
+                                style={{ width: "100%", height: "auto", display: "block", maxHeight: "80vh", objectFit: "contain" }}
+                            />
+                        ) : (
+                            <div style={{ color: "#fff", padding: 20 }}>No Video</div>
+                        )}
+                    </div>
 
-                {/* Right: Metadata */}
-                <div style={{ position: "relative" }}>
-                    <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 24, paddingRight: 30 }}>
-                        {clip.name || "Untitled Clip"}
-                    </h3>
+                    {/* Right: Metadata */}
+                    <div style={{ position: "relative" }}>
+                        <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 24, paddingRight: 30 }}>
+                            {clip.name || "Untitled Clip"}
+                        </h3>
 
-                    <div style={{ display: "grid", gap: 20 }}>
+                        <div style={{ display: "grid", gap: 20 }}>
 
-                        {/* Description / Full Prompt */}
-                        <div>
-                            <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Description</label>
-                            <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: 0, maxHeight: 100, overflowY: "auto" }}>
-                                {prompt}
-                            </p>
-                        </div>
-
-                        {/* Dialogue Script */}
-                        <div>
-                            <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Script</label>
-                            <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.5, background: "#F1F5F9", padding: 10, borderRadius: 6, maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
-                                {scriptText}
+                            {/* Description / Full Prompt */}
+                            <div>
+                                <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Description</label>
+                                <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: 0, maxHeight: 100, overflowY: "auto" }}>
+                                    {prompt}
+                                </p>
                             </div>
-                        </div>
 
-                        {/* Attributes Table */}
-                        <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                <span style={{ fontSize: 13, color: "#64748B" }}>Audio Status</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: clip.has_audio ? "#16A34A" : "#94A3B8" }}>
-                                    {clip.has_audio ? (
-                                        (clip.speaker_type === 'on_screen' || clip.speaker_type === 'character')
-                                            ? "👄 Lipsync"
-                                            : "🔊 Audio Only"
-                                    ) : "🔇 Silent"}
-                                </span>
+                            {/* Dialogue Script */}
+                            <div>
+                                <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Script</label>
+                                <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.5, background: "#F1F5F9", padding: 10, borderRadius: 6, maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
+                                    {scriptText}
+                                </div>
                             </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                <span style={{ fontSize: 13, color: "#64748B" }}>Duration</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{Number(duration).toFixed(1)}s</span>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                <span style={{ fontSize: 13, color: "#64748B" }}>Speaker Type</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>
-                                    {speakerType === 'on_screen' ? 'CHARACTER' : (speakerType || '').replace("_", " ")}
-                                </span>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                <span style={{ fontSize: 13, color: "#64748B" }}>Motion</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>{motionVal || "None"}</span>
-                            </div>
-                        </div>
 
-                        {/* Action Buttons */}
-                        <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleCaptureFrame(); }}
-                                disabled={isCapturing}
-                                style={{
-                                    padding: "8px 16px",
-                                    borderRadius: 999,
-                                    background: isCapturing ? "#94A3B8" : "#4F46E5",
-                                    color: "white",
-                                    border: "none",
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    cursor: isCapturing ? "wait" : "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6
-                                }}
-                            >
-                                {isCapturing ? "Capturing..." : "Extend Video"}
-                            </button>
+                            {/* Attributes Table */}
+                            <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                                    <span style={{ fontSize: 13, color: "#64748B" }}>Audio Status</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: clip.has_audio ? "#16A34A" : "#94A3B8" }}>
+                                        {clip.has_audio ? (
+                                            (clip.speaker_type === 'on_screen' || clip.speaker_type === 'character')
+                                                ? "👄 Lipsync"
+                                                : "🔊 Audio Only"
+                                        ) : "🔇 Silent"}
+                                    </span>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                                    <span style={{ fontSize: 13, color: "#64748B" }}>Duration</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{Number(duration).toFixed(1)}s</span>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                                    <span style={{ fontSize: 13, color: "#64748B" }}>Speaker Type</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>
+                                        {speakerType === 'on_screen' ? 'CHARACTER' : (speakerType || '').replace("_", " ")}
+                                    </span>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                                    <span style={{ fontSize: 13, color: "#64748B" }}>Motion</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>{motionVal || "None"}</span>
+                                </div>
+                            </div>
 
-                            {onDelete && (
+                            {/* Action Buttons */}
+                            <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 10 }}>
                                 <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDelete(clip);
+                                    onClick={(e) => { e.stopPropagation(); handleCaptureFrame(); }}
+                                    disabled={isCapturing}
+                                    style={{
+                                        padding: "8px 16px",
+                                        borderRadius: 999,
+                                        background: isCapturing ? "#94A3B8" : "#4F46E5",
+                                        color: "white",
+                                        border: "none",
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isCapturing ? "wait" : "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 6
+                                    }}
+                                >
+                                    {isCapturing ? "Capturing..." : "Extend Video"}
+                                </button>
+
+                                {onDelete && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onDelete(clip);
+                                        }}
+                                        style={{
+                                            padding: "8px 16px",
+                                            borderRadius: 999,
+                                            background: "white",
+                                            color: "#EF4444",
+                                            border: "1px solid #EF4444",
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: "pointer"
+                                        }}
+                                    >
+                                        Delete
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        onEdit?.(clip);
                                     }}
                                     style={{
                                         padding: "8px 16px",
                                         borderRadius: 999,
-                                        background: "white",
-                                        color: "#EF4444",
-                                        border: "1px solid #EF4444",
+                                        background: "#000",
+                                        color: "white",
+                                        border: "none",
                                         fontSize: 13,
                                         fontWeight: 600,
                                         cursor: "pointer"
                                     }}
                                 >
-                                    Delete
+                                    Modify
                                 </button>
-                            )}
-                            <button
-                                onClick={() => {
-                                    onEdit?.(clip);
-                                }}
-                                style={{
-                                    padding: "8px 16px",
-                                    borderRadius: 999,
-                                    background: "#000",
-                                    color: "white",
-                                    border: "none",
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    cursor: "pointer"
-                                }}
-                            >
-                                Modify
-                            </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-);
+    );
 }
