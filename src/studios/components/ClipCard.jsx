@@ -82,9 +82,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             console.log("LOG: [v30] Fetching Blob from Local Proxy:", cacheBustedSrc);
 
-            // [v32] Fetch with Timeout (5s) [Reduced from 15s]
+            // [v34] Fetch with Timeout (10s) [Increased for mobile networks]
             const controller = new AbortController();
-            const fetchTimeoutId = setTimeout(() => controller.abort(), 5000);
+            const fetchTimeoutId = setTimeout(() => controller.abort(), 10000);
 
             try {
                 const response = await fetch(cacheBustedSrc, { signal: controller.signal });
@@ -165,6 +165,13 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
         } catch (err) {
             console.error("Frame capture failed:", err);
+            console.error("Error details:", {
+                message: err?.message,
+                name: err?.name,
+                stack: err?.stack,
+                type: typeof err,
+                stringified: JSON.stringify(err, null, 2)
+            });
 
             // CLEANUP [v27]
             if (objectUrl) URL.revokeObjectURL(objectUrl); // Ensure objectUrl is cleaned up on error
@@ -210,7 +217,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v32 - Robust] Capture Failed completely!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            // [v34] Enhanced error reporting
+            const errorReason = err?.message || err?.name || (typeof err === 'string' ? err : JSON.stringify(err)) || "Unknown Error";
+            const errorMsg = `[v34 - Enhanced Logs] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
