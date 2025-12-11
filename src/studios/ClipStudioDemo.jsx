@@ -1108,12 +1108,16 @@ export default function ClipStudioDemo() {
                                     }
                                     console.log("Public URL generated:", publicUrl);
 
+                                    // Lookup original scene to inherit metadata
+                                    const sourceScene = keyframes.find(k => k.id === clip.scene_id) || {};
+
                                     const newKeyframePayload = {
                                         name: `${clip.name} ext`,
-                                        prompt: clip.prompt || "Captured end frame",
+                                        prompt: clip.prompt || sourceScene.prompt || "Captured end frame",
                                         image_url: publicUrl,
-                                        character_id: clip.character_id,
-                                        setting_id: clip.setting_id,
+                                        character_id: clip.character_id || sourceScene.characterId || null,
+                                        setting_id: clip.setting_id || sourceScene.setting_id || null, // Key: Inherit setting
+                                        camera_angle: clip.cameraLabel || sourceScene.cameraLabel || "Standard",
                                         created_at: new Date().toISOString()
                                     };
                                     console.log("Inserting into DB:", newKeyframePayload);

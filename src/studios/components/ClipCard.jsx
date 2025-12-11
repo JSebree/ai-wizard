@@ -121,7 +121,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v5 - Fetch Fix]\n\nCapture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\nFallback URL: ${getProxiedUrl(thumbSrc)}\n\n(Please screenshot this for support)`;
+            const errorMsg = `Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
@@ -149,7 +149,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             const blob = await res.blob();
             return blob;
         } catch (err) {
-            throw new Error(`Fallback Error: ${err.message}`);
+            console.error("Fallback Error:", err);
+            return null; // Return null to allow caller to handle gracefully
         }
     };
 
