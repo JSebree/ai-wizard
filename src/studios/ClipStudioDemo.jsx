@@ -1179,9 +1179,22 @@ export default function ClipStudioDemo() {
                                                 tempId: Date.now(),
                                                 name: formattedKeyframe.name || "Untitled Extension",
                                                 characterId: formattedKeyframe.characterId || "",
-                                                text: "",
+                                                // Initialize mandatory dialogueBlocks array so .map doesn't crash
+                                                dialogueBlocks: [
+                                                    {
+                                                        id: uuidv4(),
+                                                        characterId: formattedKeyframe.characterId || "",
+                                                        text: "",
+                                                        audioUrl: "",
+                                                        duration: 0,
+                                                        pauseDuration: 0.5,
+                                                        isGenerating: false
+                                                    }
+                                                ],
+                                                text: "", // legacy fallback
                                                 audioUrl: "",
                                                 duration: 0,
+                                                manualDuration: 2.5, // Default manual duration
                                                 pauseDuration: 0.5,
                                                 isGenerating: false,
                                                 speakerType: "on_screen",
