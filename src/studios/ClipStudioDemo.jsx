@@ -1135,7 +1135,7 @@ export default function ClipStudioDemo() {
                                     const sourceScene = keyframes.find(k => k.id === (clip.scene_id || clip.sceneId)) || {};
 
                                     // [v52] Robust Metadata Inheritance for Badges
-                                    const inheritedCamera = clip.camera_angle || clip.cameraLabel || sourceScene.camera_angle || sourceScene.cameraLabel || "Standard";
+                                    const inheritedCamera = clip.camera_angle || clip.cameraLabel || sourceScene.camera_angle || sourceScene.cameraLabel || null;
                                     const inheritedChar = clip.character_id || clip.characterId || sourceScene.character_id || sourceScene.characterId || null;
                                     const inheritedSetting = clip.setting_id || clip.settingId || sourceScene.setting_id || sourceScene.settingId || null;
 
