@@ -65,25 +65,50 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             }
         }
 
+        // [v40] Safety Net: If we are here, last_frame_url was missing or failed.
+        // On Mobile, offscreen video extraction WILL fail. Fallback immediately.
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobile) {
+            console.warn("[v40] Mobile detected & Last Frame URL missing. Skipping offscreen extraction.");
+            if (thumbSrc) {
+                try {
+                    const proxiedThumb = getProxiedUrl(thumbSrc);
+                    const blob = await captureFromImage(proxiedThumb);
+                    if (blob) {
+                        onGenerateKeyframe?.(clip, blob);
+                        setIsCapturing(false);
+                        // Optional: Alert the user that quality might be lower
+                        // alert("Using thumbnail as fallback (Pre-generated frame missing)");
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Mobile thumb fallback failed", e);
+                }
+            }
+            // If we can't even get the thumb, we let it fail or alert
+            setIsCapturing(false);
+            alert("[v40 - Mobile] Cannot expand video.\n\nReason: Pre-generated last frame is missing and mobile cannot extract frames dynamically.\n\nPlease attempt on Desktop or regenerate the clip.");
+            return;
+        }
+
         let offscreenVideo = null;
 
         try {
             // [v38] Offscreen video with proxied URL (CORS-enabled)
-            // Live video uses direct URL (no CORS) -> taints canvas
-            // Offscreen + proxied URL = CORS headers + DOM attachment for mobile
             offscreenVideo = document.createElement('video');
             offscreenVideo.crossOrigin = "anonymous";
             offscreenVideo.preload = "auto";
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
-            // DOM attachment for mobile
+            // DOM attachment for mobile (unused now due to safety net, kept for desktop robustness)
             offscreenVideo.style.position = "absolute";
             offscreenVideo.style.opacity = "0.01";
             offscreenVideo.style.pointerEvents = "none";
             offscreenVideo.style.top = "-9999px";
             document.body.appendChild(offscreenVideo);
-            console.log("LOG: [v38] Video attached to DOM");
+
+            // ... (rest of offscreen logic)
 
             // Use proxied URL (has CORS headers)
             let captureSrc = videoSrc;
@@ -147,13 +172,6 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
         } catch (err) {
             console.error("Frame capture failed:", err);
-            console.error("Error details:", {
-                message: err?.message,
-                name: err?.name,
-                stack: err?.stack,
-                type: typeof err,
-                stringified: JSON.stringify(err, null, 2)
-            });
 
             // Cleanup
             if (offscreenVideo && offscreenVideo.parentNode) {
@@ -174,7 +192,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                     if (blob) {
                         onGenerateKeyframe?.(clip, blob);
                         setIsCapturing(false);
-                        alert(`[v38] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
+                        alert(`[v40] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
                         return;
                     }
                 } catch (fallbackErr) {
@@ -185,16 +203,10 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             setIsCapturing(false);
             let captureSrcDebug = videoSrc;
-            if (videoSrc.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
-                captureSrcDebug = videoSrc.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
-            } else if (videoSrc.includes('video-generations.nyc3.digitaloceanspaces.com')) {
-                captureSrcDebug = videoSrc.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
-            } else if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
-                captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
-            }
+            // ... debug logic ...
 
             const errorReason = err?.message || err?.name || (typeof err === 'string' ? err : JSON.stringify(err)) || "Unknown Error";
-            const errorMsg = `[v38 - CORS Fix] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v40 - Pre-Gen Fallback] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}`;
             alert(errorMsg);
         }
     };
