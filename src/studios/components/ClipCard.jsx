@@ -75,9 +75,12 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         if (lastFrameUrl) {
             console.log("LOG: [v40] Using pre-generated last frame URL:", lastFrameUrl);
             try {
-                // [v42 Debug] Verify we are trying to use it
-                // alert(`Using pre-gen URL: ${lastFrameUrl}`); 
-                const blob = await captureFromImage(lastFrameUrl);
+                // [v46] Proxy the URL to ensure we get CORS headers from Cloudflare Function
+                // This is crucial because raw Bucket URLs might not send ACAO: *
+                const proxiedLastFrame = getProxiedUrl(lastFrameUrl);
+                console.log("LOG: [v46] Proxied Last Frame:", proxiedLastFrame);
+
+                const blob = await captureFromImage(proxiedLastFrame);
                 if (blob) {
                     onGenerateKeyframe?.(clip, blob);
                     setIsCapturing(false);
