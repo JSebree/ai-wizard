@@ -37,6 +37,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             newUrl = url.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
         } else if (url.includes('video-generations.nyc3.digitaloceanspaces.com')) {
             newUrl = url.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
+        } else if (url.includes('a-roll-output.nyc3.digitaloceanspaces.com')) {
+            newUrl = url.replace('https://a-roll-output.nyc3.digitaloceanspaces.com', '/last-frames-proxy');
         } else if (url.includes('nyc3.digitaloceanspaces.com')) {
             newUrl = url.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
         }
@@ -88,7 +90,6 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 }
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
-                alert(`[Debug] Pre-Gen Capture Failed!\n\nURL: ${lastFrameUrl}\n\nError: ${err.message}\n\nFalling back to Thumbnail...`);
             }
             // [v45] Consolidate Fallback Logic
             // If direct fetch failed, and we are here, we try thumbnail fallback ONE MORE TIME 
