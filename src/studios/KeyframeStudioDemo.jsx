@@ -1571,7 +1571,7 @@ export default function KeyframeStudioDemo() {
                                                 gap: 3
                                             }}>
                                                 <span>👄</span>
-                                                <span>LIP-SYNC READY</span>
+                                                <span>Ready</span>
                                             </div>
                                         )}
                                     </div>
