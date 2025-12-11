@@ -49,6 +49,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         console.log("LOG: Starting capture for", videoSrc);
 
         let offscreenVideo = null; // Hoist for cleanup access [v25b]
+        let objectUrl = null; // Hoist for cleanup access [v33]
 
         try {
             // Offscreen capture
