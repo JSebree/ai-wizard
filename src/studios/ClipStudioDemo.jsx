@@ -1157,12 +1157,15 @@ export default function ClipStudioDemo() {
                                             image_url: s.image_url,
                                             imageUrl: s.image_url,
                                             characterId: s.character_id,
-                                            description: s.prompt
+                                            description: s.prompt,
+                                            setting_id: newKeyframePayload.setting_id,
+                                            cameraLabel: newKeyframePayload.camera_angle // Key: Required for Lip Sync Ready Badge
                                         };
 
                                         setKeyframes(prev => [formattedKeyframe, ...prev]);
 
                                         // AUTO-NAVIGATE WORKFLOW
+                                        setPreviewShot(null); // Close Modal [v24 Fix]
                                         setSelectedKeyframe(formattedKeyframe);
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
 

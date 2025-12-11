@@ -68,7 +68,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 offscreenVideo.onerror = (e) => reject(offscreenVideo.error || new Error("Metadata Load Error"));
             });
 
-            offscreenVideo.currentTime = videoRef.current ? videoRef.current.currentTime : 0;
+            offscreenVideo.currentTime = Math.max(0, offscreenVideo.duration - 0.1);
 
             await new Promise((resolve, reject) => {
                 offscreenVideo.onseeked = () => resolve();
@@ -120,7 +120,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v23 - External Proxy] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v24 - Last Frame Capture] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
