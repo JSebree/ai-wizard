@@ -81,6 +81,7 @@ export default function ClipStudioDemo() {
                     name: s.name,
                     image_url: s.image_url,
                     characterId: s.character_id,
+                    setting_id: s.setting_id, // Explicitly map setting_id
                     description: s.prompt,
                     cameraLabel: s.camera_angle // Captured for validation
                 })));
@@ -1110,7 +1111,6 @@ export default function ClipStudioDemo() {
 
                                     // Lookup original scene to inherit metadata
                                     const sourceScene = keyframes.find(k => k.id === clip.scene_id) || {};
-                                    console.log(`[v7 Debug] Lookup Scene ${clip.scene_id}:`, sourceScene);
 
                                     const newKeyframePayload = {
                                         name: `${clip.name} ext`,
@@ -1152,14 +1152,11 @@ export default function ClipStudioDemo() {
                                         addShot(formattedKeyframe);
                                         setPreviewShot(null);
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
-
-                                        const debugMsg = `Success! [v8 - Syntax Fix]\n\nInherited Metadata from Scene: ${clip.scene_id}\nName: ${sourceScene.name || "N/A"}\nsetting_id: ${newKeyframePayload.setting_id}\ncharacter_id: ${newKeyframePayload.character_id}`;
-                                        alert(debugMsg);
                                     }
 
                                 } catch (err) {
                                     console.error("Error generating keyframe:", err);
-                                    alert(`Failed to save keyframe [v8 Error]: ${err.message}`);
+                                    alert(`Failed to save keyframe: ${err.message}`);
                                 }
                             }}
                         />
