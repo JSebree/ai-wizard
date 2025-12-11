@@ -48,62 +48,83 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         setIsCapturing(true);
         console.log("LOG: Starting capture for", videoSrc);
 
+        let offscreenVideo = null;
+
         try {
-            // [v37] Use the LIVE video player instead of offscreen
-            // Mobile Safari refuses to load metadata for hidden/offscreen videos
-            const liveVideo = videoRef.current;
-            if (!liveVideo) {
-                throw new Error("Video player not found");
+            // [v38] Offscreen video with proxied URL (CORS-enabled)
+            // Live video uses direct URL (no CORS) -> taints canvas
+            // Offscreen + proxied URL = CORS headers + DOM attachment for mobile
+            offscreenVideo = document.createElement('video');
+            offscreenVideo.crossOrigin = "anonymous";
+            offscreenVideo.preload = "auto";
+            offscreenVideo.muted = true;
+            offscreenVideo.playsInline = true;
+
+            // DOM attachment for mobile
+            offscreenVideo.style.position = "absolute";
+            offscreenVideo.style.opacity = "0.01";
+            offscreenVideo.style.pointerEvents = "none";
+            offscreenVideo.style.top = "-9999px";
+            document.body.appendChild(offscreenVideo);
+            console.log("LOG: [v38] Video attached to DOM");
+
+            // Use proxied URL (has CORS headers)
+            let captureSrc = videoSrc;
+            if (videoSrc.includes('nyc3.digitaloceanspaces.com')) {
+                captureSrc = getProxiedUrl(videoSrc);
             }
 
-            console.log("LOG: [v37] Using live video player (not offscreen)");
+            console.log("LOG: [v38] Using proxied URL:", captureSrc);
+            offscreenVideo.src = captureSrc;
+            offscreenVideo.load();
 
-            // Wait for metadata if not already loaded
-            if (!liveVideo.duration || isNaN(liveVideo.duration)) {
-                console.log("LOG: [v37] Waiting for metadata...");
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => reject(new Error("Metadata timeout")), 5000);
-                    liveVideo.onloadedmetadata = () => {
-                        clearTimeout(timeout);
-                        console.log("LOG: [v37] Metadata loaded");
-                        resolve();
-                    };
-                });
-            }
+            // Wait for metadata
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error("Metadata timeout")), 10000);
+                offscreenVideo.onloadedmetadata = () => {
+                    clearTimeout(timeout);
+                    console.log("LOG: [v38] Metadata loaded. Duration:", offscreenVideo.duration);
+                    resolve();
+                };
+                offscreenVideo.onerror = (e) => {
+                    clearTimeout(timeout);
+                    reject(offscreenVideo.error || new Error("Metadata load error"));
+                };
+            });
 
-            const seekTime = Math.max(0, liveVideo.duration - 0.1);
-            console.log(`[v37] Seeking to: ${seekTime}s (Duration: ${liveVideo.duration}s)`);
+            const seekTime = Math.max(0, offscreenVideo.duration - 0.1);
+            console.log(`[v38] Seeking to: ${seekTime}s (Duration: ${offscreenVideo.duration}s)`);
 
-            // Seek to end
-            liveVideo.currentTime = seekTime;
+            offscreenVideo.currentTime = seekTime;
 
             await new Promise((resolve) => {
                 const timeout = setTimeout(() => {
-                    console.warn(`[v37] Seek timed out after 5s. Capturing current frame (${liveVideo.currentTime}s) instead.`);
+                    console.warn(`[v38] Seek timed out. Capturing current frame (${offscreenVideo.currentTime}s)`);
                     resolve();
                 }, 5000);
 
-                liveVideo.onseeked = () => {
+                offscreenVideo.onseeked = () => {
                     clearTimeout(timeout);
-                    console.log("[v37] Seek completed successfully.");
+                    console.log("[v38] Seek completed successfully");
                     resolve();
                 };
-                liveVideo.onerror = () => {
+                offscreenVideo.onerror = () => {
                     clearTimeout(timeout);
-                    console.warn("[v37] Seek error. Capturing current frame.");
+                    console.warn("[v38] Seek error");
                     resolve();
                 };
             });
 
-            // Draw from live video
+            // Draw
             const canvas = document.createElement('canvas');
-            canvas.width = liveVideo.videoWidth;
-            canvas.height = liveVideo.videoHeight;
+            canvas.width = offscreenVideo.videoWidth;
+            canvas.height = offscreenVideo.videoHeight;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(liveVideo, 0, 0);
+            ctx.drawImage(offscreenVideo, 0, 0);
 
             canvas.toBlob((blob) => {
                 if (blob) onGenerateKeyframe?.(clip, blob);
+                if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo);
                 setIsCapturing(false);
             }, 'image/png');
 
@@ -117,20 +138,17 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 stringified: JSON.stringify(err, null, 2)
             });
 
-            // CLEANUP [v35] - no objectUrl with direct src
+            // Cleanup
             if (offscreenVideo && offscreenVideo.parentNode) {
                 document.body.removeChild(offscreenVideo);
             }
-            // Note: objectUrl scope is tricky here, but browser GC handles revoked URLs mostly.
 
             // FALLBACK TO THUMBNAIL
             let fallbackError = null;
             if (thumbSrc) {
                 console.log("Video capture failed. Attempting thumbnail fallback...");
                 try {
-                    // [v30] Use Local Proxy for Thumbnail too
                     const proxiedThumb = getProxiedUrl(thumbSrc);
-                    // Add cache buster
                     const separator = proxiedThumb.includes('?') ? '&' : '?';
                     const cacheBustedThumb = `${proxiedThumb}${separator}_t=${Date.now()}`;
 
@@ -139,9 +157,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                     if (blob) {
                         onGenerateKeyframe?.(clip, blob);
                         setIsCapturing(false);
-                        // [v30] Alert on Fallback so user knows 'First Frame' is due to error
-                        alert(`[v30 Release] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
-                        return; // Success via fallback
+                        alert(`[v38] Warning: Precise Capture Failed.\n\nReason: ${err.message}\n\nUsing Thumbnail (First Frame) as fallback.`);
+                        return;
                     }
                 } catch (fallbackErr) {
                     console.error("Thumbnail fallback failed:", fallbackErr);
@@ -150,7 +167,6 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             }
 
             setIsCapturing(false);
-            // Construct Detailed Error Message for User Debugging
             let captureSrcDebug = videoSrc;
             if (videoSrc.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
                 captureSrcDebug = videoSrc.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
@@ -160,9 +176,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            // [v35] Enhanced error reporting
             const errorReason = err?.message || err?.name || (typeof err === 'string' ? err : JSON.stringify(err)) || "Unknown Error";
-            const errorMsg = `[v37 - Live Video] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v38 - CORS Fix] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
