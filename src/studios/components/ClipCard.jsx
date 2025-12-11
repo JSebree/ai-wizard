@@ -58,12 +58,20 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
-            // Use External CORS Proxy because our local proxy is broken by host (Index.html return)
-            // and Bucket has no CORS.
+            // [v27] Blob Capture Strategy
+            // Fetch the video as a blob first to guarantee seekability.
+            // Direct proxy streaming can fail range requests, breaking seek-to-end.
             const encodedSrc = encodeURIComponent(videoSrc);
             const captureSrc = `https://corsproxy.io/?${encodedSrc}`;
-            console.log("LOG: Capture Source:", captureSrc);
-            offscreenVideo.src = captureSrc;
+            console.log("LOG: [v27] Fetching Blob from:", captureSrc);
+
+            const response = await fetch(captureSrc);
+            if (!response.ok) throw new Error(`Fetch Failed: ${response.status}`);
+            const videoBlob = await response.blob();
+            const objectUrl = URL.createObjectURL(videoBlob);
+
+            console.log("LOG: [v27] Blob loaded, size:", videoBlob.size);
+            offscreenVideo.src = objectUrl;
 
             await new Promise((resolve, reject) => {
                 offscreenVideo.onloadedmetadata = () => resolve();
@@ -114,17 +122,21 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
 
             canvas.toBlob((blob) => {
                 if (blob) onGenerateKeyframe?.(clip, blob);
-                if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo); // Cleanup [v25b]
+
+                // Cleanup [v27]
+                URL.revokeObjectURL(objectUrl);
+                if (offscreenVideo && offscreenVideo.parentNode) document.body.removeChild(offscreenVideo);
                 setIsCapturing(false);
             }, 'image/png');
 
         } catch (err) {
             console.error("Frame capture failed:", err);
 
-            // CLEANUP [v25b]
+            // CLEANUP [v27]
             if (offscreenVideo && offscreenVideo.parentNode) {
                 document.body.removeChild(offscreenVideo);
             }
+            // Note: objectUrl scope is tricky here, but browser GC handles revoked URLs mostly.
 
             // FALLBACK TO THUMBNAIL
             let fallbackError = null;
@@ -159,7 +171,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 captureSrcDebug = videoSrc.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
             }
 
-            const errorMsg = `[v26 - 10s Timeout] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
+            const errorMsg = `[v27 - Blob Strategy] Capture Failed!\n\nReason: ${err.message || "Unknown Error"}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}\n\nAttempted URL: ${captureSrcDebug}\n\n(Please screenshot this for support)`;
             alert(errorMsg);
         }
     };
