@@ -46,24 +46,18 @@ function AppHeader() {
             SceneMe
           </span>
         </Link>
-        <button
-          type="button"
-          onClick={() => {
-            if (location.pathname !== "/interview") {
-              navigate("/interview");
-              // Give InterviewPage a moment to mount before dispatching
-              setTimeout(() => {
-                window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
-              }, 250);
-            } else {
+        {location.pathname === "/interview" && (
+          <button
+            type="button"
+            onClick={() => {
               window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
-            }
-          }}
-          className="header-review-btn text-sm px-3 py-1 rounded select-none"
-          title="Go to Review step"
-        >
-          Review
-        </button>
+            }}
+            className="header-review-btn text-sm px-3 py-1 rounded select-none"
+            title="Go to Review step"
+          >
+            Review
+          </button>
+        )}
       </div>
     </header>
   );
