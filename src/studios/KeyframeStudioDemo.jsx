@@ -1534,53 +1534,30 @@ export default function KeyframeStudioDemo() {
                     {keyframes.length === 0 ? (
                         <p style={{ fontSize: 13, color: "#94A3B8" }}>No keyframes saved yet.</p>
                     ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+                        <div className="overflow-x-auto flex gap-4 pb-4 border-b border-gray-100 min-h-[120px]">
                             {keyframes.map(scene => (
                                 <div
                                     key={scene.id}
                                     onClick={() => setActiveScene(scene)}
-                                    style={{
-                                        border: "1px solid #E2E8F0",
-                                        borderRadius: 8,
-                                        overflow: "hidden",
-                                        background: "#F8FAFC",
-                                        cursor: "pointer",
-                                        transition: "transform 0.1s ease-in-out"
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
-                                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                                    className="flex-shrink-0 w-48 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all group flex flex-col"
                                 >
-                                    <div style={{ aspectRatio: "16/9", background: "#000", position: "relative" }}>
-                                        <img src={scene.imageUrl} alt={scene.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                    <div className="aspect-video bg-black relative">
+                                        <img src={scene.imageUrl} alt={scene.name} className="w-full h-full object-cover" />
+
                                         {/* Lip-Sync Ready Badge */}
                                         {scene.characterId && (scene.camera_angle === "Standard" || scene.camera_angle === "Close & Intimate") && (
-                                            <div style={{
-                                                position: "absolute",
-                                                top: 6,
-                                                right: 6,
-                                                background: "rgba(16, 185, 129, 0.9)", // Emerald/Green
-                                                color: "white",
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                padding: "2px 6px",
-                                                borderRadius: 4,
-                                                boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-                                                backdropFilter: "blur(2px)",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 3
-                                            }}>
+                                            <div className="absolute top-1 right-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow backdrop-blur-sm flex items-center gap-1 font-bold z-10">
                                                 <span>👄</span>
                                                 <span>Ready</span>
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ padding: 12 }}>
-                                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scene.name}</div>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <div className="p-2 flex flex-col flex-1 gap-2">
+                                        <div className="font-bold text-xs text-slate-800 truncate" title={scene.name}>{scene.name}</div>
+                                        <div className="mt-auto flex justify-between items-center gap-2">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleModifyScene(scene); }}
-                                                style={{ fontSize: 11, color: "#000", background: "none", border: "1px solid #E2E8F0", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+                                                className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-white hover:border-slate-400 transition-colors"
                                             >
                                                 Modify
                                             </button>
@@ -1589,7 +1566,8 @@ export default function KeyframeStudioDemo() {
                                                     e.stopPropagation();
                                                     handleDeleteScene(scene.id);
                                                 }}
-                                                style={{ fontSize: 11, color: "#EF4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                                className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                                                title="Delete"
                                             >
                                                 Delete
                                             </button>

@@ -525,6 +525,9 @@ export default function ProductionStudioDemo() {
 
             <div className="flex flex-col gap-8 px-4 pb-20">
 
+
+
+
                 {/* 1. PROJECT BIN */}
                 <div className="flex flex-col gap-4">
                     <div>
@@ -576,7 +579,66 @@ export default function ProductionStudioDemo() {
                     </div>
                 </div>
 
-                {/* SCENE NAME INPUT (Moved here) */}
+                {/* 3. TIMELINE (Moved Here) */}
+                <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-end px-1">
+                        <h2 className="text-lg font-bold">Timeline Sequence</h2>
+                        <div className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">Total: {(Number(totalDuration) || 0).toFixed(1)}s</div>
+                    </div>
+
+                    <div
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, timeline.length)}
+                        className="bg-slate-50 border border-slate-200 rounded-xl overflow-x-auto flex items-center p-4 gap-2 min-h-[140px] shadow-inner transition-colors hover:bg-slate-100"
+                    >
+                        {timeline.length === 0 && (
+                            <div className="mx-auto text-slate-400 text-sm italic pointer-events-none">Drag or click clips from the Clip Bin above</div>
+                        )}
+
+                        {timeline.map((clip, idx) => (
+                            <React.Fragment key={clip.uniqueId}>
+                                {/* Clip Node */}
+                                <div
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, { ...clip, index: idx }, "timeline")}
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, idx)}
+                                    onClick={() => { setCurrentClipIndex(idx); setIsPlaying(false); }}
+                                    className={`relative flex-shrink-0 w-36 h-24 bg-white rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${currentClipIndex === idx ? "border-black shadow-lg scale-105 z-10" : "border-slate-300 opacity-80 hover:opacity-100"}`}
+                                >
+                                    <img src={clip.thumbnailUrl} className="w-full h-full object-cover pointer-events-none" />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
+                                        <div className="text-white text-[10px] font-medium truncate">{idx + 1}. {clip.name}</div>
+                                    </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); removeFromTimeline(idx); }}
+                                        className="absolute top-1 right-1 w-5 h-5 bg-white/90 rounded-full text-black text-xs flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+
+                                {/* Transition Node */}
+                                {idx < timeline.length - 1 && (
+                                    <div className="flex flex-col items-center justify-center gap-1 w-12 flex-shrink-0 z-0">
+                                        <div className="h-0.5 w-full bg-slate-300"></div>
+                                        <select
+                                            value={clip.transition}
+                                            onChange={(e) => updateTransition(idx, e.target.value)}
+                                            className="bg-white border border-gray-300 text-[10px] font-bold rounded px-1 py-0.5 outline-none cursor-pointer hover:border-black w-full"
+                                        >
+                                            <option value="cut">Cut</option>
+                                            <option value="crossfade">Fade</option>
+                                        </select>
+                                        <div className="h-0.5 w-full bg-slate-300"></div>
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                </div>
+
+                {/* SCENE NAME INPUT (Original Location) */}
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-gray-500 uppercase">Scene Name</label>
                     <input
@@ -740,64 +802,9 @@ export default function ProductionStudioDemo() {
                     </div>
                 </div>
 
-                {/* 3. TIMELINE */}
-                <div className="flex flex-col gap-2">
-                    <div className="flex justify-between items-end px-1">
-                        <h2 className="text-lg font-bold">Timeline Sequence</h2>
-                        <div className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">Total: {(Number(totalDuration) || 0).toFixed(1)}s</div>
-                    </div>
 
-                    <div
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, timeline.length)}
-                        className="bg-slate-50 border border-slate-200 rounded-xl overflow-x-auto flex items-center p-4 gap-2 min-h-[140px] shadow-inner transition-colors hover:bg-slate-100"
-                    >
-                        {timeline.length === 0 && (
-                            <div className="mx-auto text-slate-400 text-sm italic pointer-events-none">Drag or click clips from the Clip Bin above</div>
-                        )}
 
-                        {timeline.map((clip, idx) => (
-                            <React.Fragment key={clip.uniqueId}>
-                                {/* Clip Node */}
-                                <div
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, { ...clip, index: idx }, "timeline")}
-                                    onDragOver={handleDragOver}
-                                    onDrop={(e) => handleDrop(e, idx)}
-                                    onClick={() => { setCurrentClipIndex(idx); setIsPlaying(false); }}
-                                    className={`relative flex-shrink-0 w-36 h-24 bg-white rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${currentClipIndex === idx ? "border-black shadow-lg scale-105 z-10" : "border-slate-300 opacity-80 hover:opacity-100"}`}
-                                >
-                                    <img src={clip.thumbnailUrl} className="w-full h-full object-cover pointer-events-none" />
-                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
-                                        <div className="text-white text-[10px] font-medium truncate">{idx + 1}. {clip.name}</div>
-                                    </div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); removeFromTimeline(idx); }}
-                                        className="absolute top-1 right-1 w-5 h-5 bg-white/90 rounded-full text-black text-xs flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors shadow-sm"
-                                    >
-                                        ×
-                                    </button>
-                                </div>
 
-                                {/* Transition Node */}
-                                {idx < timeline.length - 1 && (
-                                    <div className="flex flex-col items-center justify-center gap-1 w-12 flex-shrink-0 z-0">
-                                        <div className="h-0.5 w-full bg-slate-300"></div>
-                                        <select
-                                            value={clip.transition}
-                                            onChange={(e) => updateTransition(idx, e.target.value)}
-                                            className="bg-white border border-gray-300 text-[10px] font-bold rounded px-1 py-0.5 outline-none cursor-pointer hover:border-black w-full"
-                                        >
-                                            <option value="cut">Cut</option>
-                                            <option value="crossfade">Fade</option>
-                                        </select>
-                                        <div className="h-0.5 w-full bg-slate-300"></div>
-                                    </div>
-                                )}
-                            </React.Fragment>
-                        ))}
-                    </div>
-                </div>
 
                 {/* 4. SAVED SCENES */}
                 <div className="mt-8 border-t border-gray-200 pt-8">
@@ -806,20 +813,86 @@ export default function ProductionStudioDemo() {
                         <p className="text-xs text-slate-500">Your finished productions.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="overflow-x-auto flex gap-4 pb-4 border-b border-gray-100 min-h-[120px]">
                         {savedScenes.length === 0 && (
-                            <div className="col-span-full text-center py-10 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                            <div className="w-full text-center py-8 text-slate-400 text-xs border border-dashed rounded-lg">
                                 No saved scenes yet. Render your timeline to save one!
                             </div>
                         )}
                         {savedScenes.map(scene => (
-                            <ProjectThumbnail
+                            <div
                                 key={scene.id}
-                                scene={scene}
-                                onDelete={() => handleDeleteScene(scene)}
-                                onLoad={(s) => loadScene(s)}
+                                className="flex-shrink-0 w-48 flex flex-col gap-2 cursor-pointer group"
                                 onClick={() => setSelectedViewProject(scene)}
-                            />
+                            >
+                                <div className="w-48 aspect-video bg-black rounded-lg overflow-hidden relative shadow-sm group-hover:shadow-md transition-all ring-2 ring-transparent group-hover:ring-black">
+                                    <img
+                                        src={scene.thumbnailUrl || scene.thumbnail_url}
+                                        className={`w-full h-full object-cover pointer-events-none ${scene.status === 'rendering' ? 'opacity-50' : ''}`}
+                                    />
+
+                                    {/* Status Badge */}
+                                    {scene.status === 'rendering' && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                                            <span className="text-white text-xs font-bold animate-pulse">RENDERING</span>
+                                        </div>
+                                    )}
+
+                                    {/* Play Icon */}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
+                                        {!scene.status !== 'rendering' && (
+                                            <span className="text-white opacity-0 group-hover:opacity-100 font-bold text-xl">▶</span>
+                                        )}
+                                    </div>
+
+                                    {/* Clip Count Badge (Swapped) */}
+                                    <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1 py-0.5 rounded font-mono backdrop-blur-sm">
+                                        {scene.data?.timeline?.length || 0} clips
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <div className="flex gap-2 flex-shrink-0 items-center">
+                                            {/* Download */}
+                                            {(scene.video_url || scene.videoUrl) ? (
+                                                <a
+                                                    href={scene.video_url || scene.videoUrl}
+                                                    download
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline px-0.5"
+                                                    title="Download Video"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    Download
+                                                </a>
+                                            ) : (
+                                                <span
+                                                    className="text-[10px] font-bold text-slate-400 cursor-not-allowed px-0.5"
+                                                    title="No rendered video available"
+                                                >
+                                                    Processing
+                                                </span>
+                                            )}
+                                            {/* Quick Delete */}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteScene(scene); }}
+                                                className="text-[10px] font-bold text-red-500 hover:text-red-700 px-0.5"
+                                                title="Delete"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                        <div className="text-[9px] font-bold text-black uppercase tracking-wider bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                            {(Number(scene.data?.timeline?.reduce((acc, c) => acc + (Number(c.duration) || 0), 0)) || Number(scene.duration) || 0).toFixed(1)}s
+                                        </div>
+                                    </div>
+                                    <div className="text-xs font-bold truncate text-slate-800" title={scene.name}>
+                                        {scene.name}
+                                    </div>
+                                </div>
+                            </div>
                         ))}
                     </div>
                 </div>

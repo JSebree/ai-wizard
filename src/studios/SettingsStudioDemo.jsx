@@ -732,43 +732,35 @@ export default function SettingsStudioDemo() {
           {settings.length === 0 ? (
             <p style={{ fontSize: 13, color: "#94A3B8" }}>No settings saved yet.</p>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+            <div className="overflow-x-auto flex gap-4 pb-4 border-b border-gray-100 min-h-[120px]">
               {settings.map(setting => {
                 const thumb = setting.referenceImageUrl || setting.base_hero || setting.base_image_url;
                 return (
                   <div
                     key={setting.id}
                     onClick={() => setSelectedSetting(setting)}
-                    style={{
-                      border: "1px solid #E2E8F0",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      background: "#F8FAFC",
-                      cursor: "pointer",
-                      transition: "transform 0.1s ease-in-out"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
-                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                    className="flex-shrink-0 w-48 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all group flex flex-col"
                   >
-                    <div style={{ aspectRatio: "16/9", background: "#E2E8F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div className="aspect-video bg-gray-200 flex items-center justify-center relative">
                       {thumb ? (
-                        <img src={thumb} alt={setting.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img src={thumb} alt={setting.name} className="w-full h-full object-cover" />
                       ) : (
-                        <span style={{ fontSize: 24, opacity: 0.3 }}>🏞️</span>
+                        <span className="text-2xl opacity-30">🏞️</span>
                       )}
                     </div>
-                    <div style={{ padding: 12 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{setting.name}</div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div className="p-2 flex flex-col flex-1 gap-2">
+                      <div className="font-bold text-xs text-slate-800 truncate" title={setting.name}>{setting.name}</div>
+                      <div className="mt-auto flex justify-between items-center gap-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleModifySetting(setting); }}
-                          style={{ fontSize: 11, color: "#000", background: "none", border: "1px solid #E2E8F0", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+                          className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-white hover:border-slate-400 transition-colors"
                         >
                           Modify
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDelete(setting.id); }}
-                          style={{ fontSize: 11, color: "#EF4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                          title="Delete"
                         >
                           Delete
                         </button>

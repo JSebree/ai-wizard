@@ -686,34 +686,38 @@ export default function ClipStudioDemo() {
             {/* KEYFRAME SELECTION */}
             <section className="mb-12">
                 <h2 className="text-base font-bold text-gray-800 mb-4">1. Select a Keyframe</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+                <div className="overflow-x-auto flex gap-4 pb-4 border-b border-gray-100 min-h-[120px]">
                     {keyframes.map(scene => (
                         <div
                             key={scene.id}
-                            className={`relative border rounded-lg overflow-hidden cursor-pointer transition-all min-h-[100px] bg-gray-50 ${selectedKeyframe?.id === scene.id ? 'border-black shadow-md' : 'border-gray-200 hover:border-gray-300'}`}
+                            className={`flex-shrink-0 w-48 bg-slate-50 border rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all group flex flex-col ${selectedKeyframe?.id === scene.id ? 'border-black shadow-md ring-1 ring-black' : 'border-slate-200'}`}
                             onClick={() => setSelectedKeyframe(scene)}
                         >
-                            <img
-                                src={scene.image_url || scene.imageUrl || "https://placehold.co/400x300?text=No+Image"}
-                                alt={scene.name}
-                                className="w-full aspect-[4/3] object-cover bg-gray-200"
-                                onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }}
-                            />
-                            <div className="p-2 bg-white">
-                                <h3 className="font-bold text-gray-800 text-xs truncate">{scene.name || "Untitled"}</h3>
+                            <div className="aspect-video bg-gray-200 relative">
+                                <img
+                                    src={scene.image_url || scene.imageUrl || "https://placehold.co/400x300?text=No+Image"}
+                                    alt={scene.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }}
+                                />
+                                {/* Lip-Sync Ready Badge */}
+                                {scene.characterId && (scene.cameraLabel === "Standard" || scene.cameraLabel === "Close & Intimate") && (
+                                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold z-10 backdrop-blur-sm">
+                                        <span>👄</span>
+                                        <span>Ready</span>
+                                    </div>
+                                )}
+                                {selectedKeyframe?.id === scene.id && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20 backdrop-blur-[1px]">
+                                        <div className="bg-white rounded-full p-1 shadow-lg">
+                                            <span className="text-blue-600 text-lg font-bold">✓</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            {/* Lip-Sync Ready Badge */}
-                            {scene.characterId && (scene.cameraLabel === "Standard" || scene.cameraLabel === "Close & Intimate") && (
-                                <div className="absolute top-2 right-2 flex items-center gap-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow font-bold z-10 backdrop-blur-sm">
-                                    <span>👄</span>
-                                    <span>Ready</span>
-                                </div>
-                            )}
-                            {selectedKeyframe?.id === scene.id && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20">
-                                    <span className="text-white text-2xl">✓</span>
-                                </div>
-                            )}
+                            <div className="p-2 flex flex-col flex-1 gap-2">
+                                <div className="font-bold text-xs text-slate-800 truncate" title={scene.name || "Untitled"}>{scene.name || "Untitled"}</div>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -1010,24 +1014,19 @@ export default function ClipStudioDemo() {
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-base font-bold text-gray-800">Saved Clips</h3>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+                <div className="overflow-x-auto flex gap-4 pb-4 border-b border-gray-100 min-h-[120px]">
+                    {savedClips.length === 0 && (
+                        <div className="w-full text-center py-12 text-gray-400 text-sm border border-dashed rounded-lg bg-gray-50">
+                            No saved clips yet. Create and render a clip to save it here.
+                        </div>
+                    )}
                     {savedClips.map(clip => (
                         <div
                             key={clip.id}
                             onClick={() => setPreviewShot(clip)}
-                            style={{
-                                border: "1px solid #E2E8F0",
-                                borderRadius: 8,
-                                overflow: "hidden",
-                                background: "#F8FAFC",
-                                cursor: "pointer",
-                                transition: "transform 0.1s ease-in-out"
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
-                            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
-                            className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-sm"
+                            className="flex-shrink-0 w-48 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all group flex flex-col"
                         >
-                            <div className="aspect-video bg-black relative group">
+                            <div className="aspect-video bg-black relative">
                                 {/* Badges */}
                                 <div className="absolute top-2 right-2 flex flex-col gap-1 items-end z-10">
                                     {clip.has_audio ? (
@@ -1045,18 +1044,19 @@ export default function ClipStudioDemo() {
                                     {Number(clip.duration).toFixed(1)}s
                                 </div>
                             </div>
-                            <div className="p-2">
-                                <h4 className="font-bold text-xs text-slate-800 truncate mb-2">{clip.name || "Untitled Clip"}</h4>
-                                <div className="flex justify-between items-center gap-2">
+                            <div className="p-2 flex flex-col flex-1 gap-2">
+                                <h4 className="font-bold text-xs text-slate-800 truncate" title={clip.name}>{clip.name || "Untitled Clip"}</h4>
+                                <div className="mt-auto flex justify-between items-center gap-2">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleEditClip(clip); }}
-                                        className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-slate-50 transition-colors"
+                                        className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-white hover:border-slate-400 transition-colors"
                                     >
                                         Modify
                                     </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleDeleteClip(clip); }}
-                                        className="text-[10px] font-bold text-red-500 hover:text-red-600 px-2"
+                                        className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                                        title="Delete"
                                     >
                                         Delete
                                     </button>
@@ -1064,11 +1064,6 @@ export default function ClipStudioDemo() {
                             </div>
                         </div>
                     ))}
-                    {savedClips.length === 0 && (
-                        <div className="col-span-full py-12 text-center text-gray-400 text-sm">
-                            No saved clips yet. Create and render a clip to save it here.
-                        </div>
-                    )}
                 </div>
             </section>
 

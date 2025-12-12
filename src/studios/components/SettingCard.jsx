@@ -95,7 +95,6 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
           padding: "0",
           width: "100%",
           maxWidth: "1000px", // Reverted to wider modal per user feedback
-          width: "90vw",
           position: "relative",
           maxHeight: "90vh",
           display: "flex",

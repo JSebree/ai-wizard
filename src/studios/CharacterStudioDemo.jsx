@@ -581,35 +581,31 @@ export default function CharacterStudioDemo() {
         <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>Saved Characters</h3>
           {characters.length === 0 ? <p style={{ color: "#94A3B8", fontSize: 13 }}>No characters saved.</p> : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+            <div className="overflow-x-auto flex gap-4 pb-4 border-b border-gray-100 min-h-[120px]">
               {characters.map(char => (
                 <div
                   key={char.id}
                   onClick={() => setActiveCharacter(char)}
-                  style={{
-                    border: "1px solid #E2E8F0",
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    background: "#F8FAFC",
-                    cursor: "pointer",
-                    transition: "transform 0.1s ease-in-out"
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
-                  onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                  className="flex-shrink-0 w-48 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all group flex flex-col"
                 >
-                  <div style={{ aspectRatio: "1", background: "#E2E8F0" }}>
-                    <img src={char.referenceImageUrl || char.base_image_url || char.base_hero} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <div className="aspect-square bg-slate-200 relative overflow-hidden">
+                    <img
+                      src={char.referenceImageUrl || char.base_image_url || char.base_hero}
+                      className="w-full h-full object-cover"
+                      alt={char.displayName}
+                    />
                   </div>
-                  <div style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{char.displayName || char.name}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div className="p-2 flex flex-col flex-1 gap-2">
+                    <div className="font-bold text-xs text-slate-800 truncate" title={char.displayName || char.name}>{char.displayName || char.name}</div>
+                    <div className="mt-auto flex justify-between items-center gap-2">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleModifyCharacter(char); }}
-                        style={{ fontSize: 11, color: "#000", background: "none", border: "1px solid #E2E8F0", padding: "4px 8px", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+                        className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-white hover:border-slate-400 transition-colors"
                       >Modify</button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(char.id); }}
-                        style={{ fontSize: 11, color: "#EF4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                        title="Delete"
                       >Delete</button>
                     </div>
                   </div>
