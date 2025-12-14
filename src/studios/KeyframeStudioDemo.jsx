@@ -779,8 +779,10 @@ export default function KeyframeStudioDemo() {
         const targetId = isOverwrite ? sourceSceneId : crypto.randomUUID();
 
         // 2. OPTIMISTIC SAVE (PENDING STATE)
+        const { data: { user } } = await supabase.auth.getUser();
         const pendingRecord = {
             id: targetId,
+            user_id: user?.id, // Explicitly capture User ID for N8n Payload
             ...metadata,
             // Use Placeholder URL for persistence so reload sees it as pending
             imageUrl: "https://r2.sceneme.ai/assets/pending_placeholder.png",
