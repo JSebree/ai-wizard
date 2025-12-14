@@ -252,7 +252,7 @@ export default function KeyframeStudioDemo() {
     const [keyframes, setKeyframes] = useState([]);
     const [name, setName] = useState(""); // Keyframe Name
     const [activeScene, setActiveScene] = useState(null);
-    const [sceneToDelete, setSceneToDelete] = useState(null); // Added for custom delete confirmation
+    const [keyframeToDelete, setKeyframeToDelete] = useState(null); // Added for custom delete confirmation
 
     // Selection State
     const [selectedSettingId, setSelectedSettingId] = useState("");
@@ -344,7 +344,7 @@ export default function KeyframeStudioDemo() {
                     color_grade: s.color_grade,
                     createdAt: s.created_at,
                     // FIX: Infer pending status if URL matches placeholder or is literally "PENDING"
-                    status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING" || s.status === "pending") ? 'pending' : 'complete'
+                    status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING") ? 'pending' : 'complete'
                 }));
 
                 setKeyframes(mappedScenes);
@@ -554,12 +554,12 @@ export default function KeyframeStudioDemo() {
     // DELETE HANDLER
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const handleDeleteScene = (id) => {
-        setSceneToDelete(id);
+    const handleDeleteScene = (scene) => {
+        setKeyframeToDelete(scene);
     };
 
     const handleConfirmDelete = async () => {
-        const id = sceneToDelete;
+        const id = keyframeToDelete ? keyframeToDelete.id : null; // keyframeToDelete is object in JSX usage, but here definition suggests ID?
         if (!id) return;
 
         setIsDeleting(true);
@@ -587,7 +587,7 @@ export default function KeyframeStudioDemo() {
             alert("Failed to delete keyframe. Check console for details.");
         } finally {
             setIsDeleting(false);
-            setSceneToDelete(null); // Close confirmation modal always
+            setKeyframeToDelete(null); // Close confirmation modal always
         }
     };
 
@@ -1011,8 +1011,36 @@ export default function KeyframeStudioDemo() {
             if (error) {
                 console.error("Error renaming prop in Supabase:", error);
                 setError("Failed to rename prop.");
-                // Revert optimistic update on error (requires fetching original state or more complex logic)
             }
+        }
+    };
+
+    // Manual Clear Handler (User Request)
+    const handleClearForm = () => {
+        if (window.confirm("Start fresh? This will clear your current prompt and selections.")) {
+            // UI Reset
+            setName("");
+            setPrompt("");
+            setGeneratedSceneUrl("");
+            setIsGenerating(false);
+            setGenerationMode("create");
+            setSourceSceneId(null);
+            setActiveScene(null);
+
+            // Clear Selections
+            setSelectedCharId("");
+            setSelectedCharAngle("referenceImageUrl");
+            setSelectedSettingId("");
+            setSelectedSettingAngle("base_image_url");
+            setSelectedPropId("");
+
+            // Reset Styles
+            setVisualStyleId(VISUAL_STYLES[0].id);
+            setCameraAngle(CAMERA_ANGLES[0].id);
+            setSelectedGradeId(COLOR_GRADES[0].id || "none");
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 
@@ -1534,38 +1562,58 @@ export default function KeyframeStudioDemo() {
 
                 {/* 5. Preview & Generate */}
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                        <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>5. Preview & Generate</h3>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 600, color: "#1E293B", margin: 0 }}>
+                            {generationMode === "create" ? "✨ New Keyframe" : "✏️ Modify Keyframe"}
+                        </h3>
 
-                        <button
-                            onClick={handleGenerateScene}
-                            disabled={isGenerating || !activeSetting || !activeCharacter || !prompt.trim()}
-                            style={{
-                                padding: "8px 20px",
-                                borderRadius: 999,
-                                border: "none",
-                                background: (isGenerating || !activeSetting || !prompt.trim()) ? "#94A3B8" : "#000",
-                                color: "white",
-                                fontSize: 14,
-                                fontWeight: 600,
-                                cursor: (isGenerating || !activeSetting || !prompt.trim()) ? "not-allowed" : "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6
-                            }}
-                        >
-                            {isGenerating && (
-                                <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", animation: "spin 1s linear infinite" }} />
-                            )}
-                            {isGenerating ? "Processing..." : (generationMode === "create" ? "Generate Keyframe" : "Apply Changes")}
-                        </button>
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                                onClick={handleClearForm}
+                                style={{
+                                    padding: "6px 12px",
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    borderRadius: 6,
+                                    border: "1px solid #E2E8F0",
+                                    background: "white",
+                                    color: "#64748B",
+                                    cursor: "pointer",
+                                    transition: "all 0.2s"
+                                }}
+                            >
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleGenerateScene}
+                                disabled={isGenerating || !activeSetting || !prompt.trim()}
+                                style={{
+                                    background: (isGenerating || !activeSetting || !prompt.trim()) ? "#94A3B8" : "#2563EB",
+                                    color: "white",
+                                    border: "none",
+                                    padding: "8px 16px",
+                                    borderRadius: 6,
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    cursor: (isGenerating || !activeSetting || !prompt.trim()) ? "not-allowed" : "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6
+                                }}
+                            >
+                                {isGenerating && (
+                                    <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", animation: "spin 1s linear infinite" }} />
+                                )}
+                                {isGenerating ? "Processing..." : (generationMode === "create" ? "Generate Keyframe" : "Apply Changes")}
+                            </button>
+                        </div>
                     </div>
 
                     {error && <p style={{ fontSize: 12, color: "#DC2626", marginBottom: 8 }}>{error}</p>}
 
                     <div style={{
                         position: "relative",
-                        minHeight: 400, // Larger preview
+                        minHeight: 400,
                         background: "#F1F5F9",
                         borderRadius: 8,
                         overflow: "hidden",
@@ -1597,7 +1645,7 @@ export default function KeyframeStudioDemo() {
                                 </button>
                             </div>
                         ) : (
-                            <div style={{ width: "100%", height: "100%", position: "relative", filter: activeGrade.filter, transition: "filter 0.3s ease" }}>
+                            <div style={{ width: "100%", height: "100%", position: "relative", filter: activeGrade ? activeGrade.filter : "none", transition: "filter 0.3s ease" }}>
                                 {/* Background */}
                                 {activeBgUrl ? (
                                     <img src={activeBgUrl} alt="Background" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -1655,7 +1703,7 @@ export default function KeyframeStudioDemo() {
                 {/* Save Button Area (After Generation) */}
                 {
                     generatedSceneUrl && (
-                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
                             <button
                                 onClick={handleSaveKeyframe}
                                 disabled={!name.trim()}
@@ -1676,7 +1724,9 @@ export default function KeyframeStudioDemo() {
                     )
                 }
 
+                <div style={{ height: 40 }} />
 
+                {/* 6. Saved Keyframes */}
                 <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px" }}>Saved Keyframes</h3>
                     {keyframes.length === 0 ? (
@@ -1720,10 +1770,9 @@ export default function KeyframeStudioDemo() {
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleDeleteScene(scene.id);
+                                                    setKeyframeToDelete(scene);
                                                 }}
-                                                className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
-                                                title="Delete"
+                                                className="flex-1 text-[10px] font-bold text-red-600 border border-slate-200 rounded py-1 hover:bg-red-50 hover:border-red-200 transition-colors"
                                             >
                                                 Delete
                                             </button>
@@ -1735,30 +1784,42 @@ export default function KeyframeStudioDemo() {
                     )}
                 </section>
 
-            </div >
+                {/* Keyframe Card Modal */}
+                {
+                    activeScene && (
+                        <KeyframeCard
+                            scene={activeScene}
+                            onClose={() => setActiveScene(null)}
+                            onModify={() => handleModifyScene(activeScene)}
+                            onDelete={() => handleDeleteScene(activeScene)}
+                        />
+                    )
+                }
 
-            {/* Custom Delete Confirmation Modal */}
-            {
-                sceneToDelete && (
+                {/* Delete Confirmation Modal */}
+                {keyframeToDelete && (
                     <div style={{
-                        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-                        background: "rgba(0,0,0,0.5)", zIndex: 100,
-                        display: "flex", alignItems: "center", justifyContent: "center"
+                        position: 'fixed', inset: 0, zIndex: 9999,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                        <div style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
-                            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
-                            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
-                                Are you sure you want to delete this keyframe? This action cannot be undone.
+                        <div style={{
+                            background: 'white', padding: 24, borderRadius: 12,
+                            width: '90%', maxWidth: 400,
+                            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+                        }}>
+                            <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Delete Keyframe?</h3>
+                            <p style={{ color: '#64748B', marginBottom: 20 }}>
+                                Are you sure you want to delete "{keyframeToDelete.name}"? This action cannot be undone.
                             </p>
-                            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
                                 <button
-                                    onClick={() => setSceneToDelete(null)}
-                                    disabled={isDeleting}
+                                    onClick={() => setKeyframeToDelete(null)}
                                     style={{
                                         padding: "8px 16px", borderRadius: 6,
-                                        border: "1px solid #D1D5DB", background: "white", color: "#374151",
-                                        fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer",
-                                        opacity: isDeleting ? 0.5 : 1
+                                        border: "1px solid #E2E8F0",
+                                        background: "white", color: "#64748B",
+                                        fontWeight: 600, cursor: "pointer"
                                     }}
                                 >
                                     Cancel
@@ -1778,20 +1839,8 @@ export default function KeyframeStudioDemo() {
                             </div>
                         </div>
                     </div>
-                )
-            }
-
-            {/* Keyframe Card Modal */}
-            {
-                activeScene && (
-                    <KeyframeCard
-                        scene={activeScene}
-                        onClose={() => setActiveScene(null)}
-                        onModify={() => handleModifyScene(activeScene)}
-                        onDelete={() => handleDeleteScene(activeScene.id)}
-                    />
-                )
-            }
-        </div >
+                )}
+            </div>
+        </div>
     );
 }
