@@ -76,30 +76,48 @@ export default function ClipStudioDemo() {
                 console.error("Error fetching keyframes:", scenesError);
             }
             if (scenesData) {
-                setKeyframes(scenesData.map(s => ({
-                    id: s.id,
-                    name: s.name,
-                    image_url: s.image_url,
-                    characterId: s.character_id,
-                    setting_id: s.setting_id, // Explicitly map setting_id
-                    description: s.prompt,
-                    cameraLabel: s.camera_angle // Captured for validation
-                })));
+                setKeyframes(scenesData
+                    .filter(s => {
+                        // Filter out pending or error states
+                        const isPending = s.status === 'pending' || s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING";
+                        return !isPending && s.image_url;
+                    })
+                    .map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        image_url: s.image_url,
+                        characterId: s.character_id,
+                        setting_id: s.setting_id, // Explicitly map setting_id
+                        description: s.prompt,
+                        cameraLabel: s.camera_angle // Captured for validation
+                    })));
             }
 
             // Fetch characters
             const { data: charactersData } = await supabase.from('characters').select('*');
             if (charactersData) {
                 // SANITIZATION: Fix corrupted voice IDs that look like query strings
+                // e.g. "/speakers?id=eq.en_us_001&select=*" -> "en_us_001"
                 const cleanChars = charactersData.map(c => {
-                    const isCorrupted = (val) => typeof val === 'string' && val.includes('?id=eq');
+                    const cleanId = (val) => {
+                        if (typeof val !== 'string') return val;
+                        if (val.includes('?id=eq.')) {
+                            const match = val.match(/id=eq\.([^&]+)/);
+                            return match ? match[1] : val;
+                        }
+                        return val;
+                    };
+
                     return {
                         ...c,
-                        voice_id: isCorrupted(c.voice_id) ? "en_us_001" : c.voice_id,
-                        voiceId: isCorrupted(c.voiceId) ? "en_us_001" : c.voiceId
+                        voice_id: cleanId(c.voice_id),
+                        voiceId: cleanId(c.voiceId) // Handle both casing conventions
                     };
                 });
                 setCharacters(cleanChars);
+
+                // Update local cache with clean data
+                localStorage.setItem("sceneme.characters", JSON.stringify(cleanChars));
             }
 
             // Fetch saved clips from new table

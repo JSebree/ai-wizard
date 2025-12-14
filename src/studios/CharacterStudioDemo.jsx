@@ -73,18 +73,28 @@ export default function CharacterStudioDemo() {
   const [voices, setVoices] = useState([]);
 
   // Load Voices
+  // Load Voices (Directly from Speakers Table)
   useEffect(() => {
-    fetch('/voices.json')
-      .then(res => res.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : data.voices || [];
-        setVoices(list.map(v => ({
-          id: v.id || v.voice_id,
-          name: v.name,
-          previewUrl: v.preview_url || v.audio_url || v.url
-        })).filter(v => v.id));
-      })
-      .catch(console.error);
+    async function loadVoices() {
+      if (!supabase) return;
+      try {
+        const { data, error } = await supabase
+          .from('speakers')
+          .select('id, name, preview_url, voice_id')
+          .order('name');
+
+        if (data) {
+          setVoices(data.map(v => ({
+            id: v.id, // STRICT: Use the UUID 'id' from the table
+            name: v.name,
+            previewUrl: v.preview_url || ""
+          })));
+        }
+      } catch (err) {
+        console.error("Failed to load speakers:", err);
+      }
+    }
+    loadVoices();
   }, []);
 
   // Load saved characters
@@ -108,13 +118,23 @@ export default function CharacterStudioDemo() {
     try {
       const { data, error } = await supabase.from("characters").select("*").order("created_at", { ascending: false });
       if (data) {
+        // SANITIZATION: Fix corrupted voice IDs
+        const cleanId = (val) => {
+          if (typeof val !== 'string') return val;
+          if (val.includes('?id=eq.')) {
+            const match = val.match(/id=eq\.([^&]+)/);
+            return match ? match[1] : val;
+          }
+          return val;
+        };
+
         const mapped = data.map(row => ({
           id: row.id,
           name: row.name,
           displayName: row.display_name,
           basePrompt: row.base_prompt,
           referenceImageUrl: row.base_image_url || row.base_hero,
-          voiceId: row.voice_id,
+          voiceId: cleanId(row.voice_id),
           voiceRefUrl: row.voice_ref_url,
           createdAt: row.created_at,
           // Map ALL gallery fields
@@ -147,8 +167,16 @@ export default function CharacterStudioDemo() {
     setPreviewUrl(char.referenceImageUrl || ""); // Show current image as preview
 
     // Voice
-    setVoiceId(char.voiceId || "");
+    const vId = char.voiceId || "";
+    setVoiceId(vId);
     setVoicePreviewUrl(char.voiceRefUrl || "");
+
+    // Determine Kind
+    // If exact ID "recording" OR ID not found in library -> Clone
+    const isLibraryVoice = voices.some(v => v.id === vId);
+    const isClone = vId === "recording" || !isLibraryVoice;
+
+    setVoiceKind(isClone ? "clone" : "preset");
 
     setActiveCharacter(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -243,12 +271,18 @@ export default function CharacterStudioDemo() {
     if (!imageUrl) { setError("Image required"); return; }
 
     const id = `char_${Date.now()} `;
+
+    // STRICT VOICE LOGIC:
+    // 1. Library: ID = UUID from registry
+    // 2. Clone: ID = "recording" literal
+    const finalVoiceId = voiceKind === "clone" ? "recording" : (voiceId || "recording");
+
     const newChar = {
       id,
       name,
       basePrompt,
       referenceImageUrl: imageUrl,
-      voiceId,
+      voiceId: finalVoiceId,
       voiceRefUrl: voicePreviewUrl,
       createdAt: new Date().toISOString()
     };
@@ -263,7 +297,7 @@ export default function CharacterStudioDemo() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id, name, base_prompt: basePrompt, base_image_url: imageUrl, voice_id: voiceId, kind: "character"
+          id, name, base_prompt: basePrompt, base_image_url: imageUrl, voice_id: finalVoiceId, kind: "character"
         })
       });
 
@@ -295,6 +329,10 @@ export default function CharacterStudioDemo() {
     setBasePrompt("");
     setReferenceImageUrl("");
     setPreviewUrl("");
+    // CLEANUP: Reset voice state to prevent pollution
+    setVoiceId("");
+    setVoicePreviewUrl("");
+    setVoiceKind("preset");
   };
 
   const handleDelete = (id) => {
@@ -385,8 +423,17 @@ export default function CharacterStudioDemo() {
         <section style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, background: "#FFFFFF" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Create Character</h3>
-            {(name || basePrompt) && (
-              <button onClick={() => { setName(""); setBasePrompt(""); setPreviewUrl(""); }} style={{ fontSize: 11, color: "#64748B", background: "none", border: "1px solid #E2E8F0", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}>
+            {(name || basePrompt || voiceId || previewUrl) && (
+              <button onClick={() => {
+                setName("");
+                setBasePrompt("");
+                setReferenceImageUrl("");
+                setPreviewUrl("");
+                setVoiceId("");
+                setVoicePreviewUrl("");
+                setVoiceKind("preset");
+                setActiveCharacter(null); // Clear editing context if any
+              }} style={{ fontSize: 11, color: "#64748B", background: "none", border: "1px solid #E2E8F0", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}>
                 Reset
               </button>
             )}

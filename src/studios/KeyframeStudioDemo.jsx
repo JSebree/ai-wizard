@@ -335,27 +335,18 @@ export default function KeyframeStudioDemo() {
                     settingId: s.setting_id,
                     characterId: s.character_id,
                     prop_id: s.prop_id,
-                    gradeId: s.color_grade, // Assuming we mapped color_grade to DB column color_grade, but logic used gradeId for state.
-                    // Wait, DB column is "color_grade". State uses "gradeId" to link to constant.
-                    // Let's assume stored text matches ID or Label?
-                    // In saving, we stored "activeGrade?.label" in "color_grade" column.
-                    // But we likely want to restore the ID. 
-                    // Let's standardize: Store the ID in a column like "grade_id" or map it back.
-                    // The schema used `color_grade text`. I'll save the ID there for better restoration or just save User Face Label.
-                    // Actually, the new schema has `color_grade`, `visual_style`, `camera_angle`.
-                    // To keep it simple, I will map the DB columns back to the object structure expected by the UI.
-
+                    gradeId: s.color_grade,
                     setting_name: s.setting_name,
                     character_name: s.character_name,
                     prop_name: s.prop_name,
                     visual_style: s.visual_style,
                     camera_angle: s.camera_angle,
                     color_grade: s.color_grade,
-                    createdAt: s.created_at
+                    createdAt: s.created_at,
+                    // FIX: Infer pending status if URL matches placeholder or is literally "PENDING"
+                    status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING" || s.status === "pending") ? 'pending' : 'complete'
                 }));
 
-                // Fix: Map color_grade text back to an ID if possible, or just pass it through
-                // For now, raw mapping is safer.
                 setKeyframes(mappedScenes);
             }
         };
@@ -438,19 +429,22 @@ export default function KeyframeStudioDemo() {
 
     const activeCharUrl = useMemo(() => activeCharacter ? (activeCharacter[selectedCharAngle] || activeCharacter.referenceImageUrl) : null, [activeCharacter, selectedCharAngle]);
 
-    const handleSaveKeyframe = async () => {
+    const handleSaveKeyframe = async (overrideUrl = null, shouldReset = true) => {
+        // Use override URL if provided (for auto-save), otherwise state
+        const urlToSave = overrideUrl || generatedSceneUrl;
+
         if (!name.trim()) {
             setError("Please give your keyframe a name before saving.");
             return;
         }
-        if (!generatedSceneUrl) {
+        if (!urlToSave) {
             setError("Generate a keyframe first to save it.");
             return;
         }
 
         const newScenePayload = {
             name: name.trim(),
-            image_url: generatedSceneUrl,
+            image_url: urlToSave,
             prompt: prompt,
 
             // Foreign Keys
@@ -480,7 +474,7 @@ export default function KeyframeStudioDemo() {
             // Optimistic Update
             setKeyframes(prev => prev.map(s =>
                 s.id === sourceSceneId
-                    ? { ...s, ...newScenePayload, imageUrl: generatedSceneUrl }
+                    ? { ...s, ...newScenePayload, imageUrl: urlToSave }
                     : s
             ));
 
@@ -505,7 +499,7 @@ export default function KeyframeStudioDemo() {
             const optimisticScene = {
                 ...newScenePayload,
                 id: tempId,
-                imageUrl: generatedSceneUrl,
+                imageUrl: urlToSave,
                 createdAt: new Date().toISOString()
             };
             setKeyframes([optimisticScene, ...keyframes]);
@@ -544,13 +538,15 @@ export default function KeyframeStudioDemo() {
             }
         }
 
-        // Reset Form
-        setName("");
-        setGeneratedSceneUrl("");
-        setSourceSceneId(null); // Clear context
-        setSourceSceneName(null);
-        setGenerationMode("create"); // Reset to create mode
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (shouldReset) {
+            // Reset Form
+            setName("");
+            setGeneratedSceneUrl("");
+            setSourceSceneId(null); // Clear context
+            setSourceSceneName(null);
+            setGenerationMode("create"); // Reset to create mode
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     };
 
     // DELETE HANDLER
@@ -629,6 +625,89 @@ export default function KeyframeStudioDemo() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    // --- Persistence Helper (Mirrors Clip Studio saveToBin) ---
+    const saveKeyframeToDb = async (keyframe, shouldUpdateState = true) => {
+        console.log("Saving Keyframe to DB:", keyframe);
+
+        let finalKeyframe = { ...keyframe }; // Local state version
+
+        try {
+            // Optimistic State Update
+            if (shouldUpdateState) {
+                setKeyframes(prev => {
+                    const exists = prev.find(k => k.id === keyframe.id);
+                    if (exists) return prev.map(k => k.id === keyframe.id ? keyframe : k);
+                    return [keyframe, ...prev];
+                });
+            }
+
+            if (supabase) {
+                // DATA CLEANUP: Remove fields not in DB schema
+                const dbPayload = {
+                    id: keyframe.id,
+                    name: keyframe.name,
+                    prompt: keyframe.prompt,
+                    image_url: keyframe.imageUrl || keyframe.image_url,
+
+                    // Foreign Keys
+                    setting_id: keyframe.setting_id || keyframe.settingId,
+                    character_id: keyframe.character_id || keyframe.characterId,
+                    prop_id: keyframe.prop_id,
+
+                    // Metadata (Denormalized)
+                    setting_name: keyframe.setting_name,
+                    character_name: keyframe.character_name,
+                    prop_name: keyframe.prop_name,
+                    visual_style: keyframe.visual_style,
+                    camera_angle: keyframe.camera_angle,
+                    color_grade: keyframe.color_grade,
+
+                    created_at: keyframe.createdAt || keyframe.created_at || new Date().toISOString()
+                };
+
+                // Remove strictly local fields that DB rejects
+                // We assume 'status' column MIGHT NOT exist or is optional. 
+                // If it doesn't exist, this line would cause the error. 
+                // Clip Studio deleted extra fields. We will omit 'status' from DB payload just in case.
+                // If we really want to persist status, we need to know if column exists.
+                // For now, let's rely on the Placeholder URL to infer pending status on reload.
+
+                // Ensure ID is valid UUID if new (managed by caller usually)
+
+                console.log("DB Payload:", dbPayload);
+
+                // Upsert Logic
+                const { data, error } = await supabase
+                    .from("keyframes")
+                    .upsert(dbPayload)
+                    .select()
+                    .single();
+
+                if (error) {
+                    throw error;
+                }
+
+                if (data) {
+                    console.log("DB Save Success:", data);
+                    // Merge DB result back to local item (canonical source)
+                    finalKeyframe = {
+                        ...finalKeyframe,
+                        ...data,
+                        imageUrl: data.image_url, // map back to UI prop
+                        // restore local status if needed
+                        status: keyframe.status
+                    };
+                }
+            }
+        } catch (err) {
+            console.error("Save to DB Failed:", err);
+            // We don't revert optimistic update here to prevent UI flicker, but we log loud error.
+        }
+
+        return finalKeyframe;
+    };
+
+
     // Handle Generation
     const handleGenerateScene = async () => {
         if (!activeBgUrl) {
@@ -639,130 +718,141 @@ export default function KeyframeStudioDemo() {
             setError("Please enter a scene description.");
             return;
         }
-
-        setIsGenerating(true);
-        setError("");
-
-        // Validation: Name is required before generation/save
         if (!name.trim()) {
             setError("Please name your keyframe before generating.");
-            setIsGenerating(false);
             return;
         }
 
+        setIsGenerating(true);
+        setError("");
         setGeneratedSceneUrl("");
 
-        try {
-            // Use configured webhook or fallback
-            const endpoint = API_ENDPOINT;
+        // 1. PRE-CALCULATE PAYLOAD
+        const metadata = {
+            name: name.trim(),
+            prompt: prompt,
+            setting_id: selectedSettingId,
+            character_id: selectedCharId,
+            prop_id: activeProp?.id,
+            setting_name: activeSetting?.name || settings.find(s => s.id === selectedSettingId)?.name,
+            character_name: activeCharacter?.name || characters.find(c => c.id === selectedCharId)?.name,
+            prop_name: activeProp?.name,
+            visual_style: activeStyle.label,
+            camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.label,
+            color_grade: activeGrade?.label
+        };
 
-            let payload = {};
+        const isOverwrite = generationMode === 'modify' && sourceSceneId && name.trim() === sourceSceneName;
+        const targetId = isOverwrite ? sourceSceneId : crypto.randomUUID();
 
-            if (generationMode === "create") {
-                // Visual Architect Payload (Creation)
-                payload = {
-                    asset_type: "scene_creation",
-                    prompt: prompt.trim(),
-                    name: name.trim(),
-                    // Context
-                    setting_image_url: activeBgUrl,
-                    character_image_url: activeCharUrl || "",
-                    prop_image_url: activeProp?.imageUrl || "",
-                    prop_description: activeProp?.name || "",
-                    // Style
-                    visual_style: activeStyle.description,
-                    camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description,
-                    color_grade: activeGrade.prompt || activeGrade.label,
-                    // References
-                    setting_name: activeSetting?.name || "",
-                    character_name: activeCharacter?.name || "", // Optional, default to empty
-                };
-            } else {
-                // Semantic Editor Payload (Modification)
-                const inputImage = generatedSceneUrl || activeBgUrl;
-                if (!inputImage) {
-                    throw new Error("No image to modify! Generate or select a scene first.");
-                }
+        // 2. OPTIMISTIC SAVE (PENDING STATE)
+        const pendingRecord = {
+            id: targetId,
+            ...metadata,
+            // Use Placeholder URL for persistence so reload sees it as pending
+            imageUrl: "https://r2.sceneme.ai/assets/pending_placeholder.png",
+            // Local status flag
+            status: 'pending',
+            createdAt: new Date().toISOString()
+        };
 
-                payload = {
-                    asset_type: "scene_modification",
-                    input_image: inputImage,
+        // Call Helper (Optimistic UI + DB Insert)
+        await saveKeyframeToDb(pendingRecord, true);
 
-                    // Standard Metadata
-                    prompt: prompt.trim(),
-                    name: name.trim(),
+        // 3. FREEZE API PAYLOAD & START BACKGROUND WORKER (Before UI Reset)
+        const endpoint = API_ENDPOINT;
+        let apiPayload = {};
 
-                    // References
-                    character_image_url: activeCharUrl || "",
-                    prop_image_url: activeProp?.imageUrl || "",
-                    setting_image_url: activeBgUrl || "", // Required for backend body detection
-
-                    // Context
-                    setting_name: activeSetting?.name || "",
-                    character_name: activeCharacter?.name || "",
-                    prop_name: activeProp?.name || "",
-                    prop_description: activeProp?.name || "",
-
-                    // Style
-                    visual_style: activeStyle.description,
-                    camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description,
-                    color_grade: activeGrade.prompt || activeGrade.label,
-
-                    edit_instructions: [
-                        prompt.trim(),
-                        activeStyle && activeStyle.id !== "cinematic" ? `Style: ${activeStyle.description}` : null,
-                        cameraAngle && cameraAngle !== "wide" ? `Camera Angle: ${CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description}` : null,
-                        activeGrade && activeGrade.id !== "none" ? `Color Grade: ${activeGrade.prompt}` : null
-                    ].filter(Boolean),
-
-                    parameters: {
-                        edit_strength: 0.65,
-                        preserve_size: true
-                    }
-                };
-            }
-
-            const res = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new Error(text || `Generation failed: ${res.status}`);
-            }
-
-            const data = await res.json();
-            console.log("Generation Response:", data); // DEBUG
-
-            // Robust URL extraction
-            let url = data.image_url || data.output?.image_url || data.url || "";
-
-            // Handle if URL is inside a nested object or array accidentally
-            if (typeof url === 'object') {
-                console.warn("URL is an object, attempting to extract string:", url);
-                url = url.url || url.image_url || JSON.stringify(url);
-            }
-
-            if (typeof url !== 'string' || !url.startsWith('http')) {
-                console.error("Invalid URL format:", url);
-                // Don't throw, just warn to avoid crash if possible, but we need an image
-                throw new Error("API returned invalid image URL format.");
-            }
-
-            if (!url) {
-                throw new Error("No image URL returned from API.");
-            }
-
-            setGeneratedSceneUrl(url);
-
-        } catch (err) {
-            console.error("Scene generation error", err);
-            setError(err.message || "Failed to generate scene.");
-        } finally {
-            setIsGenerating(false);
+        if (generationMode === "create") {
+            apiPayload = {
+                asset_type: "scene_creation",
+                prompt: metadata.prompt,
+                name: metadata.name,
+                setting_image_url: activeBgUrl, // Captured from current scope
+                character_image_url: activeCharUrl || "",
+                prop_image_url: activeProp?.imageUrl || "",
+                prop_description: activeProp?.name || "",
+                visual_style: activeStyle.description,
+                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description,
+                color_grade: activeGrade.prompt || activeGrade.label,
+                setting_name: metadata.setting_name,
+            };
+        } else {
+            // Modify
+            const inputImage = generatedSceneUrl || activeBgUrl;
+            apiPayload = {
+                asset_type: "scene_modification",
+                input_image: inputImage,
+                prompt: metadata.prompt,
+                name: metadata.name,
+                edit_instructions: [metadata.prompt],
+                parameters: { edit_strength: 0.65, preserve_size: true }
+            };
         }
+
+        // Define Worker (now cleaner, just consumes payload)
+        const runBackgroundGeneration = async (payload) => {
+            try {
+                const res = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) throw new Error(`Generation failed: ${res.status}`);
+                const data = await res.json();
+
+                let url = data.image_url || data.output?.image_url || data.url || "";
+                if (typeof url === 'object') url = url.url || url.image_url || JSON.stringify(url);
+
+                if (!url || !url.startsWith('http')) throw new Error("Invalid API response (No URL)");
+
+                // 2. UPDATE RECORD WITH SUCCESS (Final URL)
+                const completedRecord = {
+                    ...pendingRecord,
+                    imageUrl: url,
+                    status: 'complete'
+                };
+
+                await saveKeyframeToDb(completedRecord, true); // Update UI and DB
+
+            } catch (err) {
+                console.error("Background Scene generation error", err);
+                // 3. HANDLE FAILURE
+                setKeyframes(prev => prev.filter(k => k.id !== targetId));
+                if (supabase) {
+                    await supabase.from("keyframes").delete().eq("id", targetId);
+                }
+            }
+        };
+
+        // Fire and Forget!
+        runBackgroundGeneration(apiPayload);
+
+
+        // 4. RESET UI FOR NEXT GENERATION (Simulated Page Refresh)
+        // Now safe to reset because payload is already sent/frozen
+        setName("");
+        setPrompt("");
+        setGeneratedSceneUrl("");
+        setIsGenerating(false);
+
+        // Reset Context & Selections (Hard Reset)
+        setGenerationMode("create");
+        setSourceSceneId(null);
+        setActiveScene(null);
+
+        // Clear Selections
+        setSelectedCharId("");
+        setSelectedCharAngle("referenceImageUrl");
+        setSelectedSettingId("");
+        setSelectedSettingAngle("base_image_url");
+        setSelectedPropId(""); // Reset Prop ID, not Memo
+
+        // Reset Styles to Defaults
+        setVisualStyleId(VISUAL_STYLES[0].id); // Reset Style ID
+        setCameraAngle(CAMERA_ANGLES[0].id);
+        setSelectedGradeId(COLOR_GRADES[0].id || "none"); // Reset Grade ID
     };
 
     const handlePropUpload = async (e) => {
@@ -1542,14 +1632,22 @@ export default function KeyframeStudioDemo() {
                                     className="flex-shrink-0 w-48 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all group flex flex-col"
                                 >
                                     <div className="aspect-video bg-black relative">
-                                        <img src={scene.imageUrl} alt={scene.name} className="w-full h-full object-cover" />
-
-                                        {/* Lip-Sync Ready Badge */}
-                                        {scene.characterId && (scene.camera_angle === "Standard" || scene.camera_angle === "Close & Intimate") && (
-                                            <div className="absolute top-1 right-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow backdrop-blur-sm flex items-center gap-1 font-bold z-10">
-                                                <span>👄</span>
-                                                <span>Ready</span>
+                                        {(scene.status === 'pending' || !scene.imageUrl) ? (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 text-slate-400 gap-2">
+                                                <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                                                <span className="text-[10px] font-medium">Generating...</span>
                                             </div>
+                                        ) : (
+                                            <>
+                                                <img src={scene.imageUrl} alt={scene.name} className="w-full h-full object-cover" />
+                                                {/* Lip-Sync Ready Badge */}
+                                                {scene.characterId && (scene.camera_angle === "Standard" || scene.camera_angle === "Close & Intimate") && (
+                                                    <div className="absolute top-1 right-1 bg-green-500/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow backdrop-blur-sm flex items-center gap-1 font-bold z-10">
+                                                        <span>👄</span>
+                                                        <span>Ready</span>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                     <div className="p-2 flex flex-col flex-1 gap-2">

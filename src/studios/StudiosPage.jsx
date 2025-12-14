@@ -7,17 +7,41 @@ import KeyframeStudioDemo from "./KeyframeStudioDemo.jsx";
 import ClipStudioDemo from "./ClipStudioDemo.jsx";
 import ProductionStudioDemo from "./ProductionStudioDemo.jsx";
 
+// Define tab names and their corresponding indices
+const TAB_NAMES = ["characters", "settings", "scenes", "clips", "production"];
+const STORAGE_KEY_TAB = "sceneme.activeTab";
+
 export default function StudiosPage() {
   const nav = useNavigate();
   const location = useLocation(); // Hook to get current path
 
   // Determine default tab based on URL or LocalStorage
   const getInitialTab = () => {
+    // Prioritize URL for clip studio demo
     if (location.pathname === "/clip-studio-demo") return "clips";
-    return localStorage.getItem("studios.activeTab") || "characters";
+
+    // Then check localStorage
+    const savedIndex = localStorage.getItem(STORAGE_KEY_TAB);
+    if (savedIndex !== null) {
+      const idx = parseInt(savedIndex, 10);
+      // Validate bounds and return corresponding tab name, or default to "clips"
+      if (idx >= 0 && idx < TAB_NAMES.length) {
+        return TAB_NAMES[idx];
+      }
+    }
+    // Default to "characters" if nothing valid is found
+    return "characters";
   };
 
-  const [activeTab, setActiveTab] = useState(getInitialTab());
+  const [activeTab, setActiveTab] = useState(getInitialTab);
+
+  // Persist tab selection to localStorage
+  React.useEffect(() => {
+    const tabIndex = TAB_NAMES.indexOf(activeTab);
+    if (tabIndex !== -1) {
+      localStorage.setItem(STORAGE_KEY_TAB, tabIndex.toString());
+    }
+  }, [activeTab]);
 
   // Update tab if location changes (e.g. navigation)
   React.useEffect(() => {
