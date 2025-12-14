@@ -289,69 +289,87 @@ export default function KeyframeStudioDemo() {
     const activeProp = useMemo(() => props.find(p => p.id === selectedPropId), [props, selectedPropId]);
 
     // Load Data
-    useEffect(() => {
-        // 1. Storage / Cache Load
-        const loadLocal = () => {
-            try {
-                const rawChar = window.localStorage.getItem(CHARACTER_STORAGE_KEY);
-                if (rawChar) setCharacters(JSON.parse(rawChar));
+    // Load Data
+    // 1. Storage / Cache Load
+    const loadLocal = () => {
+        try {
+            const rawChar = window.localStorage.getItem(CHARACTER_STORAGE_KEY);
+            if (rawChar) setCharacters(JSON.parse(rawChar));
 
-                const rawSet = window.localStorage.getItem(SETTING_STORAGE_KEY);
-                if (rawSet) setSettings(JSON.parse(rawSet));
-            } catch (e) { console.warn("Local load failed", e); }
-        };
+            const rawSet = window.localStorage.getItem(SETTING_STORAGE_KEY);
+            if (rawSet) setSettings(JSON.parse(rawSet));
+        } catch (e) { console.warn("Local load failed", e); }
+    };
 
-        const loadSupabaseData = async () => {
-            if (!supabase) return;
+    const loadSupabaseData = async () => {
+        if (!supabase) return;
 
-            // Load Props
-            const { data: propsData, error: propsError } = await supabase
-                .from("props")
-                .select("*")
-                .order("created_at", { ascending: false });
+        // Load Props
+        const { data: propsData, error: propsError } = await supabase
+            .from("props")
+            .select("*")
+            .order("created_at", { ascending: false });
 
-            if (propsData) {
-                const mappedProps = propsData.map(p => ({
-                    id: p.id,
-                    name: p.name,
-                    imageUrl: p.image_url,
-                    createdAt: p.created_at
-                }));
-                setProps(mappedProps);
-            }
+        if (propsData) {
+            const mappedProps = propsData.map(p => ({
+                id: p.id,
+                name: p.name,
+                imageUrl: p.image_url,
+                createdAt: p.created_at
+            }));
+            setProps(mappedProps);
+        }
 
-            // Load Keyframes
+        // --- Data Loading ---
+        // [v55] Status Inference: We ignore DB 'status' if we have a valid image. 
+        // This fixes "Generating..." stuck state on reload.
+        try {
             const { data: scenesData, error: scenesError } = await supabase
-                .from("keyframes")
-                .select("*")
-                .order("created_at", { ascending: false });
+                .from('keyframes')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (scenesError) throw scenesError;
 
             if (scenesData) {
-                const mappedScenes = scenesData.map(s => ({
-                    id: s.id,
-                    name: s.name,
-                    imageUrl: s.image_url,
-                    prompt: s.prompt,
-                    settingId: s.setting_id,
-                    characterId: s.character_id,
-                    prop_id: s.prop_id,
-                    gradeId: s.color_grade,
-                    setting_name: s.setting_name,
-                    character_name: s.character_name,
-                    prop_name: s.prop_name,
-                    visual_style: s.visual_style,
-                    camera_angle: s.camera_angle,
-                    color_grade: s.color_grade,
-                    createdAt: s.created_at,
-                    // FIX: Infer pending status if URL matches placeholder or is literally "PENDING"
-                    status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING") ? 'pending' : 'complete'
+                setKeyframes(scenesData.map(s => {
+                    // Start with basic mapping
+                    const mapped = {
+                        id: s.id,
+                        name: s.name,
+                        imageUrl: s.image_url,
+                        // ... retrieve other metadata ...
+                        characterId: s.character_id, // Important for "Modify" context
+                        settingId: s.setting_id,
+                        character_name: s.character_name,
+                        setting_name: s.setting_name,
+                        prop_id: s.prop_id,
+                        gradeId: s.color_grade, // or try to map back to ID if stored as prompt
+                        // FIX: Infer pending status if URL matches placeholder or is literally "PENDING"
+                        status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING") ? 'pending' : 'complete',
+                        ...s // Keep everything else
+                    };
+                    return mapped;
                 }));
-
-                setKeyframes(mappedScenes);
             }
-        };
+        } catch (err) {
+            console.error("Error loading keyframes:", err);
+        }
+    };
 
-        // 2. Supabase Load
+    // Initial Load & Polling
+    useEffect(() => {
+        loadLocal(); // Keep local load for characters/settings
+        loadSupabaseData(); // Load keyframes and props
+
+        // AUTO-POLLING (Added for Mobile Persistence Support)
+        // Refresh every 10s to catch server-side updates if client was backgrounded
+        const outputInterval = setInterval(loadSupabaseData, 10000);
+        return () => clearInterval(outputInterval);
+    }, []);
+
+    // 2. Supabase Load (Characters & Settings)
+    useEffect(() => {
         const loadSupabase = async () => {
             if (!supabase) return;
             try {
@@ -403,9 +421,7 @@ export default function KeyframeStudioDemo() {
             }
         };
 
-        loadLocal();
         loadSupabase();
-        loadSupabaseData();
     }, []);
 
     // Set default selected setting if available
@@ -642,9 +658,13 @@ export default function KeyframeStudioDemo() {
             }
 
             if (supabase) {
+                // [v56] Inject User ID (Critical for RLS visibility)
+                const { data: { user } } = await supabase.auth.getUser();
+
                 // DATA CLEANUP: Remove fields not in DB schema
                 const dbPayload = {
                     id: keyframe.id,
+                    user_id: user?.id, // Explicitly set owner
                     name: keyframe.name,
                     prompt: keyframe.prompt,
                     image_url: keyframe.imageUrl || keyframe.image_url,
@@ -796,6 +816,12 @@ export default function KeyframeStudioDemo() {
                 visual_style: activeStyle.description || activeStyle.label,
                 camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description || metadata.camera_angle,
                 color_grade: activeGrade.prompt || activeGrade.label,
+
+                // SERVER-SIDE PERSISTENCE SUPPORT (v2.0)
+                // Inject IDs so backend can perform the DB Update directly
+                keyframe_id: pendingRecord.id, // Primary Key
+                record_id: pendingRecord.id,   // Alias
+                user_id: pendingRecord.user_id || (supabase?.auth?.user?.()?.id) || null
             };
         } else {
             // Modify
@@ -820,6 +846,12 @@ export default function KeyframeStudioDemo() {
                 visual_style: activeStyle.description || activeStyle.label,
                 camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description || metadata.camera_angle,
                 color_grade: activeGrade.prompt || activeGrade.label,
+
+                // SERVER-SIDE PERSISTENCE SUPPORT (v2.0)
+                // Inject IDs so backend can perform the DB Update directly
+                keyframe_id: pendingRecord.id, // Primary Key
+                record_id: pendingRecord.id,   // Alias
+                user_id: pendingRecord.user_id || (supabase?.auth?.user?.()?.id) || null
             };
         }
 
