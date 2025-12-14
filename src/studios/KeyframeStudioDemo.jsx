@@ -870,7 +870,18 @@ export default function KeyframeStudioDemo() {
                 // Explicitly log the object we are about to save
                 console.log("Calling saveKeyframeToDb with:", completedRecord);
 
-                await saveKeyframeToDb(completedRecord, true); // Update UI and DB
+                // FORCE DB UPDATE (Redundant but safe to ensure persistence)
+                if (supabase) {
+                    await supabase
+                        .from("keyframes")
+                        .update({
+                            image_url: url,
+                            status: 'complete'
+                        })
+                        .eq('id', targetId);
+                }
+
+                await saveKeyframeToDb(completedRecord, true); // Update UI and DB wrapper
 
             } catch (err) {
                 console.error("Background Scene generation error", err);
