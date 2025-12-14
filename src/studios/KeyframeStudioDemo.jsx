@@ -694,9 +694,16 @@ export default function KeyframeStudioDemo() {
                         ...finalKeyframe,
                         ...data,
                         imageUrl: data.image_url, // map back to UI prop
-                        // restore local status if needed
                         status: keyframe.status
                     };
+
+                    // Aggressive State Sync: Update BOTH list and active item
+                    if (shouldUpdateState) {
+                        setKeyframes(prev => prev.map(k => k.id === finalKeyframe.id ? finalKeyframe : k));
+
+                        // If this is the currently active scene (e.g. in modal), update it too!
+                        setActiveScene(prev => (prev && prev.id === finalKeyframe.id) ? finalKeyframe : prev);
+                    }
                 }
             }
         } catch (err) {
@@ -710,6 +717,12 @@ export default function KeyframeStudioDemo() {
 
     // Handle Generation
     const handleGenerateScene = async () => {
+        console.log("handleGenerateScene CALLED. Validation Check:", {
+            hasActiveBgUrl: !!activeBgUrl,
+            promptLength: prompt?.length,
+            nameLength: name?.length
+        });
+
         if (!activeBgUrl) {
             setError("Please select a Setting.");
             return;
@@ -768,14 +781,21 @@ export default function KeyframeStudioDemo() {
                 asset_type: "scene_creation",
                 prompt: metadata.prompt,
                 name: metadata.name,
-                setting_image_url: activeBgUrl, // Captured from current scope
+
+                // Images
+                setting_image_url: activeBgUrl,
                 character_image_url: activeCharUrl || "",
                 prop_image_url: activeProp?.imageUrl || "",
-                prop_description: activeProp?.name || "",
-                visual_style: activeStyle.description,
-                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description,
+
+                // Explicit Metadata for Backend (LLM Context)
+                character_name: metadata.character_name || "",
+                setting_name: metadata.setting_name || "",
+                prop_name: metadata.prop_name || "", // Requested specifically as prop_name
+
+                // Styles (sending full description/prompt for better generation context)
+                visual_style: activeStyle.description || activeStyle.label,
+                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description || metadata.camera_angle,
                 color_grade: activeGrade.prompt || activeGrade.label,
-                setting_name: metadata.setting_name,
             };
         } else {
             // Modify
@@ -786,9 +806,26 @@ export default function KeyframeStudioDemo() {
                 prompt: metadata.prompt,
                 name: metadata.name,
                 edit_instructions: [metadata.prompt],
-                parameters: { edit_strength: 0.65, preserve_size: true }
+                parameters: { edit_strength: 0.65, preserve_size: true },
+
+                // PASS IMAGES FOR REFERENCE (Critical for backend node logic)
+                setting_image_url: activeBgUrl,
+                character_image_url: activeCharUrl || "",
+                prop_image_url: activeProp?.imageUrl || "",
+
+                // Pass metadata to modify too, just in case
+                character_name: metadata.character_name || "",
+                setting_name: metadata.setting_name || "",
+                prop_name: metadata.prop_name || "",
+                visual_style: activeStyle.description || activeStyle.label,
+                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description || metadata.camera_angle,
+                color_grade: activeGrade.prompt || activeGrade.label,
             };
         }
+
+        console.log("=== GENERATION DEBUG ===");
+        console.log("Active BG URL:", activeBgUrl);
+        console.log("Full Payload:", JSON.stringify(apiPayload, null, 2));
 
         // Define Worker (now cleaner, just consumes payload)
         const runBackgroundGeneration = async (payload) => {
@@ -801,11 +838,27 @@ export default function KeyframeStudioDemo() {
 
                 if (!res.ok) throw new Error(`Generation failed: ${res.status}`);
                 const data = await res.json();
+                console.log("Background Gen Response Data:", JSON.stringify(data, null, 2));
 
-                let url = data.image_url || data.output?.image_url || data.url || "";
+                // ROBUST URL EXTRACTION
+                // prioritized check based on observed backend responses
+                let url = data.output?.url ||
+                    data.output?.image_url ||
+                    data.image_url ||
+                    data.url ||
+                    "";
+
+                // Handle nested url objects if any
                 if (typeof url === 'object') url = url.url || url.image_url || JSON.stringify(url);
 
-                if (!url || !url.startsWith('http')) throw new Error("Invalid API response (No URL)");
+                console.log("Extracted URL:", url);
+
+                if (!url || !url.toString().startsWith('http')) {
+                    console.error("Invalid URL extracted:", url);
+                    throw new Error("Invalid API response (No URL found in output.url, output.image_url, image_url, or url)");
+                }
+
+                console.log("Background Gen Success. Final URL:", url);
 
                 // 2. UPDATE RECORD WITH SUCCESS (Final URL)
                 const completedRecord = {
@@ -813,6 +866,9 @@ export default function KeyframeStudioDemo() {
                     imageUrl: url,
                     status: 'complete'
                 };
+
+                // Explicitly log the object we are about to save
+                console.log("Calling saveKeyframeToDb with:", completedRecord);
 
                 await saveKeyframeToDb(completedRecord, true); // Update UI and DB
 
@@ -1037,13 +1093,15 @@ export default function KeyframeStudioDemo() {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+                        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
                             {settings.map(s => (
                                 <div
                                     key={s.id}
                                     onClick={() => setSelectedSettingId(s.id)}
                                     style={{
                                         position: "relative",
+                                        flexShrink: 0,
+                                        width: 160, // Fixed width for horizontal scroll
                                         aspectRatio: "4/3",
                                         borderRadius: 8,
                                         overflow: "hidden",

@@ -22,6 +22,7 @@ export default function ProductionStudioDemo() {
     const [audioTrack, setAudioTrack] = useState(null);
     const [isRendering, setIsRendering] = useState(false);
     const [renderedUrl, setRenderedUrl] = useState(null);
+    const [currentSceneId, setCurrentSceneId] = useState(null); // Track active project ID
     const [sceneName, setSceneName] = useState(""); // User defined scene name
 
     // Playback State

@@ -421,9 +421,6 @@ export default function ClipStudioDemo() {
             let finalClip = { ...payload }; // Local state version
 
             if (supabase) {
-                // If it looks like a valid UUID, try to UPDATE, else INSERT
-                const isExisting = shot.dbId && shot.dbId.length > 10;
-
                 // DATA CLEANUP: Remove fields not in DB schema
                 const dbPayload = { ...payload };
                 delete dbPayload.audio_url;
@@ -436,37 +433,37 @@ export default function ClipStudioDemo() {
                 dbPayload.dialogue_blocks = JSON.stringify(enrichedBlocks);
                 dbPayload.shot_type = shot.speakerType === 'on_screen' ? 'lipsync' : 'cinematic';
 
-                if (isExisting) {
-                    console.log("Updating existing clip record:", shot.dbId);
-                    dbPayload.id = shot.dbId; // Ensure ID matches
-                    const { data, error } = await supabase
-                        .from("clips")
-                        .update(dbPayload)
-                        .eq("id", shot.dbId)
-                        .select()
-                        .single();
+                // CRITICAL FIX: Ensure video_url is present if available
+                if (shot.videoUrl) {
+                    dbPayload.video_url = shot.videoUrl;
+                }
 
-                    if (error) throw error;
-                    if (data) finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
+                // If we have a known DB ID, use it. Otherwise, use the shot.id if it looks like a valid UUID, or generate new.
+                const validId = (shot.dbId && shot.dbId.length > 10) ? shot.dbId : (shot.id && shot.id.length > 10 && !shot.id.startsWith("saved_") ? shot.id : uuidv4());
+                dbPayload.id = validId;
 
-                } else {
-                    console.log("[saveToBin] Inserting NEW clip record...");
-                    const dbId = uuidv4();
-                    dbPayload.id = dbId;
-                    const { data, error } = await supabase
-                        .from("clips")
-                        .insert([dbPayload])
-                        .select()
-                        .single();
+                console.log("[saveToBin] DB Upsert Payload:", JSON.stringify(dbPayload, null, 2));
 
-                    if (error) {
-                        console.error("[saveToBin] INSERT ERROR:", error);
-                        throw error;
-                    }
-                    if (data) {
-                        console.log("[saveToBin] INSERT SUCCESS. New ID:", data.id);
-                        finalClip = { ...finalClip, ...data, dialogue_blocks: enrichedBlocks };
-                    }
+                const { data, error } = await supabase
+                    .from("clips")
+                    .upsert(dbPayload)
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error("[saveToBin] SUPABASE ERROR:", error);
+                    throw error;
+                }
+
+                if (data) {
+                    console.log("[saveToBin] SAVE SUCCESS. ID:", data.id);
+                    finalClip = {
+                        ...finalClip,
+                        ...data,
+                        // Restore local props
+                        dialogue_blocks: enrichedBlocks,
+                        videoUrl: data.video_url || finalClip.videoUrl // Sync back
+                    };
                 }
             }
 
@@ -609,10 +606,25 @@ export default function ClipStudioDemo() {
             updateShot(shot.tempId, updatedShot);
 
             // 2. Update DB Record with Final URL
-            console.log("[renderClip] Step 2: Final Save. Updating ID:", dbId, "with Video URL:", videoUrl);
-            // Force status to completed for the DB save
-            const finalRecord = await saveToBin({ ...updatedShot, status: 'completed' }, false);
-            console.log("[renderClip] Step 2 Result: Success?", !!finalRecord);
+            console.log("[renderClip] Step 2: Final Save starting...");
+            console.log("   - DB ID:", dbId);
+            console.log("   - Video URL:", videoUrl);
+
+            // Construct explicit final object to avoid stale state references
+            const finalSaveObj = {
+                ...updatedShot,
+                videoUrl: videoUrl, // Explicit override
+                status: 'completed'
+            };
+
+            const finalRecord = await saveToBin(finalSaveObj, false);
+
+            if (!finalRecord) {
+                console.error("[renderClip] CRITICAL: Final SaveToBin returned null/undefined!");
+                throw new Error("Failed to save final video URL to database.");
+            }
+
+            console.log("[renderClip] Step 2 Result: Success. Record:", finalRecord);
 
         } catch (err) {
             console.error("Render Error:", err);
