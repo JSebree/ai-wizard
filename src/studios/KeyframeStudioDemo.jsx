@@ -359,10 +359,13 @@ export default function KeyframeStudioDemo() {
 
                     // 2. Rescue Local Pending Items that aren't in DB yet (Lag or Insert Failure)
                     // This prevents "Disappearing" if N8n is slow or Client Insert failed silently
+                    // 2. Rescue Local Pending/Syncing Items (prevent Poller race condition)
                     const localPending = prevKeyframes.filter(k =>
-                        k.status === 'pending' &&
-                        !dbMap.has(k.id) &&
-                        (Date.now() - new Date(k.createdAt).getTime() < 120000) // Keep for 2 mins max
+                        (!dbMap.has(k.id)) && // Not in DB yet
+                        (
+                            k.status === 'pending' || // It's still generating
+                            (Date.now() - new Date(k.createdAt).getTime() < 10000) // OR it was created < 10s ago (lag protection)
+                        )
                     );
 
                     return [...localPending, ...mergedList];
@@ -488,10 +491,10 @@ export default function KeyframeStudioDemo() {
             image_url: urlToSave,
             prompt: prompt,
 
-            // Foreign Keys
-            setting_id: selectedSettingId,
-            character_id: selectedCharId,
-            prop_id: activeProp?.id,
+            // Foreign Keys (Strict Sanitization)
+            setting_id: (val => val && val.length > 5 ? val : null)(selectedSettingId),
+            character_id: (val => val && val.length > 5 ? val : null)(selectedCharId),
+            prop_id: (val => val && val.length > 5 ? val : null)(activeProp?.id),
 
             // Metadata
             setting_name: activeSetting?.name || settings.find(s => s.id === selectedSettingId)?.name,
@@ -500,7 +503,8 @@ export default function KeyframeStudioDemo() {
 
             visual_style: activeStyle.label,
             camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.label,
-            color_grade: activeGrade?.label
+            color_grade: activeGrade?.label,
+            status: 'complete'
         };
 
         // DETERMINISTIC SAVE LOGIC
@@ -541,6 +545,7 @@ export default function KeyframeStudioDemo() {
                 ...newScenePayload,
                 id: tempId,
                 imageUrl: urlToSave,
+                status: 'complete',
                 createdAt: new Date().toISOString()
             };
             setKeyframes([optimisticScene, ...keyframes]);
