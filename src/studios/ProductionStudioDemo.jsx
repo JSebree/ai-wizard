@@ -188,8 +188,7 @@ export default function ProductionStudioDemo() {
             video_url: url,
             thumbnail_url: timeline[0]?.thumbnailUrl,
             status: status,
-            created_at: new Date().toISOString(),
-            user_id: (await supabase.auth.getUser()).data.user?.id // Inject User ID
+            created_at: new Date().toISOString()
         };
 
         let data, error;
