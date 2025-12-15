@@ -298,6 +298,10 @@ export default function KeyframeStudioDemo() {
 
             const rawSet = window.localStorage.getItem(SETTING_STORAGE_KEY);
             if (rawSet) setSettings(JSON.parse(rawSet));
+
+            // [Persistence] Restore Keyframes (including Pending ones)
+            const rawScenes = window.localStorage.getItem(SCENE_STORAGE_KEY);
+            if (rawScenes) setKeyframes(JSON.parse(rawScenes));
         } catch (e) { console.warn("Local load failed", e); }
     };
 
@@ -334,25 +338,35 @@ export default function KeyframeStudioDemo() {
             console.log("DEBUG: Raw DB Data:", scenesData); // Check if 'lost' record is here
 
             if (scenesData) {
-                setKeyframes(scenesData.map(s => {
-                    // Start with basic mapping
-                    const mapped = {
+                setKeyframes(prevKeyframes => {
+                    const dbMap = new Map(scenesData.map(s => [s.id, s]));
+
+                    // 1. Map DB items to UI model
+                    const mergedList = scenesData.map(s => ({
                         id: s.id,
                         name: s.name,
                         imageUrl: s.image_url,
                         // ... retrieve other metadata ...
-                        characterId: s.character_id, // Important for "Modify" context
+                        characterId: s.character_id,
                         settingId: s.setting_id,
                         character_name: s.character_name,
                         setting_name: s.setting_name,
                         prop_id: s.prop_id,
-                        gradeId: s.color_grade, // or try to map back to ID if stored as prompt
-                        // FIX: Infer pending status if URL matches placeholder or is literally "PENDING"
+                        gradeId: s.color_grade,
                         status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING") ? 'pending' : 'complete',
-                        ...s // Keep everything else
-                    };
-                    return mapped;
-                }));
+                        ...s
+                    }));
+
+                    // 2. Rescue Local Pending Items that aren't in DB yet (Lag or Insert Failure)
+                    // This prevents "Disappearing" if N8n is slow or Client Insert failed silently
+                    const localPending = prevKeyframes.filter(k =>
+                        k.status === 'pending' &&
+                        !dbMap.has(k.id) &&
+                        (Date.now() - new Date(k.createdAt).getTime() < 120000) // Keep for 2 mins max
+                    );
+
+                    return [...localPending, ...mergedList];
+                });
             }
         } catch (err) {
             console.error("Error loading keyframes:", err);
@@ -466,7 +480,10 @@ export default function KeyframeStudioDemo() {
             return;
         }
 
+        const { data: { user } } = await supabase.auth.getUser();
+
         const newScenePayload = {
+            user_id: user?.id,
             name: name.trim(),
             image_url: urlToSave,
             prompt: prompt,
@@ -833,20 +850,24 @@ export default function KeyframeStudioDemo() {
                 prop_name: metadata.prop_name || "", // Requested specifically as prop_name
 
                 // Foreign Keys (Critical for Filtering)
-                setting_id: metadata.setting_id || null,
-                character_id: metadata.character_id || null,
-                prop_id: metadata.prop_id || null,
+                // [v57] STRICT SANITIZATION: N8n fails if "empty string" is passed to UUID column.
+                // We enforce NULL for any falsy or empty values using this inline helper.
+                setting_id: (val => val && val.length > 5 ? val : null)(metadata.setting_id),
+                character_id: (val => val && val.length > 5 ? val : null)(metadata.character_id),
+                prop_id: (val => val && val.length > 5 ? val : null)(metadata.prop_id),
 
-                // Styles (sending full description/prompt for better generation context)
-                visual_style: activeStyle.description || activeStyle.label,
-                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description || metadata.camera_angle,
-                color_grade: activeGrade.prompt || activeGrade.label,
+                // Styles (sending label/name for cleaner DB logging)
+                visual_style: activeStyle.label,
+                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.label || metadata.camera_angle,
+                color_grade: activeGrade.label,
 
                 // SERVER-SIDE PERSISTENCE SUPPORT (v2.0)
                 // Inject IDs so backend can perform the DB Update directly
-                keyframe_id: pendingRecord.id, // Primary Key
-                record_id: pendingRecord.id,   // Alias
-                user_id: pendingRecord.user_id || (supabase?.auth?.user?.()?.id) || null
+                // [v58] ULTRA-STRICT SANITIZATION: Wrap everything.
+                id: (val => val && val.length > 5 ? val : null)(pendingRecord.id),
+                keyframe_id: (val => val && val.length > 5 ? val : null)(pendingRecord.id),
+                record_id: (val => val && val.length > 5 ? val : null)(pendingRecord.id),
+                user_id: (val => val && val.length > 5 ? val : null)(pendingRecord.user_id || (supabase?.auth?.user?.()?.id))
             };
         } else {
             // Modify
@@ -870,24 +891,47 @@ export default function KeyframeStudioDemo() {
                 prop_name: metadata.prop_name || "",
 
                 // Foreign Keys (Critical for Filtering)
-                setting_id: metadata.setting_id || null,
-                character_id: metadata.character_id || null,
-                prop_id: metadata.prop_id || null,
+                // [v57] STRICT SANITIZATION
+                setting_id: (val => val && val.length > 5 ? val : null)(metadata.setting_id),
+                character_id: (val => val && val.length > 5 ? val : null)(metadata.character_id),
+                prop_id: (val => val && val.length > 5 ? val : null)(metadata.prop_id),
 
-                visual_style: activeStyle.description || activeStyle.label,
-                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.description || metadata.camera_angle,
-                color_grade: activeGrade.prompt || activeGrade.label,
+                visual_style: activeStyle.label,
+                camera_angle: CAMERA_ANGLES.find(a => a.id === cameraAngle)?.label || metadata.camera_angle,
+                color_grade: activeGrade.label,
 
                 // SERVER-SIDE PERSISTENCE SUPPORT (v2.0)
                 // Inject IDs so backend can perform the DB Update directly
-                keyframe_id: pendingRecord.id, // Primary Key
-                record_id: pendingRecord.id,   // Alias
-                user_id: pendingRecord.user_id || (supabase?.auth?.user?.()?.id) || null
+                // [v58] ULTRA-STRICT SANITIZATION
+                id: (val => val && val.length > 5 ? val : null)(pendingRecord.id),
+                keyframe_id: (val => val && val.length > 5 ? val : null)(pendingRecord.id),
+                record_id: (val => val && val.length > 5 ? val : null)(pendingRecord.id),
+                user_id: (val => val && val.length > 5 ? val : null)(pendingRecord.user_id || (supabase?.auth?.user?.()?.id))
             };
         }
 
+        // [v59] FINAL SHIELD: Global Payload Sanitizer
+        // Recursively cleans the payload to ensure NO empty strings reach N8n/Supabase UUID columns.
+        const sanitizePayload = (obj) => {
+            const clean = {};
+            Object.keys(obj).forEach(key => {
+                const val = obj[key];
+                if (val === "" || (typeof val === 'string' && val.trim() === "")) {
+                    clean[key] = null; // Convert empty string to null
+                } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                    clean[key] = sanitizePayload(val); // Recurse
+                } else {
+                    clean[key] = val;
+                }
+            });
+            return clean;
+        };
+
+        const finalPayload = sanitizePayload(apiPayload);
+
         console.log("=== GENERATION DEBUG ===");
         console.log("Active BG URL:", activeBgUrl);
+        console.log("SANITIZED N8N PAYLOAD:", JSON.stringify(finalPayload, null, 2));
         console.log("Full Payload:", JSON.stringify(apiPayload, null, 2));
 
         // Define Worker (now cleaner, just consumes payload)
@@ -896,7 +940,7 @@ export default function KeyframeStudioDemo() {
                 const res = await fetch(endpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload) // Use the payload passed in
                 });
 
                 if (!res.ok) throw new Error(`Generation failed: ${res.status}`);
@@ -949,15 +993,14 @@ export default function KeyframeStudioDemo() {
             } catch (err) {
                 console.error("Background Scene generation error", err);
                 // 3. HANDLE FAILURE
-                setKeyframes(prev => prev.filter(k => k.id !== targetId));
-                if (supabase) {
-                    await supabase.from("keyframes").delete().eq("id", targetId);
-                }
+                // Change status to 'error' instead of deleting
+                // But since we rely on image_url for status, maybe just log it.
+                // DO NOT DELETE the record. The user should see "Pending" or "Failed" rather than nothing.
             }
         };
 
         // Fire and Forget!
-        runBackgroundGeneration(apiPayload);
+        runBackgroundGeneration(finalPayload);
 
 
         // 4. RESET UI FOR NEXT GENERATION (Simulated Page Refresh)
