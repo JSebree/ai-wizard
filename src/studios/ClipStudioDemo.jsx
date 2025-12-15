@@ -53,6 +53,9 @@ export default function ClipStudioDemo() {
                 if (localScenes.length > 0) setKeyframes(localScenes);
                 const localChars = JSON.parse(localStorage.getItem("sceneme.characters") || "[]");
                 if (localChars.length > 0) setCharacters(localChars);
+                // [Persistence] Restore Clips
+                const localClips = JSON.parse(localStorage.getItem("sceneme.clips") || "[]");
+                if (localClips.length > 0) setSavedClips(localClips);
             } catch (e) { }
 
             // Load Voice Registry
@@ -153,7 +156,20 @@ export default function ClipStudioDemo() {
                         return { ...c, dialogue_blocks: [] }; // Fallback to empty array
                     }
                 });
-                setSavedClips(parsedClips);
+
+                // [Persistence] Safe Merge Strategy
+                setSavedClips(prevClips => {
+                    const dbMap = new Map(parsedClips.map(c => [c.id, c]));
+
+                    // Rescue recent local pending/rendering items (buffer 5 mins for rendering)
+                    const localPending = prevClips.filter(c =>
+                        (c.status === 'pending' || c.status === 'rendering') &&
+                        !dbMap.has(c.id) &&
+                        (Date.now() - new Date(c.created_at || Date.now()).getTime() < 300000) // 5 mins
+                    );
+
+                    return [...localPending, ...parsedClips];
+                });
             }
         };
         fetchData();
@@ -167,6 +183,13 @@ export default function ClipStudioDemo() {
             console.error("Failed to save shotList draft:", e);
         }
     }, [shotList]);
+
+    // [Persistence] Save Clips to Local (for refresh safety)
+    useEffect(() => {
+        try {
+            localStorage.setItem("sceneme.clips", JSON.stringify(savedClips));
+        } catch (e) { console.error("Failed to save clips locally:", e); }
+    }, [savedClips]);
 
     // --- Shot Management ---
     const addShot = useCallback((explicitKeyframe = null) => {
@@ -442,6 +465,10 @@ export default function ClipStudioDemo() {
                 const validId = (shot.dbId && shot.dbId.length > 10) ? shot.dbId : (shot.id && shot.id.length > 10 && !shot.id.startsWith("saved_") ? shot.id : uuidv4());
                 dbPayload.id = validId;
 
+                // [Persistence] Inject User ID for RLS
+                const { data: { user } } = await supabase.auth.getUser();
+                dbPayload.user_id = user?.id;
+
                 console.log("[saveToBin] DB Upsert Payload:", JSON.stringify(dbPayload, null, 2));
 
                 const { data, error } = await supabase
@@ -495,6 +522,9 @@ export default function ClipStudioDemo() {
 
         const webhookUrl = shot.speakerType === "on_screen" ? LIPSYNC_WEBHOOK : I2V_WEBHOOK;
 
+        // [Persistence] Fetch User for Payload
+        const { data: { user } } = await supabase.auth.getUser();
+
         try {
             // 1. Create Initial DB Record (Pending/Rendering)
             console.log("Creating initial pending record...");
@@ -524,25 +554,55 @@ export default function ClipStudioDemo() {
             // FramePack expects integer frames (e.g. 300 for 10s @ 30fps)
             const numFrames = Math.ceil((duration || 3) * 30);
 
+            // 2. Construct & Sanitize Payload
+            const rawPayload = {
+                clip_name: shot.name,
+                // Safety Truncation: FramePack has a 75 token limit
+                prompt: (shot.prompt || "").slice(0, 280),
+                image_url: shot.sceneImageUrl,
+                audio_url: shot.stitchedAudioUrl,
+                motion: shot.motion || "static",
+                num_frames: numFrames, // Explicit frame count for I2V
+                // Passing dialogue structure in case backend supports multi-speaker face mapping
+                dialogue: shot.dialogueBlocks.map(b => ({
+                    speaker_id: b.characterId,
+                    text: b.text,
+                    duration: b.duration || 0,
+                    character_name: b.characterName || "Unknown"
+                })),
+
+                // [Persistence v2.0] Inject IDs for Server-Side Update
+                id: dbId,
+                clip_id: dbId, // Alias
+                user_id: user?.id || null,
+                scene_id: shot.sceneId || null,
+                character_id: shot.characterId || null,
+                setting_id: shot.setting_id || null
+            };
+
+            // Global Sanitizer (Recursively convert "" to null)
+            const sanitizePayload = (obj) => {
+                const clean = {};
+                Object.keys(obj).forEach(key => {
+                    const val = obj[key];
+                    if (val === "" || (typeof val === 'string' && val.trim() === "")) {
+                        clean[key] = null;
+                    } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                        clean[key] = sanitizePayload(val);
+                    } else {
+                        clean[key] = val;
+                    }
+                });
+                return clean;
+            };
+
+            const finalPayload = sanitizePayload(rawPayload);
+            console.log("SANITIZED N8N PAYLOAD:", JSON.stringify(finalPayload, null, 2));
+
             const res = await fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    clip_name: shot.name,
-                    // Safety Truncation: FramePack has a 75 token limit
-                    prompt: (shot.prompt || "").slice(0, 280),
-                    image_url: shot.sceneImageUrl,
-                    audio_url: shot.stitchedAudioUrl,
-                    motion: shot.motion || "static",
-                    num_frames: numFrames, // Explicit frame count for I2V
-                    // Passing dialogue structure in case backend supports multi-speaker face mapping
-                    dialogue: shot.dialogueBlocks.map(b => ({
-                        speaker_id: b.characterId,
-                        text: b.text,
-                        duration: b.duration || 0,
-                        character_name: b.characterName || "Unknown"
-                    }))
-                })
+                body: JSON.stringify(finalPayload)
             });
 
             if (!res.ok) throw new Error("Video rendering failed.");
