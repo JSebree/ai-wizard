@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
+// Simple IOS Detection
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
 // Template gallery (add more items over time)
 const TEMPLATE_KEY = "interview_template_v1";
 const templates = [
@@ -307,7 +311,13 @@ export default function LandingPage() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+
   async function handleInstallClick() {
+    if (isIOS) {
+      setShowIOSInstructions(true);
+      return;
+    }
     if (!installPrompt) return;
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
@@ -482,7 +492,7 @@ export default function LandingPage() {
             SceneMe Studios
           </button>
 
-          {installPrompt && (
+          {(installPrompt || (isIOS && !isStandalone)) && (
             <button
               type="button"
               onClick={handleInstallClick}
@@ -513,7 +523,8 @@ export default function LandingPage() {
 
 
       {/* --- Examples Gallery --- */}
-      <section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }}>
+      < section className="card" style={{ padding: 18, border: "1px solid #E5E7EB", borderRadius: 12, background: "#fff", marginBottom: 16 }
+      }>
         <h2 style={{ marginTop: 0, marginBottom: 12 }}>Get inspired</h2>
         <p style={{ marginTop: 0, color: "#475569" }}>
           Explore examples to inspire you—or use them to jump-start your own scene.
@@ -571,11 +582,46 @@ export default function LandingPage() {
               </div>
             ))}
         </div>
-      </section>
+      </section >
 
 
 
       {/* --- Intake Modal --- */}
+      {
+        showIOSInstructions && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 2000
+            }}
+            onClick={() => setShowIOSInstructions(false)}
+          >
+            <div style={{ width: "90%", maxWidth: 360, background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}>
+              <h3 style={{ marginTop: 0, fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Install on iPhone</h3>
+              <p style={{ color: "#4B5563", marginBottom: 20 }}>
+                iOS doesn't support a direct install button yet. Here is the trick:
+              </p>
+              <ol style={{ paddingLeft: 20, color: "#374151", marginBottom: 20, lineHeight: 1.6 }}>
+                <li>Tap the <strong>Share Icon</strong> <span style={{ fontSize: 18 }}>⎋</span> below.</li>
+                <li>Scroll down and tap <strong>Add to Home Screen</strong> <span style={{ fontSize: 18 }}>⊞</span>.</li>
+              </ol>
+              <button
+                onClick={() => setShowIOSInstructions(false)}
+                style={{ width: "100%", padding: 12, background: "#111827", color: "#fff", borderRadius: 8, fontWeight: 600 }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        )
+      }
       {
         showForm && (
           <div
