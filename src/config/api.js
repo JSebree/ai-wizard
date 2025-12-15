@@ -19,4 +19,7 @@ export const API_CONFIG = {
     GENERATE_VOICE_PREVIEW: "https://n8n.simplifies.click/webhook/generate-voice-preview",
     GENERATE_VIDEO_PREVIEW: "https://n8n.simplifies.click/webhook/generate-video-preview",
     GENERATE_LIPSYNC_PREVIEW: "https://n8n.simplifies.click/webhook/generate-lipsync-preview",
+
+    // Production (Render)
+    GENERATE_RENDER_SCENE: "https://n8n.simplifies.click/webhook/render-scene",
 };

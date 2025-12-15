@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { API_CONFIG } from "../config/api";
 import ProjectCard from "./components/ProjectCard";
 import ProjectThumbnail from "./components/ProjectThumbnail"; // New Thumb
 
@@ -228,7 +229,7 @@ export default function ProductionStudioDemo() {
     };
 
     const musicWebhookUrl = import.meta.env.VITE_N8N_MUSIC_WEBHOOK;
-    const renderWebhookUrl = import.meta.env.VITE_N8N_RENDER_WEBHOOK;
+    const renderWebhookUrl = API_CONFIG.GENERATE_RENDER_SCENE;
 
     const generateAiMusic = async () => {
         try {
