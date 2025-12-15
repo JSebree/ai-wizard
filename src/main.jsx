@@ -6,6 +6,13 @@ import { InterviewProvider } from './interview/interviewState';
 import './index.css';
 import App from './App.jsx';
 
+// GLOBAL PWA CAPTURE: Listen immediately to catch the event before React mounts
+window.deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredPrompt = e;
+});
+
 // Only register service worker in production to minimize dev risks
 if (import.meta.env.PROD) {
   registerSW({ immediate: true });

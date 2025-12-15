@@ -293,8 +293,14 @@ export default function LandingPage() {
   const [installPrompt, setInstallPrompt] = useState(null);
 
   useEffect(() => {
+    // Check if event already fired (Race Condition Fix)
+    if (window.deferredPrompt) {
+      setInstallPrompt(window.deferredPrompt);
+    }
+
     const handler = (e) => {
       e.preventDefault();
+      window.deferredPrompt = e; // Sync global
       setInstallPrompt(e);
     };
     window.addEventListener("beforeinstallprompt", handler);
