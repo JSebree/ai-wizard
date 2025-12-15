@@ -290,6 +290,25 @@ export default function LandingPage() {
   const [showForm, setShowForm] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState(null);
   const [nextPath, setNextPath] = useState("/interview");
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  async function handleInstallClick() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") {
+      setInstallPrompt(null);
+    }
+  }
 
   function openForm(tpl = null, path = "/interview") {
     setPendingTemplate(tpl);
@@ -456,6 +475,33 @@ export default function LandingPage() {
           >
             SceneMe Studios
           </button>
+
+          {installPrompt && (
+            <button
+              type="button"
+              onClick={handleInstallClick}
+              className="btn btn-secondary"
+              style={{
+                padding: "10px 16px",
+                borderRadius: 8,
+                border: "1px solid #E5E7EB",
+                background: "#F9FAFB",
+                color: "#111827",
+                fontWeight: 600,
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                gap: 6
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Install App
+            </button>
+          )}
         </div>
       </section>
 
