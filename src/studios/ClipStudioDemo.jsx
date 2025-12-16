@@ -10,7 +10,20 @@ const I2V_WEBHOOK = API_CONFIG.GENERATE_VIDEO_PREVIEW;
 const LIPSYNC_WEBHOOK = API_CONFIG.GENERATE_LIPSYNC_PREVIEW;
 
 // Helper to prefix IDs for local vs saved items
-const prefixId = (id) => (typeof id === 'string' && id.startsWith('saved_')) ? id : `local_${id} `;
+const prefixId = (id) => (typeof id === 'string' && id.startsWith('saved_')) ? id : `local_${id}`;
+
+// Helper: Blob to Base64
+const blobToBase64 = (blob) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = reader.result.split(',')[1]; // Remove data:audio/wav;base64,...
+            resolve(base64String);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
 
 export default function ClipStudioDemo() {
     const [keyframes, setKeyframes] = useState([]);
@@ -220,7 +233,10 @@ export default function ClipStudioDemo() {
             speakerType: "on_screen", // Default speaker type
             status: "draft", // draft, generating, preview_ready, completed
             videoUrl: "",
-            error: ""
+            error: "",
+            useSeedVC: false,
+            isRecording: false, // UI State
+            inputMode: "text", // "text" | "mic"
         };
         setShotList(prev => {
             console.log("Updating Shot List. Previous Length:", prev.length);
@@ -274,7 +290,176 @@ export default function ClipStudioDemo() {
         ));
     }, []);
 
-    // --- Audio Generation ---
+    // --- Audio Recording & STS Conversion ---
+    const handleConvertRecording = useCallback(async (shotTempId, blob) => {
+        const shot = shotList.find(s => s.tempId === shotTempId);
+        if (!shot) return;
+
+        try {
+            // 1. Identify Target Voice (Same logic as TTS-to-STS)
+            const primaryBlock = shot.dialogueBlocks[0];
+            let targetVoiceUrl = null;
+
+            console.log("[STS] Lookup Debug:", {
+                lookingForId: primaryBlock.characterId,
+                availableCharIds: characters.map(c => c.id),
+                availableRegistryIds: registryVoices.map(v => v.id)
+            });
+
+            if (primaryBlock) {
+                // Ensure ID comparison is safe (string vs number)
+                const char = characters.find(c => String(c.id) === String(primaryBlock.characterId));
+                const narrator = registryVoices.find(v => String(v.id) === String(primaryBlock.characterId));
+
+                if (narrator) {
+                    targetVoiceUrl = narrator.previewUrl;
+                } else if (char) {
+                    // Check for cloned voice/recording ref
+                    if ((char.voice_id === "recording" || char.voiceId === "recording") && (char.voice_ref_url || char.voiceRefUrl)) {
+                        targetVoiceUrl = char.voice_ref_url || char.voiceRefUrl;
+                    } else {
+                        // Check for registry voice
+                        const assignedVoiceId = char.voice_id || char.voiceId;
+                        const foundVoice = registryVoices.find(v => v.id === assignedVoiceId);
+                        if (foundVoice) {
+                            targetVoiceUrl = foundVoice.previewUrl;
+                        } else {
+                            console.warn(`[STS] Character '${char.name}' has voice_id '${assignedVoiceId}' but it was not found in registry. Registry size: ${registryVoices.length}`);
+                        }
+                    }
+                } else {
+                    console.warn(`[STS] Character ID '${primaryBlock.characterId}' not found in Characters or Registry.`);
+                }
+            }
+
+            if (!targetVoiceUrl) {
+                console.error("[STS] Voice Selection Failed. Primary Block:", primaryBlock);
+                throw new Error("No target voice selected. Please assign a character with a valid voice to the first block.");
+            }
+
+            // 2. Prepare Payload
+            const base64Audio = await blobToBase64(blob);
+
+            console.log("[STS] Sending Audio to Seed VC...");
+
+            const seedRes = await fetch(API_CONFIG.SEED_VC_ENDPOINT, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${API_CONFIG.RUNPOD_API_KEY}`
+                },
+                body: JSON.stringify({
+                    input: {
+                        source_audio: base64Audio, // Base64 input supported by our new handler
+                        target_audio_url: targetVoiceUrl,
+                        diffusion_steps: 25,
+                        length_adjust: 1.0,
+                        inference_cfg_rate: 0.7,
+                        auto_f0_adjust: false
+                    }
+                })
+            });
+
+            if (!seedRes.ok) {
+                const errorText = await seedRes.text();
+                throw new Error(`API Error ${seedRes.status}: ${errorText}`);
+            }
+
+            let seedData = await seedRes.json();
+            console.log("[STS] Initial Response:", seedData);
+
+            // Handle Async/Queue Response (RunPod Cold Start)
+            if (seedData.status === "IN_QUEUE" || seedData.status === "IN_PROGRESS") {
+                const jobId = seedData.id;
+                console.log(`[STS] Job Queued (${jobId}). Polling for completion...`);
+
+                // Polling Loop
+                while (true) {
+                    await new Promise(r => setTimeout(r, 2000)); // Wait 2s
+
+                    const statusRes = await fetch(`${API_CONFIG.SEED_VC_ENDPOINT.replace('/run', '')}/status/${jobId}`, {
+                        headers: { "Authorization": `Bearer ${API_CONFIG.RUNPOD_API_KEY}` }
+                    });
+
+                    if (!statusRes.ok) throw new Error("Failed to poll status");
+
+                    seedData = await statusRes.json();
+                    console.log("[STS] Poll Status:", seedData.status);
+
+                    if (seedData.status === "COMPLETED") break;
+                    if (seedData.status === "FAILED") throw new Error("RunPod Job Failed");
+                }
+            }
+
+            let audioUrl = "";
+            if (seedData.output && seedData.output.audio_url) {
+                audioUrl = seedData.output.audio_url;
+            } else if (seedData.audio_url) { // Handler direct return
+                audioUrl = seedData.audio_url;
+            } else if (seedData.output && seedData.output.audio) {
+                audioUrl = `data:audio/wav;base64,${seedData.output.audio}`;
+            } else if (seedData.audio) {
+                audioUrl = `data:audio/wav;base64,${seedData.audio}`;
+            } else {
+                throw new Error(`Unexpected Response: ${JSON.stringify(seedData).substring(0, 100)}...`);
+            }
+
+            // 3. Update Shot
+            // We'll update the first block's audioUrl (and stitchedAudioUrl)
+            const updatedBlocks = shot.dialogueBlocks.map((b, i) => i === 0 ? { ...b, audioUrl: audioUrl } : b);
+
+            updateShot(shotTempId, {
+                dialogueBlocks: updatedBlocks,
+                stitchedAudioUrl: audioUrl,
+                status: "draft",
+                isAudioLocked: true,
+                totalAudioDuration: 0 // Will auto-update on load
+            });
+
+        } catch (err) {
+            console.error("STS Failed:", err);
+            updateShot(shotTempId, { status: "draft", error: `Voice Conversion Failed: ${err.message}` });
+        }
+    }, [shotList, characters, registryVoices, updateShot]);
+    const handleStartRecording = useCallback(async (shotTempId) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            const chunks = [];
+
+            mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'audio/webm' }); // Browsers record in webm or ogg usually
+                await handleConvertRecording(shotTempId, blob);
+
+                // Cleanup stream
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            // Store recorder instance in a way we can access to stop it
+            // Ideally we'd use a ref per shot, but for this demo list we'll just attach to window or a simplified map
+            // HACK: Attaching to window for simplicity in this function-based list without complex refs
+            window[`recorder_${shotTempId}`] = mediaRecorder;
+
+            mediaRecorder.start();
+            updateShot(shotTempId, { isRecording: true, error: "" });
+
+        } catch (err) {
+            console.error("Mic Error:", err);
+            updateShot(shotTempId, { error: "Could not access microphone." });
+        }
+    }, [updateShot, handleConvertRecording]);
+
+    const handleStopRecording = useCallback((shotTempId) => {
+        const recorder = window[`recorder_${shotTempId}`];
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+            updateShot(shotTempId, { isRecording: false, status: "generating_seedvc" });
+        }
+    }, [updateShot]);
+
+
+    // --- Audio Generation (TTS) ---
     const generateAllDialogue = useCallback(async (shotTempId, force = false) => {
         const shotToGenerate = shotList.find(s => s.tempId === shotTempId);
         if (!shotToGenerate) return;
@@ -364,6 +549,87 @@ export default function ClipStudioDemo() {
             }
 
             if (!audioUrl) throw new Error("No audio URL in response");
+
+            // --- Seed VC Integration ---
+            if (shotToGenerate.useSeedVC) {
+                console.log("[Seed VC] Post-processing enabled. Starting conversion...");
+                updateShot(shotTempId, { status: "generating_seedvc", error: "" }); // Optional: Add new status or keep "generating"
+
+                // 1. Identify Target Voice
+                // Strategy: Use the first block's character/voice as the target for the whole clip
+                // (Limitation of single-file stitch)
+                const primaryBlock = shotToGenerate.dialogueBlocks[0];
+                let targetVoiceUrl = null;
+
+                if (primaryBlock) {
+                    const char = characters.find(c => c.id === primaryBlock.characterId);
+                    const narrator = registryVoices.find(v => v.id === primaryBlock.characterId);
+
+                    if (narrator) {
+                        targetVoiceUrl = narrator.previewUrl;
+                    } else if (char) {
+                        // Check if char has a reliable preview URL
+                        // If it's a clone ("recording"), use the ref URL
+                        if ((char.voice_id === "recording" || char.voiceId === "recording") && (char.voice_ref_url || char.voiceRefUrl)) {
+                            targetVoiceUrl = char.voice_ref_url || char.voiceRefUrl;
+                        } else {
+                            // If it's a registry voice assigned to a char, we need to find that registry voice's preview URL
+                            const assignedVoiceId = char.voice_id || char.voiceId;
+                            const foundVoice = registryVoices.find(v => v.id === assignedVoiceId);
+                            if (foundVoice) targetVoiceUrl = foundVoice.previewUrl;
+                        }
+                    }
+                }
+
+                if (!targetVoiceUrl) {
+                    console.warn("[Seed VC] Could not determine target voice URL from primary speaker. Skipping conversion.");
+                } else {
+                    console.log("[Seed VC] Converting using target:", targetVoiceUrl);
+
+                    try {
+                        const seedRes = await fetch(API_CONFIG.SEED_VC_ENDPOINT, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${API_CONFIG.RUNPOD_API_KEY || ""}` // Add if needed, though mostly standard endpoint
+                            },
+                            body: JSON.stringify({
+                                input: {
+                                    source_audio_url: audioUrl,
+                                    target_audio_url: targetVoiceUrl,
+                                    diffusion_steps: 25,
+                                    length_adjust: 1.0,
+                                    inference_cfg_rate: 0.7,
+                                    auto_f0_adjust: false
+                                }
+                            })
+                        });
+
+                        const seedData = await seedRes.json();
+                        console.log("[Seed VC] Response:", seedData);
+
+                        if (seedData.output && seedData.output.audio_url) {
+                            audioUrl = seedData.output.audio_url; // Override with converted audio
+                            console.log("[Seed VC] Success! New Audio URL:", audioUrl);
+                        } else if (seedData.output && seedData.output.audio) {
+                            // Handle Base64 output if that's what returns (though we prefer URL)
+                            // Ideally we want a URL. If it's base64, we might need to upload it or use data URI
+                            // For now assuming the handler returns audio_url as requested in user prompt
+                            // But let's support data URI just in case
+                            audioUrl = `data:audio/wav;base64,${seedData.output.audio}`;
+                        } else if (seedData.error) {
+                            throw new Error("Seed VC Error: " + seedData.error);
+                        }
+
+                    } catch (seedErr) {
+                        console.error("[Seed VC] Conversion Failed:", seedErr);
+                        // We do NOT fail the whole generation, we just fall back to valid generic TTS
+                        // But we might want to alert the user
+                        // updateShot(shotTempId, { error: "Seed VC Failed, using standard TTS." });
+                    }
+                }
+            }
+            // ---------------------------
 
             // Calculate Accurate Duration
             let totalDuration = 3.0; // Fallback
@@ -882,10 +1148,12 @@ export default function ClipStudioDemo() {
                                                     <p className="text-sm font-semibold">Rendering...</p>
                                                 </div>
                                             )}
-                                            {shot.status === 'generating' && (
+                                            {(shot.status === 'generating' || shot.status === 'generating_seedvc') && (
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white text-center p-4">
                                                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white mb-2"></div>
-                                                    <p className="text-sm font-semibold">Generating Audio...</p>
+                                                    <p className="text-sm font-semibold">
+                                                        {shot.status === 'generating_seedvc' ? "Converting Voice..." : "Generating Audio..."}
+                                                    </p>
                                                 </div>
                                             )}
                                             {shot.status === 'preview_ready' && (
@@ -988,8 +1256,8 @@ export default function ClipStudioDemo() {
                                                         <button
                                                             onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })}
                                                             disabled={!isLipSyncEligible}
-                                                            className={`flex - 1 md: flex - none px - 3 py - 1 text - [10px] uppercase font - bold rounded flex items - center gap - 1 ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"
-                                                                } disabled: opacity - 40 disabled: cursor - not - allowed`}
+                                                            className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded flex items-center gap-1 ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"
+                                                                } disabled:opacity-40 disabled:cursor-not-allowed`}
                                                         >
                                                             Character
                                                             {(!isLipSyncEligible) && (
@@ -1002,8 +1270,26 @@ export default function ClipStudioDemo() {
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`flex - 1 md: flex - none px - 3 py - 1 text - [10px] uppercase font - bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"} `}>Narrator</button>
+                                                    <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"} `}>Narrator</button>
                                                 </div>
+                                            </div>
+
+                                            {/* INPUT MODE TOGGLE */}
+                                            <div className="flex bg-gray-200 p-1 rounded-lg mb-4">
+                                                <button
+                                                    onClick={() => updateShot(shot.tempId, { inputMode: "text" })}
+                                                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-all ${shot.inputMode !== "mic" ? "bg-white text-black shadow-sm" : "text-gray-500 hover:text-gray-700"
+                                                        }`}
+                                                >
+                                                    Text to Speech
+                                                </button>
+                                                <button
+                                                    onClick={() => updateShot(shot.tempId, { inputMode: "mic" })}
+                                                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-all ${shot.inputMode === "mic" ? "bg-white text-black shadow-sm" : "text-gray-500 hover:text-gray-700"
+                                                        }`}
+                                                >
+                                                    Microphone (STS)
+                                                </button>
                                             </div>
 
                                             <div className="flex flex-col gap-3">
@@ -1025,18 +1311,26 @@ export default function ClipStudioDemo() {
                                                                     </optgroup>
                                                                 )}
                                                             </select>
-                                                            <div className="flex gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    className="flex-1 bg-white border border-gray-200 rounded-lg text-sm px-3 py-2 outline-none"
-                                                                    placeholder={inputPlaceholder}
-                                                                    value={block.text}
-                                                                    onChange={e => updateBlock(shot.tempId, block.id, "text", e.target.value)}
-                                                                />
-                                                                {shot.dialogueBlocks.length > 1 && (
-                                                                    <button onClick={() => removeBlock(shot.tempId, block.id)} className="text-gray-300 hover:text-red-400 px-2">×</button>
-                                                                )}
-                                                            </div>
+
+                                                            {/* CONDITIONAL INPUT AREA */}
+                                                            {shot.inputMode === "mic" ? (
+                                                                <div className="flex items-center justify-center bg-gray-50 border border-dashed border-gray-300 rounded-lg text-xs text-gray-400 italic">
+                                                                    <span>Ready to record...</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex gap-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        className="flex-1 bg-white border border-gray-200 rounded-lg text-sm px-3 py-2 outline-none"
+                                                                        placeholder={inputPlaceholder}
+                                                                        value={block.text}
+                                                                        onChange={e => updateBlock(shot.tempId, block.id, "text", e.target.value)}
+                                                                    />
+                                                                    {shot.inputMode !== "mic" && shot.dialogueBlocks.length > 1 && (
+                                                                        <button onClick={() => removeBlock(shot.tempId, block.id)} className="text-gray-300 hover:text-red-400 px-2">×</button>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="flex items-center gap-3">
                                                             {block.audioUrl && <span className="text-[10px] text-gray-800 font-bold">✓ Audio Included</span>}
@@ -1057,20 +1351,42 @@ export default function ClipStudioDemo() {
                                                     </div>
                                                 ))}
 
-                                                <div className="flex justify-between items-center mt-2">
-                                                    {shot.speakerType === "on_screen" && (
+                                                <div className="flex justify-between items-center mt-2 gap-2">
+                                                    {shot.speakerType === "on_screen" && shot.inputMode !== "mic" && (
                                                         <button onClick={() => addBlock(shot.tempId)} className="text-[10px] font-bold text-gray-600 hover:underline hover:text-black">+ Add Dialogue Block</button>
                                                     )}
-                                                    <button
-                                                        onClick={() => generateAllDialogue(shot.tempId, true)}
-                                                        disabled={shot.dialogueBlocks.some(b => !b.text || !b.text.trim())}
-                                                        className={`ml - auto px - 4 py - 2 text - xs font - bold rounded - lg shadow - sm transition - all ${shot.dialogueBlocks.some(b => !b.text || !b.text.trim())
-                                                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                                            : "bg-black text-white hover:bg-gray-800"
-                                                            } `}
-                                                    >
-                                                        {shot.dialogueBlocks.some(b => b.audioUrl) ? "⚡ Regenerate Dialogue" : "⚡ Generate Dialogue"}
-                                                    </button>
+
+                                                    {/* CONDITIONAL ACTION BUTTONS */}
+                                                    {shot.inputMode === "mic" ? (
+                                                        <button
+                                                            onClick={() => shot.isRecording ? handleStopRecording(shot.tempId) : handleStartRecording(shot.tempId)}
+                                                            className={`w-full py-3 text-sm font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 ${shot.isRecording ? "bg-red-500 text-white animate-pulse" : "bg-black text-white hover:bg-gray-800"
+                                                                }`}
+                                                        >
+                                                            {shot.isRecording ? (
+                                                                <>
+                                                                    <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+                                                                    Stop Recording
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span>🎤</span>
+                                                                    Start Recording & Convert
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => generateAllDialogue(shot.tempId, true)}
+                                                            disabled={shot.dialogueBlocks.some(b => !b.text || !b.text.trim())}
+                                                            className={`ml-auto px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition-all ${shot.dialogueBlocks.some(b => !b.text || !b.text.trim())
+                                                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                                                : "bg-black text-white hover:bg-gray-800"
+                                                                }`}
+                                                        >
+                                                            {shot.dialogueBlocks.some(b => b.audioUrl) ? "⚡ Regenerate Dialogue" : "⚡ Generate Dialogue"}
+                                                        </button>
+                                                    )}
                                                 </div>
 
                                                 {/* AUDIO PREVIEW */}
