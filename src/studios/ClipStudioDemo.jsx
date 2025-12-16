@@ -345,8 +345,7 @@ export default function ClipStudioDemo() {
             const seedRes = await fetch(API_CONFIG.SEED_VC_ENDPOINT, {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${API_CONFIG.RUNPOD_API_KEY}`
+                    "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
                     input: {
@@ -378,7 +377,7 @@ export default function ClipStudioDemo() {
                     await new Promise(r => setTimeout(r, 2000)); // Wait 2s
 
                     const statusRes = await fetch(`${API_CONFIG.SEED_VC_ENDPOINT.replace('/run', '')}/status/${jobId}`, {
-                        headers: { "Authorization": `Bearer ${API_CONFIG.RUNPOD_API_KEY}` }
+                        headers: { "Content-Type": "application/json" }
                     });
 
                     if (!statusRes.ok) throw new Error("Failed to poll status");

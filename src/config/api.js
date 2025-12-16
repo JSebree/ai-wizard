@@ -24,6 +24,5 @@ export const API_CONFIG = {
     GENERATE_RENDER_SCENE: "https://n8n.simplifies.click/webhook/render-scene",
 
     // Voice Conversion
-    SEED_VC_ENDPOINT: "https://api.runpod.ai/v2/f9kykzikds5kc0/run",
-    RUNPOD_API_KEY: import.meta.env.VITE_RUNPOD_API_KEY,
+    SEED_VC_ENDPOINT: "/seed-vc-proxy/run",
 };
