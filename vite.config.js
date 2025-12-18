@@ -100,6 +100,17 @@ export default defineConfig(({ mode }) => {
             });
           }
         },
+        '/voice-proxy': {
+          target: 'https://voice-generations.nyc3.digitaloceanspaces.com',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/voice-proxy/, ''),
+          configure: (proxy, options) => {
+            proxy.on('proxyRes', (proxyRes, req, res) => {
+              proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+            });
+          }
+        },
         '/seed-vc-proxy': {
           target: 'https://api.runpod.ai/v2/f9kykzikds5kc0',
           changeOrigin: true,
