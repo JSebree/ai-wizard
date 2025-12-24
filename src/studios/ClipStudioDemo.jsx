@@ -245,14 +245,19 @@ export default function ClipStudioDemo() {
         fetchData();
     }, []);
 
-    // PERSIST SHOTLIST
+    // PERSIST SHOTLIST (Debounced)
     useEffect(() => {
-        try {
-            localStorage.setItem("sceneme.shotList", JSON.stringify(shotList));
-        } catch (e) {
-            console.error("Failed to save shotList draft:", e);
-        }
+        const handler = setTimeout(() => {
+            try {
+                localStorage.setItem("sceneme.shotList", JSON.stringify(shotList));
+            } catch (e) {
+                console.error("Failed to save shotList draft:", e);
+            }
+        }, 1000); // 1s debounce
+
+        return () => clearTimeout(handler);
     }, [shotList]);
+
 
     // [Persistence] Save Clips to Local (for refresh safety)
     useEffect(() => {
@@ -1509,7 +1514,10 @@ export default function ClipStudioDemo() {
                                                                                     className="h-8 w-32 opacity-90"
                                                                                     onLoadedMetadata={(e) => {
                                                                                         if (e.target.duration && e.target.duration !== Infinity) {
-                                                                                            updateBlock(shot.tempId, block.id, "duration", e.target.duration);
+                                                                                            const cur = block.duration || 0;
+                                                                                            if (Math.abs(cur - e.target.duration) > 0.1) {
+                                                                                                updateBlock(shot.tempId, block.id, "duration", e.target.duration);
+                                                                                            }
                                                                                         }
                                                                                     }}
                                                                                 />
@@ -1566,8 +1574,12 @@ export default function ClipStudioDemo() {
                                                         src={shot.stitchedAudioUrl}
                                                         className="h-8 w-full max-w-[200px]"
                                                         onLoadedMetadata={(e) => {
-                                                            if (e.target.duration && e.target.duration !== Infinity) {
-                                                                updateShot(shot.tempId, { totalAudioDuration: e.target.duration });
+                                                            const newDur = e.target.duration;
+                                                            if (newDur && newDur !== Infinity) {
+                                                                const current = shot.totalAudioDuration || 0;
+                                                                if (Math.abs(current - newDur) > 0.1) {
+                                                                    updateShot(shot.tempId, { totalAudioDuration: newDur });
+                                                                }
                                                             }
                                                         }}
                                                     />
