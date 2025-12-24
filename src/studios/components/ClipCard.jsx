@@ -102,32 +102,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             // Actually, if lastFrameUrl was present but failed, we haven't tried thumbnail yet.
             // So let's try thumbnail now if we haven't.
 
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            if (isMobile) {
-                console.warn("[v45] Mobile detected & Direct Capture Failed/Missing.");
+            // [v45] Mobile check removed to allow video extraction fallback on all devices
+        }
 
-                if (thumbSrc) {
-                    try {
-                        const proxiedThumb = getProxiedUrl(thumbSrc);
-                        const blob = await captureFromImage(proxiedThumb);
-                        if (blob) {
-                            onGenerateKeyframe?.(clip, blob);
-                            setIsCapturing(false);
-                            return;
-                        }
-                    } catch (e) {
-                        console.error("Mobile thumb fallback failed", e);
-                        alert(`[v45 - Mobile] Thumbnail Fallback Failed.\n\nError: ${e.message}`);
-                        setIsCapturing(false);
-                        return;
-                    }
-                }
-
-                setIsCapturing(false);
-                alert(`[v45 - Mobile] Cannot extend video.\n\nReason: No last frame found and thumbnail missing.\n\nClip ID: ${clip.id}`);
-                return;
-            }
-        } // End else
 
         // [v45] Legacy v40 block removed.
         // If we are on Desktop, we continue to offscreen extraction below...
