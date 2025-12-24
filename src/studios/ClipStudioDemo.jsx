@@ -476,12 +476,25 @@ export default function ClipStudioDemo() {
     const handleStartRecording = useCallback(async (shotTempId, blockId) => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+
+            // [v67] Mobile Safari Support
+            let mimeType = 'audio/webm';
+            if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                mimeType = 'audio/mp4';
+            } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+                mimeType = 'audio/aac';
+            }
+
+            const mediaRecorder = new MediaRecorder(stream, { mimeType });
+            // Store mimeType on the instance for onstop
+            mediaRecorder.mimeTypeFromOpts = mimeType;
+
             const chunks = [];
 
             mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
             mediaRecorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
+                const type = mediaRecorder.mimeTypeFromOpts || 'audio/webm';
+                const blob = new Blob(chunks, { type });
                 await handleConvertRecording(shotTempId, blockId, blob);
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -1403,203 +1416,212 @@ export default function ClipStudioDemo() {
                                                     <div className="relative group">
                                                         <button
                                                             onClick={() => updateShot(shot.tempId, { speakerType: "on_screen" })}
-                                                            disabled={!isLipSyncEligible}
+                                                            // [v66] ALLOW FORCE SELECTION via Warning
+                                                            // disabled={!isLipSyncEligible}
                                                             className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded flex items-center gap-1 ${shot.speakerType === "on_screen" ? "bg-black text-white" : "text-gray-400"
-                                                                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                                                                } hover:text-gray-800`}
                                                         >
                                                             Character
                                                             {(!isLipSyncEligible) && (
-                                                                <span className="text-[8px] opacity-70">⛔</span>
+                                                                <span className="text-[8px] opacity-70" title="Warning: Angle might be too wide for good lip-sync">⚠️</span>
                                                             )}
                                                         </button>
                                                         {(!isLipSyncEligible) && (
                                                             <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-black text-white text-[10px] rounded shadow-lg z-20 pointer-events-none">
-                                                                Lip-Sync requires a 'Standard' or 'Close & Intimate' shot with a Character.
+                                                                Warning: Lip-Sync works best with 'Standard' or 'Close & Intimate' shots. Wide shots may look unnatural.
                                                             </div>
                                                         )}
                                                     </div>
                                                     <button onClick={() => updateShot(shot.tempId, { speakerType: "narrator" })} className={`flex-1 md:flex-none px-3 py-1 text-[10px] uppercase font-bold rounded ${shot.speakerType === "narrator" ? "bg-black text-white" : "text-gray-400"} `}>Narrator</button>
                                                 </div>
                                             </div>
+                                        </div>
 
-                                            {/* INPUT MODE TOGGLE - REMOVED, NOW PER BLOCK */}
-                                            <div className="flex flex-col gap-4">
-                                                {shot.dialogueBlocks.map((block, bIdx) => (
-                                                    <div key={block.id} className="relative pl-3 border-l-2 border-gray-200 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                                                        <div className="flex flex-col gap-3">
-                                                            {/* Row 1: Speaker + Input Mode Toggle */}
-                                                            <div className="flex justify-between items-center gap-2">
-                                                                <select
-                                                                    value={block.characterId}
-                                                                    onChange={e => updateBlock(shot.tempId, block.id, "characterId", e.target.value)}
-                                                                    className="bg-white border text-xs border-gray-200 rounded px-2 py-1 outline-none flex-1 font-semibold"
-                                                                >
-                                                                    <option value="">Select Speaker...</option>
-                                                                    <optgroup label="Characters">
-                                                                        {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        {/* INPUT MODE TOGGLE - REMOVED, NOW PER BLOCK */}
+                                        <div className="flex flex-col gap-4">
+                                            {shot.dialogueBlocks.map((block, bIdx) => (
+                                                <div key={block.id} className="relative pl-3 border-l-2 border-gray-200 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                                    <div className="flex flex-col gap-3">
+                                                        {/* Row 1: Speaker + Input Mode Toggle */}
+                                                        <div className="flex justify-between items-center gap-2">
+                                                            <select
+                                                                value={block.characterId}
+                                                                onChange={e => updateBlock(shot.tempId, block.id, "characterId", e.target.value)}
+                                                                className="bg-white border text-xs border-gray-200 rounded px-2 py-1 outline-none flex-1 font-semibold"
+                                                            >
+                                                                <option value="">Select Speaker...</option>
+                                                                <optgroup label="Characters">
+                                                                    {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                                </optgroup>
+                                                                {shot.speakerType === "narrator" && registryVoices.length > 0 && (
+                                                                    <optgroup label="Voice Registry">
+                                                                        {registryVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                                                     </optgroup>
-                                                                    {shot.speakerType === "narrator" && registryVoices.length > 0 && (
-                                                                        <optgroup label="Voice Registry">
-                                                                            {registryVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                                                        </optgroup>
+                                                                )}
+                                                            </select>
+
+                                                            {/* Per-Block Input Mode Toggle */}
+                                                            <div className="flex bg-gray-100 p-0.5 rounded">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateBlock(shot.tempId, block.id, "inputMode", "text");
+                                                                    }}
+                                                                    className={`px-2 py-1 text-[10px] font-bold rounded ${block.inputMode !== 'mic' ? 'bg-black text-white' : 'text-gray-400'}`}
+                                                                >
+                                                                    Text
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateBlock(shot.tempId, block.id, "inputMode", "mic");
+                                                                    }}
+                                                                    className={`px-2 py-1 text-[10px] font-bold rounded ${block.inputMode === 'mic' ? 'bg-black text-white' : 'text-gray-400'}`}
+                                                                >
+                                                                    Mic
+                                                                </button>
+                                                            </div>
+
+                                                            {shot.dialogueBlocks.length > 1 && (
+                                                                <button onClick={() => removeBlock(shot.tempId, block.id)} className="text-gray-300 hover:text-red-400 font-bold px-1 text-lg leading-none">×</button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Row 2: Input Area */}
+                                                        {block.inputMode === 'mic' ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => block.isRecording ? handleStopRecording(shot.tempId, block.id) : handleStartRecording(shot.tempId, block.id)}
+                                                                    className={`flex-1 py-3 text-xs font-bold rounded flex items-center justify-center gap-2 transition-all ${block.isRecording ? "bg-red-500 text-white animate-pulse" : "bg-black text-white hover:bg-gray-800"}`}
+                                                                >
+                                                                    {block.isRecording ? (
+                                                                        <>
+                                                                            <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+                                                                            Stop Recording
+                                                                        </>
+                                                                    ) : "🎤 Record Audio (STS)"}
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex gap-2 items-start">
+                                                                <textarea
+                                                                    className="flex-1 bg-white border border-gray-200 rounded text-sm px-3 py-2 outline-none resize-none focus:border-gray-400 transition-colors"
+                                                                    placeholder="Enter dialogue..."
+                                                                    rows={2}
+                                                                    value={block.text}
+                                                                    onChange={e => updateBlock(shot.tempId, block.id, "text", e.target.value)}
+                                                                />
+                                                                <button
+                                                                    onClick={() => generateBlockAudio(shot.tempId, block.id)}
+                                                                    disabled={block.isGenerating || !block.text}
+                                                                    className={`w-24 bg-black text-white text-[10px] font-bold rounded disabled:opacity-50 flex flex-col items-center justify-center gap-1 hover:bg-gray-800 self-stretch transition-all ${block.isGenerating ? "cursor-wait" : ""}`}
+                                                                >
+                                                                    {block.isGenerating ? (
+                                                                        <>
+                                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                            <span>Generating</span>
+                                                                        </>
+                                                                    ) : block.audioUrl ? (
+                                                                        <>
+                                                                            <span className="text-lg leading-none">↻</span>
+                                                                            <span>Regenerate</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        "Generate"
                                                                     )}
-                                                                </select>
+                                                                </button>
+                                                            </div>
+                                                        )}
 
-                                                                {/* Per-Block Input Mode Toggle */}
-                                                                <div className="flex bg-gray-100 p-0.5 rounded">
-                                                                    <button
-                                                                        onClick={() => updateBlock(shot.tempId, block.id, "inputMode", "text")}
-                                                                        className={`px-2 py-1 text-[10px] font-bold rounded ${block.inputMode !== 'mic' ? 'bg-black text-white' : 'text-gray-400'}`}
-                                                                    >
-                                                                        Text
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => updateBlock(shot.tempId, block.id, "inputMode", "mic")}
-                                                                        className={`px-2 py-1 text-[10px] font-bold rounded ${block.inputMode === 'mic' ? 'bg-black text-white' : 'text-gray-400'}`}
-                                                                    >
-                                                                        Mic
-                                                                    </button>
-                                                                </div>
+                                                        {/* Row 3: Status & Audio Player */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-1 gap-2 min-h-[24px]">
+                                                            <div className="flex items-center gap-2 flex-1 overflow-hidden">
+                                                                {block.error && <span className="text-[10px] text-red-500 font-bold max-w-[150px] truncate" title={block.error}>{block.error}</span>}
 
-                                                                {shot.dialogueBlocks.length > 1 && (
-                                                                    <button onClick={() => removeBlock(shot.tempId, block.id)} className="text-gray-300 hover:text-red-400 font-bold px-1 text-lg leading-none">×</button>
+                                                                {block.audioUrl && (
+                                                                    <div className="flex items-center gap-2 bg-green-50 px-2 py-1 rounded border border-green-100 max-w-full">
+                                                                        <span className="text-[10px] font-bold text-green-700 whitespace-nowrap">✓ Ready</span>
+                                                                        {/* Fixed Player & Duration Spacing */}
+                                                                        <div className="flex items-center gap-2">
+                                                                            <audio
+                                                                                controls
+                                                                                src={block.audioUrl}
+                                                                                className="h-8 w-32 opacity-90"
+                                                                                onLoadedMetadata={(e) => {
+                                                                                    if (e.target.duration && e.target.duration !== Infinity) {
+                                                                                        const cur = block.duration || 0;
+                                                                                        if (Math.abs(cur - e.target.duration) > 0.1) {
+                                                                                            updateBlock(shot.tempId, block.id, "duration", e.target.duration);
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                            <span className="text-[10px] text-gray-500 font-mono font-bold whitespace-nowrap bg-white px-1 rounded shadow-sm">
+                                                                                {(block.duration || 0).toFixed(1)}s
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
                                                                 )}
                                                             </div>
 
-                                                            {/* Row 2: Input Area */}
-                                                            {block.inputMode === 'mic' ? (
-                                                                <div className="flex items-center gap-2">
-                                                                    <button
-                                                                        onClick={() => block.isRecording ? handleStopRecording(shot.tempId, block.id) : handleStartRecording(shot.tempId, block.id)}
-                                                                        className={`flex-1 py-3 text-xs font-bold rounded flex items-center justify-center gap-2 transition-all ${block.isRecording ? "bg-red-500 text-white animate-pulse" : "bg-black text-white hover:bg-gray-800"}`}
-                                                                    >
-                                                                        {block.isRecording ? (
-                                                                            <>
-                                                                                <span className="w-2 h-2 bg-white rounded-full animate-ping" />
-                                                                                Stop Recording
-                                                                            </>
-                                                                        ) : "🎤 Record Audio (STS)"}
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="flex gap-2 items-start">
-                                                                    <textarea
-                                                                        className="flex-1 bg-white border border-gray-200 rounded text-sm px-3 py-2 outline-none resize-none focus:border-gray-400 transition-colors"
-                                                                        placeholder="Enter dialogue..."
-                                                                        rows={2}
-                                                                        value={block.text}
-                                                                        onChange={e => updateBlock(shot.tempId, block.id, "text", e.target.value)}
-                                                                    />
-                                                                    <button
-                                                                        onClick={() => generateBlockAudio(shot.tempId, block.id)}
-                                                                        disabled={block.isGenerating || !block.text}
-                                                                        className={`w-24 bg-black text-white text-[10px] font-bold rounded disabled:opacity-50 flex flex-col items-center justify-center gap-1 hover:bg-gray-800 self-stretch transition-all ${block.isGenerating ? "cursor-wait" : ""}`}
-                                                                    >
-                                                                        {block.isGenerating ? (
-                                                                            <>
-                                                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                                <span>Generating</span>
-                                                                            </>
-                                                                        ) : block.audioUrl ? (
-                                                                            <>
-                                                                                <span className="text-lg leading-none">↻</span>
-                                                                                <span>Regenerate</span>
-                                                                            </>
-                                                                        ) : (
-                                                                            "Generate"
-                                                                        )}
-                                                                    </button>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Row 3: Status & Audio Player */}
-                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-1 gap-2 min-h-[24px]">
-                                                                <div className="flex items-center gap-2 flex-1 overflow-hidden">
-                                                                    {block.error && <span className="text-[10px] text-red-500 font-bold max-w-[150px] truncate" title={block.error}>{block.error}</span>}
-
-                                                                    {block.audioUrl && (
-                                                                        <div className="flex items-center gap-2 bg-green-50 px-2 py-1 rounded border border-green-100 max-w-full">
-                                                                            <span className="text-[10px] font-bold text-green-700 whitespace-nowrap">✓ Ready</span>
-                                                                            {/* Fixed Player & Duration Spacing */}
-                                                                            <div className="flex items-center gap-2">
-                                                                                <audio
-                                                                                    controls
-                                                                                    src={block.audioUrl}
-                                                                                    className="h-8 w-32 opacity-90"
-                                                                                    onLoadedMetadata={(e) => {
-                                                                                        if (e.target.duration && e.target.duration !== Infinity) {
-                                                                                            const cur = block.duration || 0;
-                                                                                            if (Math.abs(cur - e.target.duration) > 0.1) {
-                                                                                                updateBlock(shot.tempId, block.id, "duration", e.target.duration);
-                                                                                            }
-                                                                                        }
-                                                                                    }}
-                                                                                />
-                                                                                <span className="text-[10px] text-gray-500 font-mono font-bold whitespace-nowrap bg-white px-1 rounded shadow-sm">
-                                                                                    {(block.duration || 0).toFixed(1)}s
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-
-                                                                {/* Pause Duration Control */}
-                                                                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-0.5 self-start sm:self-auto">
-                                                                    <span className="text-[9px] uppercase font-bold text-gray-400 whitespace-nowrap">Pause After:</span>
-                                                                    <input
-                                                                        type="number" step="0.1" min="0"
-                                                                        className="w-8 text-[10px] font-bold outline-none text-center"
-                                                                        value={block.pauseDuration || 0.5}
-                                                                        onChange={e => updateBlock(shot.tempId, block.id, "pauseDuration", parseFloat(e.target.value))}
-                                                                    />
-                                                                    <span className="text-[9px] text-gray-400">s</span>
-                                                                </div>
+                                                            {/* Pause Duration Control */}
+                                                            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-0.5 self-start sm:self-auto">
+                                                                <span className="text-[9px] uppercase font-bold text-gray-400 whitespace-nowrap">Pause After:</span>
+                                                                <input
+                                                                    type="number" step="0.1" min="0"
+                                                                    className="w-8 text-[10px] font-bold outline-none text-center"
+                                                                    value={block.pauseDuration || 0.5}
+                                                                    onChange={e => updateBlock(shot.tempId, block.id, "pauseDuration", parseFloat(e.target.value))}
+                                                                />
+                                                                <span className="text-[9px] text-gray-400">s</span>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                ))}
-
-                                                {/* Bottom Actions */}
-                                                <div className="flex flex-col gap-3 mt-2">
-                                                    <button onClick={() => addBlock(shot.tempId)} className="text-xs font-bold text-gray-500 hover:text-black self-start transition-colors">+ Add Another Line</button>
-
-                                                    <button
-                                                        onClick={() => finalizeAudio(shot.tempId)}
-                                                        className="w-full py-3 bg-gradient-to-r from-gray-900 to-black text-white font-bold rounded-lg shadow hover:shadow-lg transition-all flex items-center justify-center gap-2 hover:translate-y-[-1px]"
-                                                    >
-                                                        {shot.status === 'rendering' ? (
-                                                            <>
-                                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                <span>Rendering Final Audio...</span>
-                                                            </>
-                                                        ) : (
-                                                            <span>✨ Finalize Audio</span>
-                                                        )}
-                                                    </button>
                                                 </div>
+                                            ))}
+
+                                            {/* Bottom Actions */}
+                                            <div className="flex flex-col gap-3 mt-2">
+                                                <button onClick={() => addBlock(shot.tempId)} className="text-xs font-bold text-gray-500 hover:text-black self-start transition-colors">+ Add Another Line</button>
+
+                                                <button
+                                                    onClick={() => finalizeAudio(shot.tempId)}
+                                                    className="w-full py-3 bg-gradient-to-r from-gray-900 to-black text-white font-bold rounded-lg shadow hover:shadow-lg transition-all flex items-center justify-center gap-2 hover:translate-y-[-1px]"
+                                                >
+                                                    {shot.status === 'rendering' ? (
+                                                        <>
+                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                            <span>Rendering Final Audio...</span>
+                                                        </>
+                                                    ) : (
+                                                        <span>✨ Finalize Audio</span>
+                                                    )}
+                                                </button>
                                             </div>
-
-                                            {/* AUDIO PREVIEW */}
-                                            {shot.stitchedAudioUrl && (
-                                                <div className="mt-3 bg-gray-100 rounded-lg p-2 flex items-center justify-between animate-fade-in">
-                                                    <span className="text-[10px] font-bold text-gray-500 uppercase mr-2">Preview Audio:</span>
-                                                    <audio
-                                                        controls
-                                                        src={shot.stitchedAudioUrl}
-                                                        className="h-8 w-full max-w-[200px]"
-                                                        onLoadedMetadata={(e) => {
-                                                            const newDur = e.target.duration;
-                                                            if (newDur && newDur !== Infinity) {
-                                                                const current = shot.totalAudioDuration || 0;
-                                                                if (Math.abs(current - newDur) > 0.1) {
-                                                                    updateShot(shot.tempId, { totalAudioDuration: newDur });
-                                                                }
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                            )}
                                         </div>
+
+                                        {/* AUDIO PREVIEW */}
+                                        {shot.stitchedAudioUrl && (
+                                            <div className="mt-3 bg-gray-100 rounded-lg p-2 flex items-center justify-between animate-fade-in">
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase mr-2">Preview Audio:</span>
+                                                <audio
+                                                    controls
+                                                    src={shot.stitchedAudioUrl}
+                                                    className="h-8 w-full max-w-[200px]"
+                                                    onLoadedMetadata={(e) => {
+                                                        const newDur = e.target.duration;
+                                                        if (newDur && newDur !== Infinity) {
+                                                            const current = shot.totalAudioDuration || 0;
+                                                            if (Math.abs(current - newDur) > 0.1) {
+                                                                updateShot(shot.tempId, { totalAudioDuration: newDur });
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -36,9 +36,21 @@ export default function CharacterStudioDemo() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+
+      // [v67] Mobile Safari Support: Detect optimal MIME type
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+        mimeType = 'audio/aac';
+      }
+      console.log("Using MIME Type for Recording:", mimeType);
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      // Store mimeType for onstop reference
+      mediaRecorderRef.current.mimeTypeFromOpts = mimeType;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -47,8 +59,10 @@ export default function CharacterStudioDemo() {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `recording_${Date.now()}.webm`, { type: 'audio/webm' });
+        const type = mediaRecorderRef.current.mimeTypeFromOpts || 'audio/webm';
+        const ext = type.split('/')[1];
+        const audioBlob = new Blob(audioChunksRef.current, { type });
+        const audioFile = new File([audioBlob], `recording_${Date.now()}.${ext}`, { type });
         await uploadVoiceFile(audioFile);
 
         // Stop all tracks to release mic
@@ -59,7 +73,7 @@ export default function CharacterStudioDemo() {
       setIsRecording(true);
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      // You might want to show a toast or error message here
+      setError("Microphone access denied or not supported.");
     }
   };
 
