@@ -341,14 +341,17 @@ export default function CharacterStudioDemo() {
         })
       });
 
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Registration failed (${res.status}): ${errText}`);
+      }
+
       // Attempt to retrieve real UUID from response
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const realId = data.id || data.uuid || data.character_id;
-        if (realId) {
-          console.log("Received real ID from registry:", realId);
-          setCharacters(prev => prev.map(c => c.id === id ? { ...c, id: realId } : c));
-        }
+      const data = await res.json().catch(() => ({}));
+      const realId = data.id || data.uuid || data.character_id;
+      if (realId) {
+        console.log("Received real ID from registry:", realId);
+        setCharacters(prev => prev.map(c => c.id === id ? { ...c, id: realId } : c));
       }
 
       // Trigger Expansion (Include voice data to prevent overwrite)
@@ -372,7 +375,10 @@ export default function CharacterStudioDemo() {
       setTimeout(fetchSupabase, 3000);
       setTimeout(fetchSupabase, 5000);
 
-    } catch (e) { console.error("Registration failed", e); }
+    } catch (e) {
+      console.error("Registration failed", e);
+      alert(`Error saving character: ${e.message}`);
+    }
 
     setName("");
     setBasePrompt("");
