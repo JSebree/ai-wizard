@@ -1277,11 +1277,25 @@ export default function ClipStudioDemo() {
                                             )}
                                             {/* GENERATING OVERLAY: Show if shot status is generating OR any block is generating */}
                                             {(shot.status === 'generating' || shot.status === 'generating_seedvc' || shot.dialogueBlocks.some(b => b.isGenerating)) && (
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white text-center p-4 z-10">
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white text-center p-4 z-20 backdrop-blur-sm">
                                                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white mb-2"></div>
-                                                    <p className="text-sm font-semibold">
+                                                    <p className="text-sm font-semibold mb-2">
                                                         {shot.status === 'generating_seedvc' ? "Converting Voice..." : "Generating Audio..."}
                                                     </p>
+                                                    {/* [v65] Fail-Safe Dismiss via updateShot */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            updateShot(shot.tempId, { status: "draft", error: "Manually cancelled." });
+                                                            // Also clear block flags
+                                                            shot.dialogueBlocks.forEach(b => {
+                                                                if (b.isGenerating) updateBlock(shot.tempId, b.id, "isGenerating", false);
+                                                            });
+                                                        }}
+                                                        className="text-[10px] uppercase font-bold text-gray-400 hover:text-white border border-gray-600 hover:border-white px-2 py-1 rounded transition-colors"
+                                                    >
+                                                        Cancel / Dismiss
+                                                    </button>
                                                 </div>
                                             )}
                                             {shot.status === 'preview_ready' && (

@@ -76,6 +76,24 @@ export default function CharacterStudioDemo() {
   // Load Voices (Directly from Speakers Table)
   useEffect(() => {
     async function loadVoices() {
+      // 1. Try fetching from local JSON registry first (most reliable)
+      try {
+        const res = await fetch('/voices.json');
+        if (res.ok) {
+          const json = await res.json();
+          const list = Array.isArray(json) ? json : json.voices || [];
+          setVoices(list.map(v => ({
+            id: v.id || v.voice_id,
+            name: v.name,
+            previewUrl: v.preview_url || v.audio_url || v.url || ""
+          })));
+          return;
+        }
+      } catch (err) {
+        console.warn("Local voices.json not found, trying Supabase...", err);
+      }
+
+      // 2. Fallback to Supabase
       if (!supabase) return;
       try {
         const { data, error } = await supabase
@@ -83,9 +101,9 @@ export default function CharacterStudioDemo() {
           .select('id, name, preview_url, voice_id')
           .order('name');
 
-        if (data) {
+        if (data && data.length > 0) {
           setVoices(data.map(v => ({
-            id: v.id, // STRICT: Use the UUID 'id' from the table
+            id: v.id,
             name: v.name,
             previewUrl: v.preview_url || ""
           })));
@@ -235,7 +253,8 @@ export default function CharacterStudioDemo() {
       }
     } catch (err) {
       console.error("Voice upload error", err);
-      // Optional: set error state
+      setError(`Voice upload failed: ${err.message}`);
+      alert("Failed to upload voice recording. Please try again.");
     }
   };
 
