@@ -330,7 +330,13 @@ export default function CharacterStudioDemo() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id, name, base_prompt: basePrompt, base_image_url: imageUrl, voice_id: finalVoiceId, kind: "character"
+          id,
+          name,
+          base_prompt: basePrompt,
+          base_image_url: imageUrl,
+          voice_id: finalVoiceId,
+          voice_ref_url: voicePreviewUrl || null,
+          kind: "character"
         })
       });
 
