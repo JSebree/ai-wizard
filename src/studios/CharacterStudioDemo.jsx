@@ -365,7 +365,8 @@ export default function CharacterStudioDemo() {
           base_prompt: basePrompt,
           base_image_url: imageUrl,
           voice_id: finalVoiceId,
-          audio_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
+          // [v70] FIX: Use 'voice_ref_url' to match DB column and Register payload vs 'audio_url'
+          voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
           kind: "character"
         })
       }).catch(console.error);
