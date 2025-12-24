@@ -90,7 +90,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 }
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
-                alert(`[Debug Proxy] Proxy Failed!\n\nProxied URL: ${getProxiedUrl(lastFrameUrl)}\n\nError: ${err.message}\n\nFalling back...`);
+                console.warn("Pre-generated last frame failed, falling back to extraction:", err);
+                // Silent fallback
+
             }
             // [v45] Consolidate Fallback Logic
             // If direct fetch failed, and we are here, we try thumbnail fallback ONE MORE TIME 
