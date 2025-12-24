@@ -227,7 +227,7 @@ export default function ProductionStudioDemo() {
         }
     };
 
-    const musicWebhookUrl = import.meta.env.VITE_N8N_MUSIC_WEBHOOK;
+    const musicWebhookUrl = API_CONFIG.GENERATE_MUSIC;
     const renderWebhookUrl = API_CONFIG.GENERATE_RENDER_SCENE;
 
     const generateAiMusic = async () => {
