@@ -344,11 +344,20 @@ export default function CharacterStudioDemo() {
         }
       }
 
-      // Trigger Expansion
+      // Trigger Expansion (Include voice data to prevent overwrite)
       void fetch(API_CONFIG.GENERATE_CHARACTER_EXPANSION, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, name, base_prompt: basePrompt, base_image_url: imageUrl, kind: "character" })
+        // [v68] BUGFIX: Include voice_id and audio_url so n8n update doesn't wipe them
+        body: JSON.stringify({
+          id,
+          name,
+          base_prompt: basePrompt,
+          base_image_url: imageUrl,
+          voice_id: finalVoiceId,
+          audio_url: voicePreviewUrl || null,
+          kind: "character"
+        })
       }).catch(console.error);
 
       // Refresh list multiple times to ensure we catch the DB write
