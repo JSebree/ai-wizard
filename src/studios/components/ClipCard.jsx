@@ -90,7 +90,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 }
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
-                console.warn("Pre-generated last frame failed, falling back to extraction:", err);
+
                 // Silent fallback
 
             }
