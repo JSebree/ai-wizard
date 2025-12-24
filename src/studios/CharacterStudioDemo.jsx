@@ -307,7 +307,7 @@ export default function CharacterStudioDemo() {
 
     // STRICT VOICE LOGIC:
     // 1. Library: ID = UUID from registry
-    // 2. Clone: ID = "recording" literal
+    // 2. Clone: ID = "recording" literal (Required by backend logic)
     const finalVoiceId = voiceKind === "clone" ? "recording" : (voiceId || "recording");
 
     const newChar = {
@@ -316,7 +316,7 @@ export default function CharacterStudioDemo() {
       basePrompt,
       referenceImageUrl: imageUrl,
       voiceId: finalVoiceId,
-      voiceRefUrl: voicePreviewUrl,
+      voiceRefUrl: voiceKind === "clone" ? voicePreviewUrl : null,
       createdAt: new Date().toISOString()
     };
 
@@ -335,7 +335,8 @@ export default function CharacterStudioDemo() {
           base_prompt: basePrompt,
           base_image_url: imageUrl,
           voice_id: finalVoiceId,
-          voice_ref_url: voicePreviewUrl || null,
+          // [v69] STRICT: Only send voice_ref_url if it's a clone. Registry voices don't need it.
+          voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
           kind: "character"
         })
       });
@@ -361,7 +362,7 @@ export default function CharacterStudioDemo() {
           base_prompt: basePrompt,
           base_image_url: imageUrl,
           voice_id: finalVoiceId,
-          audio_url: voicePreviewUrl || null,
+          audio_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
           kind: "character"
         })
       }).catch(console.error);
