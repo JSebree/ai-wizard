@@ -326,14 +326,6 @@ export default function CharacterStudioDemo() {
 
     // Supabase Register
     try {
-      // [Debug] Verify Payload on Mobile
-      const payloadVoiceId = finalVoiceId;
-      const payloadRefUrl = voiceKind === "clone" ? (voicePreviewUrl || null) : null;
-      alert(`Debug Saving:
-Kind: ${voiceKind}
-ID: ${payloadVoiceId}
-RefURL: ${payloadRefUrl ? 'PRESENT' : 'NULL'}`);
-
       const res = await fetch(API_CONFIG.REGISTER_CHARACTER, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
