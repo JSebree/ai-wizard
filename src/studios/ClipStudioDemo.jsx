@@ -801,7 +801,7 @@ export default function ClipStudioDemo() {
             // Optimistic / Demo Save
             const payload = {
                 id: shot.id, // Prefer existing ID (for updates)
-                name: shot.name || `Clip ${new Date().toLocaleTimeString()} `,
+                name: shot.name || `Clip ${new Date().toLocaleTimeString()}`,
                 scene_id: shot.sceneId || selectedKeyframe?.id,
                 scene_name: shot.sceneName || selectedKeyframe?.name || "Unknown Scene",
                 character_id: shot.dialogueBlocks?.[0]?.characterId || shot.characterId || selectedKeyframe?.characterId || null,
@@ -1172,7 +1172,7 @@ export default function ClipStudioDemo() {
         if (scene) setSelectedKeyframe(scene);
 
         const restoredShot = {
-            id: `restored_${Date.now()} `,
+            id: `restored_${Date.now()}`,
             tempId: Date.now(),
             name: clip.name ? `${clip.name} (Remix)` : "", // Auto-append Remix
             sceneId: clip.scene_id,
@@ -1755,12 +1755,6 @@ export default function ClipStudioDemo() {
                                 }
 
                                 try {
-                                    console.log("PARENT: onGenerateKeyframe called with blob size:", blob?.size);
-
-                                    if (!blob) {
-                                        alert("Error: No image captured from video.");
-                                        return;
-                                    }
 
                                     // SUSPICIOUS BLOB CHECK [v12]
                                     if (blob.size < 1000) {
@@ -1770,7 +1764,9 @@ export default function ClipStudioDemo() {
                                         return;
                                     }
 
-                                    const filename = `${Date.now()}_${clip.id}_end.png`;
+                                    // Sanitize ID to prevent URL errors (remove spaces)
+                                    const safeId = String(clip.id).replace(/\s+/g, '_');
+                                    const filename = `${Date.now()}_${safeId}_end.png`;
                                     console.log("Uploading via Webhook (kind='scene'):", filename);
 
                                     const formData = new FormData();
