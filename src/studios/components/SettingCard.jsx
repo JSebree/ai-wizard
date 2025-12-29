@@ -52,7 +52,7 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
     establishing_overhead ||
     null;
 
-  // All images we might have for this setting
+  // All images we might have for this setting (De-duplicated)
   const galleryImages = [
     { key: 'base', label: 'Base image', url: resolvedBaseImage },
     { key: 'scene_n', label: 'North', url: scene_n },
@@ -64,7 +64,9 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
     { key: 'scene_w', label: 'West', url: scene_w },
     { key: 'scene_nw', label: 'North-west', url: scene_nw },
     { key: 'establishing_overhead', label: 'Overhead', url: establishing_overhead },
-  ].filter((entry) => !!entry.url);
+  ].filter((entry, index, self) =>
+    !!entry.url && self.findIndex(t => t.url === entry.url) === index
+  );
 
   const displayPrompt = basePrompt || core_prompt || "";
 
@@ -133,8 +135,7 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
               overflowY: "auto",
               borderBottom: "1px solid #E2E8F0"
             }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
-              {/* Reduced minHeight and maxHeight to help content fit vertically */}
-              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 250, position: "relative" }}>
+              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 230, position: "relative" }}>
                 <a
                   href={primaryImage}
                   target="_blank"

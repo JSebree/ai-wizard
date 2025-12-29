@@ -65,7 +65,7 @@ export default function CharacterCard({ character, onClose, onModify, onDelete }
     headshot_front ||
     null;
 
-  // Gallery
+  // Gallery De-duplication
   const galleryImages = [
     { key: 'base', label: 'Reference', url: referenceImageUrl || base_image_url },
     { key: 'hero', label: 'Hero', url: base_hero },
@@ -75,7 +75,9 @@ export default function CharacterCard({ character, onClose, onModify, onDelete }
     { key: 'torso', label: 'Torso', url: torso_front },
     { key: 'full_c', label: 'Full (C)', url: fullbody_centered },
     { key: 'full_s', label: 'Full (S)', url: fullbody_side },
-  ].filter((entry) => !!entry.url);
+  ].filter((entry, index, self) =>
+    !!entry.url && self.findIndex(t => t.url === entry.url) === index
+  );
 
   // Voice Logic
   const presetId = voiceId || voice_id || null;
@@ -151,7 +153,7 @@ export default function CharacterCard({ character, onClose, onModify, onDelete }
               overflowY: "auto",
               borderBottom: "1px solid #E2E8F0"
             }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
-              <div style={{ background: "#F8FAFC", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 250, position: "relative", border: "1px solid #E2E8F0" }}>
+              <div style={{ background: "#F8FAFC", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 230, position: "relative", border: "1px solid #E2E8F0" }}>
                 <a
                   href={primaryImage}
                   target="_blank"
