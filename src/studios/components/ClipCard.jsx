@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 
-export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKeyframe, characters, registryVoices }) {
+export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, onGenerateKeyframe, characters, registryVoices }) {
     if (!clip) return null;
 
     const {
@@ -27,7 +27,43 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
     const dateStr = created_at ? new Date(created_at).toLocaleDateString() : "Draft";
 
     const [isCapturing, setIsCapturing] = useState(false);
-    const videoRef = React.useRef(null);
+    const [isReshooting, setIsReshooting] = useState(false);
+    const [reshootParams, setReshootParams] = useState({
+        camType: 1,
+        reverseCamera: false,
+        zoom: 1.0,
+        label: "Pan Right"
+    });
+
+    const videoRef = useRef(null);
+
+    const CAMERA_GROUPS = [
+        {
+            label: "Pan & Tilt",
+            options: [
+                { id: 1, label: "Pan Right ➡" },
+                { id: 2, label: "Pan Left ⬅" },
+                { id: 3, label: "Tilt Up ⬆" },
+                { id: 4, label: "Tilt Down ⬇" },
+            ]
+        },
+        {
+            label: "Zoom",
+            options: [
+                { id: 5, label: "Zoom In ➕" },
+                { id: 6, label: "Zoom Out ➖" },
+            ]
+        },
+        {
+            label: "Advanced Moves",
+            options: [
+                { id: 7, label: "Crane Up ⤴" },
+                { id: 8, label: "Crane Down ⤵" },
+                { id: 9, label: "Orbit Left ↻" },     // Swapped icon per user feedback (was ↺)
+                { id: 10, label: "Orbit Right ↺" },   // Swapped icon per user feedback (was ↻)
+            ]
+        }
+    ];
 
     // Helper: Rewrite URL to use local proxy if it's from digitaloceanspaces
     const getProxiedUrl = (url) => {
@@ -45,6 +81,35 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         return newUrl;
     };
 
+    // Helper to capture from image (thumbnail fallback)
+    const captureFromImage = async (src) => {
+        try {
+            console.log("Fetching fallback image:", src);
+            // [v32] Added Timeout to Fallback Fetch (5s) to prevent hangs
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 5000);
+
+            const res = await fetch(src, { signal: controller.signal });
+            clearTimeout(id);
+
+            if (!res.ok) {
+                // Inspect error body [v12]
+                const text = await res.text().catch(() => "");
+                throw new Error(`Fetch failed: ${res.status} ${res.statusText} for ${src}\nBody: ${text.substring(0, 100)}`);
+            }
+            // Check content type
+            const type = res.headers.get("content-type");
+            if (type && type.includes("text/html")) {
+                throw new Error(`Proxy Error: Received HTML instead of image from ${src}`);
+            }
+            const blob = await res.blob();
+            return blob;
+        } catch (err) {
+            console.error("Fallback Error:", err);
+            throw err; // Re-throw to allow parent to handle [v14]
+        }
+    };
+
     const handleCaptureFrame = async () => {
         if (!videoSrc) return;
         setIsCapturing(true);
@@ -57,17 +122,20 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         if (!lastFrameUrl && clip.id && !String(clip.id).startsWith('local_')) {
             console.log("[v43] last_frame_url missing in prop. Fetching from Supabase...");
             try {
-                const { data, error } = await supabase
-                    .from('clips')
-                    .select('last_frame_url')
-                    .eq('id', clip.id)
-                    .single();
+                // Check if supabase global exists, otherwise skip to avoid crash
+                if (typeof supabase !== 'undefined') {
+                    const { data, error } = await supabase
+                        .from('clips')
+                        .select('last_frame_url')
+                        .eq('id', clip.id)
+                        .single();
 
-                if (data && data.last_frame_url) {
-                    console.log("[v43] Fetched fresh last_frame_url:", data.last_frame_url);
-                    lastFrameUrl = data.last_frame_url;
-                } else {
-                    console.warn("[v43] Fetch returned no URL:", error || "Null data");
+                    if (data && data.last_frame_url) {
+                        console.log("[v43] Fetched fresh last_frame_url:", data.last_frame_url);
+                        lastFrameUrl = data.last_frame_url;
+                    } else {
+                        console.warn("[v43] Fetch returned no URL:", error || "Null data");
+                    }
                 }
             } catch (fetchErr) {
                 console.error("[v43] Failed to self-heal last_frame_url:", fetchErr);
@@ -78,7 +146,6 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             console.log("LOG: [v40] Using pre-generated last frame URL:", lastFrameUrl);
             try {
                 // [v46] Proxy the URL to ensure we get CORS headers from Cloudflare Function
-                // This is crucial because raw Bucket URLs might not send ACAO: *
                 const proxiedLastFrame = getProxiedUrl(lastFrameUrl);
                 console.log("LOG: [v46] Proxied Last Frame:", proxiedLastFrame);
 
@@ -90,25 +157,8 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
                 }
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
-
-                // Silent fallback
-
             }
-            // [v45] Consolidate Fallback Logic
-            // If direct fetch failed, and we are here, we try thumbnail fallback ONE MORE TIME 
-            // (or just rely on the previous attempt if lastFrameUrl was null)
-
-            // Check if we already tried lastFrameUrl and failed...
-            // Actually, if lastFrameUrl was present but failed, we haven't tried thumbnail yet.
-            // So let's try thumbnail now if we haven't.
-
-            // [v45] Mobile check removed to allow video extraction fallback on all devices
         }
-
-
-        // [v45] Legacy v40 block removed.
-        // If we are on Desktop, we continue to offscreen extraction below...
-
 
         let offscreenVideo = null;
 
@@ -120,14 +170,11 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             offscreenVideo.muted = true;
             offscreenVideo.playsInline = true;
 
-            // DOM attachment for mobile (unused now due to safety net, kept for desktop robustness)
             offscreenVideo.style.position = "absolute";
             offscreenVideo.style.opacity = "0.01";
             offscreenVideo.style.pointerEvents = "none";
             offscreenVideo.style.top = "-9999px";
             document.body.appendChild(offscreenVideo);
-
-            // ... (rest of offscreen logic)
 
             // Use proxied URL (has CORS headers)
             let captureSrc = videoSrc;
@@ -221,50 +268,22 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
             }
 
             setIsCapturing(false);
-            let captureSrcDebug = videoSrc;
-            // ... debug logic ...
-
             const errorReason = err?.message || err?.name || (typeof err === 'string' ? err : JSON.stringify(err)) || "Unknown Error";
-            const errorMsg = `[v40 - Pre-Gen Fallback] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}\n\nThumb Present: ${thumbSrc ? "Yes" : "No"}`;
-            alert(errorMsg);
+            alert(`[v40 - Pre-Gen Fallback] Capture Failed!\n\nError: ${errorReason}\n\nFallback Error: ${fallbackError || "N/A"}`);
         }
     };
 
-
-
-    // Helper to capture from image (thumbnail fallback)
-    const captureFromImage = async (src) => {
-        try {
-            console.log("Fetching fallback image:", src);
-            // [v32] Added Timeout to Fallback Fetch (5s) to prevent hangs
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 5000);
-
-            const res = await fetch(src, { signal: controller.signal });
-            clearTimeout(id);
-
-            if (!res.ok) {
-                // Inspect error body [v12]
-                const text = await res.text().catch(() => "");
-                throw new Error(`Fetch failed: ${res.status} ${res.statusText} for ${src}\nBody: ${text.substring(0, 100)}`);
-            }
-            // Check content type
-            const type = res.headers.get("content-type");
-            if (type && type.includes("text/html")) {
-                throw new Error(`Proxy Error: Received HTML instead of image from ${src}`);
-            }
-            const blob = await res.blob();
-            return blob;
-        } catch (err) {
-            console.error("Fallback Error:", err);
-            throw err; // Re-throw to allow parent to handle [v14]
+    const handleConfirmReshoot = () => {
+        if (onReshoot) {
+            onReshoot(clip, reshootParams);
+            setIsReshooting(false);
+            onClose();
         }
     };
 
     // Dialogue script
     const scriptText = dBlocks?.map(d => {
         let name = d.characterName || d.speaker;
-        // If name is missing or "Unknown Speaker", try to resolve via ID
         if (!name || name === "Unknown Speaker" || name === "Unknown") {
             const idToFind = d.characterId || d.speaker_id || clip.character_id;
             const found = characters?.find(c => c.id === idToFind) || registryVoices?.find(v => v.id === idToFind);
@@ -273,211 +292,242 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onGenerateKe
         return `${name || "Unknown"}: ${d.text}`;
     }).join("\n\n") || "No dialogue.";
 
+    // Audio Sync Logic
+    const audioRef = useRef(null);
+    const audioSrc = (clip.has_audio || clip.stitched_audio_url) ? (clip.stitched_audio_url || clip.audio_url || clip.audioUrl) : null;
+
+    // Sync play/pause/seek
+    const handleVideoPlay = () => audioRef.current?.play();
+    const handleVideoPause = () => audioRef.current?.pause();
+    const handleVideoSeek = () => {
+        if (audioRef.current && videoRef.current) {
+            audioRef.current.currentTime = videoRef.current.currentTime;
+        }
+    };
+
+    // Ensure volume sync (if video is muted, audio shouldn't be, generally. But if user mutes video player? 
+    // Usually web video players mute both. We can just say video is visual only, audio handles sound?)
+    // Actually, improved logic: If video has NO audio track, we rely on audioRef.
+    // videoRef controls are sufficient for timeline.
+
     return (
         <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in"
             onClick={onClose}
-            style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.4)",
-                backdropFilter: "blur(4px)",
-                zIndex: 50,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-            }}
         >
             <div
-                className="bg-white rounded-xl shadow-xl p-6 w-full max-w-4xl relative"
+                className="bg-white rounded-xl shadow-xl p-6 w-full max-w-6xl relative flex flex-col max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
-                style={{
-                    backgroundColor: "white",
-                    borderRadius: "0.75rem",
-                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-                    padding: "1.5rem",
-                    width: "100%",
-                    maxWidth: "56rem",
-                    position: "relative",
-                    maxHeight: "90vh",
-                    overflowY: "auto"
-                }}
             >
-                <button
-                    className="absolute top-3 right-3 text-gray-500 hover:text-black"
-                    onClick={(e) => { e.stopPropagation(); onClose(); }}
-                    style={{
-                        position: "absolute",
-                        top: "0.75rem",
-                        right: "0.75rem",
-                        color: "#6B7280",
-                        cursor: "pointer",
-                        background: "none",
-                        border: "none",
-                        fontSize: "1.25rem"
-                    }}
-                >
-                    ✕
-                </button>
+                {/* ... (render button) ... */}
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 h-full overflow-hidden">
+                    {/* LEFT: PREVIEW AREA */}
+                    <div className="flex flex-col gap-4 overflow-y-auto">
+                        <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[400px] relative group bg-clip-border">
+                            {videoSrc ? (
+                                <>
+                                    <video
+                                        ref={videoRef}
+                                        controls
+                                        autoPlay
+                                        loop
+                                        src={videoSrc}
+                                        className="w-full h-auto max-h-[60vh] z-10 relative" // Ensure z-index
+                                        onPlay={handleVideoPlay}
+                                        onPause={handleVideoPause}
+                                        onSeeking={handleVideoSeek}
+                                        onSeeked={handleVideoSeek}
+                                        onWaiting={() => audioRef.current?.pause()}
+                                        onPlaying={handleVideoPlay}
+                                    />
+                                    {/* Separate Audio Track for Reshot Clips */}
+                                    {audioSrc && (
+                                        <audio
+                                            ref={audioRef}
+                                            src={audioSrc}
+                                            preload="auto"
+                                            className="hidden"
+                                        />
+                                    )}
+                                </>
+                            ) : thumbSrc ? (
+                                <img
+                                    src={thumbSrc}
+                                    alt="Thumbnail"
+                                    className="w-full h-auto max-h-[60vh] object-contain"
+                                />
+                            ) : (
+                                <div className="text-white">No Media</div>
+                            )}
 
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
-                    {/* Left: Huge Preview */}
-                    <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, position: "relative" }}>
-                        {/* [v64] Debug Dot for Last Frame URL */}
-                        <div
-                            title={clip.last_frame_url || clip.lastFrameUrl ? "Last Frame URL Ready" : "Last Frame URL Missing"}
-                            style={{
-                                position: "absolute",
-                                top: 10,
-                                left: 10,
-                                width: 12,
-                                height: 12,
-                                borderRadius: "50%",
-                                zIndex: 100,
-                                background: clip.last_frame_url || clip.lastFrameUrl ? "#22c55e" : "#ef4444",
-                                boxShadow: clip.last_frame_url || clip.lastFrameUrl ? "0 0 8px rgba(34, 197, 94, 0.8)" : "0 0 8px rgba(239, 68, 68, 0.8)",
-                                border: "1px solid white",
-                                cursor: "help"
-                            }}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                alert(`Debug Last Frame:\n\nURL: ${clip.last_frame_url || clip.lastFrameUrl || "NULL"}\n\nID: ${clip.id}`);
-                            }}
-                        />
-                        {/* If video exists, show it. Else show thumbnail or black. */}
-                        {videoSrc ? (
-                            <video
-                                ref={videoRef}
-                                controls
-                                src={videoSrc} // DIRECT URL (Restores Playback)
-                                style={{ width: "100%", height: "auto", maxHeight: "80vh", display: "block" }}
-                            />
-                        ) : thumbSrc ? (
-                            <img
-                                src={thumbSrc}
-                                alt="Clip thumbnail"
-                                style={{ width: "100%", height: "auto", display: "block", maxHeight: "80vh", objectFit: "contain" }}
-                            />
-                        ) : (
-                            <div style={{ color: "#fff", padding: 20 }}>No Video</div>
-                        )}
+                            {/* Reshoot Overlay */}
+                            {isReshooting && (
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-20 flex items-center justify-center p-8 transition-all animate-fade-in">
+                                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                                        <div className="text-center">
+                                            <h3 className="text-lg font-bold text-gray-900">🎥 Reshoot Scene</h3>
+                                            <p className="text-xs text-gray-500">Apply a new camera movement to this clip.</p>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Camera Movement</label>
+                                                <div className="relative">
+                                                    <select
+                                                        value={reshootParams.camType}
+                                                        onChange={(e) => {
+                                                            const id = parseInt(e.target.value);
+                                                            const group = CAMERA_GROUPS.find(g => g.options.find(o => o.id === id));
+                                                            const opt = group?.options.find(o => o.id === id);
+                                                            if (opt) {
+                                                                setReshootParams(p => ({ ...p, camType: id, label: opt.label.replace(/ .*/, '') }));
+                                                            }
+                                                        }}
+                                                        className="w-full text-sm bg-gray-50 border border-gray-200 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 appearance-none"
+                                                    >
+                                                        {CAMERA_GROUPS.map((group, gIdx) => (
+                                                            <optgroup key={gIdx} label={group.label}>
+                                                                {group.options.map(opt => (
+                                                                    <option key={opt.id} value={opt.id}>
+                                                                        {opt.label}
+                                                                    </option>
+                                                                ))}
+                                                            </optgroup>
+                                                        ))}
+                                                    </select>
+                                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Zoom Strength */}
+                                            <div>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <label className="text-xs font-bold text-gray-500 uppercase">Zoom Strength</label>
+                                                    <span className="text-xs font-bold text-blue-600">{reshootParams.zoom}x</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="0.1"
+                                                    max="2.0"
+                                                    step="0.1"
+                                                    value={reshootParams.zoom}
+                                                    onChange={e => setReshootParams(p => ({ ...p, zoom: parseFloat(e.target.value) }))}
+                                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                                />
+                                                <p className="text-[10px] text-gray-400 mt-1">
+                                                    Controls the speed and intensity of the camera movement. Higher values create faster, more dramatic moves.
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-gray-700">Invert Cam Direction</span>
+                                                    <span className="text-[10px] text-gray-400">Play the movement path backwards</span>
+                                                </div>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        checked={reshootParams.reverseCamera}
+                                                        onChange={e => setReshootParams(p => ({ ...p, reverseCamera: e.target.checked }))}
+                                                    />
+                                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-2 pt-2">
+                                            <button
+                                                onClick={() => setIsReshooting(false)}
+                                                className="flex-1 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleConfirmReshoot}
+                                                className="flex-1 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
+                                            >
+                                                Start Reshoot
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Right: Metadata */}
-                    <div style={{ position: "relative" }}>
-                        <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 24, paddingRight: 30 }}>
-                            {clip.name || "Untitled Clip"}
-                        </h3>
-
-                        <div style={{ display: "grid", gap: 20 }}>
-
-                            {/* Description / Full Prompt */}
+                    {/* RIGHT: DETAILS */}
+                    <div className="flex flex-col h-full overflow-hidden">
+                        <div className="flex-1 overflow-y-auto pr-2 space-y-6">
                             <div>
-                                <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Description</label>
-                                <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: 0, maxHeight: 100, overflowY: "auto" }}>
-                                    {prompt}
-                                </p>
+                                <h2 className="text-2xl font-bold text-gray-900 leading-tight">{name || "Untitled Clip"}</h2>
+                                <p className="text-sm text-gray-500 mt-1">{dateStr}</p>
                             </div>
 
-                            {/* Dialogue Script */}
-                            <div>
-                                <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Script</label>
-                                <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.5, background: "#F1F5F9", padding: 10, borderRadius: 6, maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
-                                    {scriptText}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2 block">Prompt</label>
+                                    <p className="text-sm text-gray-700 bg-blue-50/50 p-3 rounded-lg border border-blue-100 leading-relaxed">
+                                        {prompt}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Script</label>
+                                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 whitespace-pre-wrap font-mono leading-relaxed max-h-[150px] overflow-y-auto">
+                                        {scriptText}
+                                    </div>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Attributes Table */}
-                            <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                    <span style={{ fontSize: 13, color: "#64748B" }}>Audio Status</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: clip.has_audio ? "#16A34A" : "#94A3B8" }}>
-                                        {clip.has_audio ? (
-                                            (clip.speaker_type === 'on_screen' || clip.speaker_type === 'character')
-                                                ? "👄 Lipsync"
-                                                : "🔊 Audio Only"
-                                        ) : "🔇 Silent"}
-                                    </span>
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                    <span style={{ fontSize: 13, color: "#64748B" }}>Duration</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{Number(duration).toFixed(1)}s</span>
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                    <span style={{ fontSize: 13, color: "#64748B" }}>Speaker Type</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>
-                                        {speakerType === 'on_screen' ? 'CHARACTER' : (speakerType || '').replace("_", " ")}
-                                    </span>
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                                    <span style={{ fontSize: 13, color: "#64748B" }}>Motion</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", textTransform: "capitalize" }}>{motionVal || "None"}</span>
-                                </div>
+                        {/* FOOTER ACTIONS */}
+                        <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col gap-3 shrink-0">
+                            {/* Stats */}
+                            <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                                <span className="flex items-center gap-1">
+                                    ⏱ <b>{Number(duration).toFixed(1)}s</b>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    🎥 <b>{motionVal || "Static"}</b>
+                                </span>
                             </div>
 
-                            {/* Action Buttons */}
-                            <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleCaptureFrame(); }}
-                                    disabled={isCapturing}
-                                    style={{
-                                        padding: "8px 16px",
-                                        borderRadius: 999,
-                                        background: isCapturing ? "#94A3B8" : "#4F46E5",
-                                        color: "white",
-                                        border: "none",
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: isCapturing ? "wait" : "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 6
-                                    }}
-                                >
-                                    {isCapturing ? "Capturing..." : "Extend Video"}
-                                </button>
-
-                                {onDelete && (
+                            <div className="grid grid-cols-2 gap-2">
+                                {onReshoot && (
                                     <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDelete(clip);
-                                        }}
-                                        style={{
-                                            padding: "8px 16px",
-                                            borderRadius: 999,
-                                            background: "white",
-                                            color: "#EF4444",
-                                            border: "1px solid #EF4444",
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            cursor: "pointer"
-                                        }}
+                                        onClick={() => setIsReshooting(true)}
+                                        className="col-span-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg shadow hover:shadow-lg hover:translate-y-[-1px] transition-all flex items-center justify-center gap-2"
                                     >
-                                        Delete
+                                        <span>🎥 Reshoot with Camera</span>
                                     </button>
                                 )}
+
                                 <button
-                                    onClick={() => {
-                                        onEdit?.(clip);
-                                    }}
-                                    style={{
-                                        padding: "8px 16px",
-                                        borderRadius: 999,
-                                        background: "#000",
-                                        color: "white",
-                                        border: "none",
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: "pointer"
-                                    }}
+                                    onClick={() => onEdit?.(clip)}
+                                    className="py-2.5 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors"
                                 >
                                     Modify
                                 </button>
+
+                                <button
+                                    onClick={() => onClose()} // Just close
+                                    className="py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Close
+                                </button>
                             </div>
+
+                            {onDelete && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onDelete(clip); }}
+                                    className="text-xs font-bold text-red-500 hover:text-red-700 self-center"
+                                >
+                                    Delete Clip
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -123,6 +123,18 @@ export default defineConfig(({ mode }) => {
             });
           }
         },
+        '/infcam-proxy': {
+          target: 'https://api.runpod.ai/v2/qd2x3p5z8axsf2',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/infcam-proxy/, ''),
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req, res) => {
+              // Inject the key locally for dev using loaded env
+              proxyReq.setHeader('Authorization', `Bearer ${env.VITE_RUNPOD_API_KEY || env.RUNPOD_API_KEY}`);
+            });
+          }
+        },
       },
     },
   }

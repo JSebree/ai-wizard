@@ -26,6 +26,9 @@ export const API_CONFIG = {
     // Voice Conversion
     SEED_VC_ENDPOINT: "/seed-vc-proxy/run",
 
+    // Video-to-Video (InfCam)
+    INFCAM_ENDPOINT: "/infcam-proxy/run",
+
     // Music Generation
     GENERATE_MUSIC: "https://n8n.simplifies.click/webhook/generate-music",
 };

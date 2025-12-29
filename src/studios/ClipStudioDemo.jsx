@@ -1164,6 +1164,150 @@ export default function ClipStudioDemo() {
         }
     };
 
+
+    // --- InfCam Reshoot Logic ---
+    const handleInfCamReshoot = async (originalClip, params) => {
+        console.log("Reshooting Clip:", originalClip.id, "Params:", params);
+
+        // 1. Create a "Ghost" pending clip to show immediate feedback
+        const tempId = `reshoot_${Date.now()}`;
+        const ghostClip = {
+            ...originalClip,
+            id: tempId,
+            status: 'rendering', // or 'generating'
+            name: `${originalClip.name} (${params.label || 'Reshoot'})`,
+            created_at: new Date().toISOString(),
+            video_url: "",
+            // inherit other props
+        };
+
+        // Add to Saved Clips immediately so user sees it
+        setSavedClips(prev => [ghostClip, ...prev]);
+
+        try {
+            // 2. Prepare Payload
+            // [Fix] Calculate frames based on duration (assuming 24fps)
+            // Clamp to 81 to match extrinsics limit. Align to 4n+1.
+            const fps = 24;
+            let rawFrames = Math.round((originalClip.duration || 3.4) * fps);
+
+            // Limit to 81 (InfCam standard max per preset)
+            if (rawFrames > 81) rawFrames = 81;
+
+            // Align to 4n+1
+            const n = Math.floor((rawFrames - 1) / 4);
+            const targetFrames = (n * 4) + 1;
+
+            const payload = {
+                input: {
+                    video_url: originalClip.video_url || originalClip.videoUrl,
+                    prompt: originalClip.prompt || "Reshoot",
+                    cam_type: params.camType,
+                    reverse_camera: params.reverseCamera || false,
+                    zoom_factor: params.zoom || 1.0,
+                    num_frames: targetFrames, // Pass clamped & aligned frames
+
+                    // [Spec Match] Parameters from handler.py / README
+                    height: 480, // Default model resolution
+                    width: 832,  // Default model resolution
+                    num_inference_steps: params.steps || 30, // Good balance
+                    tea_cache_l1_thresh: params.teaCache || 0.1, // Optimized speed
+                    cfg_scale: 5.0, // Handler default
+                    seed: params.seed || Math.floor(Math.random() * 1000000)
+                }
+            };
+
+            // 3. Call Proxy
+            const response = await fetch(API_CONFIG.INFCAM_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`InfCam Start Failed: ${response.status} ${errText}`);
+            }
+
+            let data = await response.json();
+
+            // 4. Poll if Async
+            if (data.id && (data.status === "IN_QUEUE" || data.status === "IN_PROGRESS")) {
+                const jobId = data.id;
+                console.log("InfCam Job Queued:", jobId);
+
+                // Poll loop
+                while (true) {
+                    await new Promise(r => setTimeout(r, 5000)); // 5s poll
+                    const statusRes = await fetch(`${API_CONFIG.INFCAM_ENDPOINT.replace('/run', '')}/status/${jobId}`, {
+                        headers: { "Content-Type": "application/json" }
+                    });
+
+                    if (!statusRes.ok) throw new Error("InfCam Poll Failed");
+                    data = await statusRes.json();
+
+                    if (data.status === "COMPLETED") break;
+                    if (data.status === "FAILED") throw new Error(`InfCam Job Failed: ${JSON.stringify(data.error)}`);
+                }
+            }
+
+            // 5. Get Result
+            // RunPod serverless usually returns { output: { video_url: "..." } } or just { video_url: "..." } depending on handler mapping
+            // The user's handler returns { "video_url": ... } from the function
+            // So data.output should contain that object.
+
+            const resultUrl = data.output?.video_url || data.video_url;
+
+            if (!resultUrl) throw new Error("No video URL in InfCam response");
+
+            // 6. Persist to DB
+            if (supabase) {
+                // [Fix] Generate ID explicitly (removed user_id as it causes schema error)
+                const newId = uuidv4();
+                // const { data: { user } } = await supabase.auth.getUser(); 
+
+                const { data: dbClip, error: dbError } = await supabase
+                    .from('clips')
+                    .insert([{
+                        id: newId,
+                        // user_id: user?.id, // Column apparently doesn't exist?
+                        name: ghostClip.name,
+                        prompt: ghostClip.prompt,
+                        video_url: resultUrl,
+                        thumbnail_url: originalClip.thumbnail_url, // Reuse thumb or capture new? Reuse for now.
+                        scene_id: originalClip.scene_id,
+                        character_id: originalClip.character_id,
+                        status: 'completed',
+                        duration: originalClip.duration,
+                        motion_type: `InfCam ${params.label || params.camType}`,
+                        // [Fix] Preserve Audio Metadata
+                        stitched_audio_url: originalClip.stitched_audio_url || originalClip.audio_url,
+                        dialogue_blocks: originalClip.dialogue_blocks, // Preserve detailed script/timing
+                        speaker_type: originalClip.speaker_type, // Preserve speaker info
+                        has_audio: !!(originalClip.stitched_audio_url || originalClip.audio_url) // Flag for UI to play separate audio
+                    }])
+                    .select()
+                    .single();
+
+                if (dbError) throw dbError;
+
+                // Replace ghost with real DB clip
+                setSavedClips(prev => prev.map(c => c.id === tempId ? dbClip : c));
+            } else {
+                // Local Fallback
+                const localSuccess = { ...ghostClip, video_url: resultUrl, status: 'completed', id: `local_infcam_${Date.now()}` };
+                setSavedClips(prev => prev.map(c => c.id === tempId ? localSuccess : c));
+            }
+
+
+        } catch (error) {
+            console.error("InfCam Error:", error);
+            // Update ghost to error state
+            setSavedClips(prev => prev.map(c => c.id === tempId ? { ...c, status: 'failed', error: error.message } : c));
+            alert(`Reshoot Failed: ${error.message}`);
+        }
+    };
+
     // EDIT LOGIC
     const handleEditClip = (clip) => {
         // Restore clip data to "workshop" (Story Studio context)
@@ -1412,20 +1556,7 @@ export default function ClipStudioDemo() {
                                                     onChange={e => updateShot(shot.tempId, { prompt: e.target.value })}
                                                 />
                                             </div>
-                                            <div>
-                                                <label className="text-xs font-bold text-slate-700 uppercase mb-2 block">📷 Camera Movement</label>
-                                                <select
-                                                    className="w-full bg-slate-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"
-                                                    value={shot.motion}
-                                                    onChange={e => updateShot(shot.tempId, { motion: e.target.value })}
-                                                >
-                                                    <option value="static">Static (No movement)</option>
-                                                    <option value="zoom_in">Zoom In</option>
-                                                    <option value="zoom_out">Zoom Out</option>
-                                                    <option value="pan_left">Pan Left</option>
-                                                    <option value="pan_right">Pan Right</option>
-                                                </select>
-                                            </div>
+
                                         </div>
 
                                         <hr className="border-gray-100" />
@@ -1742,6 +1873,7 @@ export default function ClipStudioDemo() {
                             clip={previewShot}
                             onClose={() => setPreviewShot(null)}
                             onEdit={handleEditClip}
+                            onReshoot={handleInfCamReshoot}
                             onDelete={handleDeleteClip}
                             characters={characters}
                             registryVoices={registryVoices}
