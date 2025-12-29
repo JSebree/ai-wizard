@@ -319,7 +319,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[85vh] flex overflow-hidden relative"
+                className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] lg:h-[85vh] flex flex-col lg:flex-row overflow-hidden relative"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* CLOSE BUTTON (Absolute Top Right) */}
@@ -333,7 +333,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                 </button>
 
                 {/* LEFT: MEDIA (Video/Image) */}
-                <div className="w-full lg:w-3/5 bg-black flex items-center justify-center relative group">
+                <div className="w-full lg:w-3/5 min-h-[300px] shrink-0 bg-black flex items-center justify-center relative group">
                     {/* Expand/Reset Icons could go here if needed, keeping it clean for now */}
 
                     {videoSrc ? (
@@ -427,7 +427,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                 </div>
 
                 {/* RIGHT: INFO PANEL */}
-                <div className="w-full lg:w-2/5 flex flex-col h-full bg-white relative z-10">
+                <div className="w-full lg:w-2/5 flex flex-col h-full bg-white relative z-10 overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-8">
                         {/* Header */}
                         <div className="mb-6 pr-8"> {/* Padding right for close button */}
