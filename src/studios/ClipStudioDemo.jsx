@@ -1418,7 +1418,7 @@ export default function ClipStudioDemo() {
             startDelay: clip.start_delay || 0,
         };
 
-        setShotList(prev => [restoredShot, ...prev]); // Prepend restored clip
+        setShotList([restoredShot]); // FORCE SINGLE SHOT: Replace workshop instead of prepending
         setPreviewShot(null);
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2119,7 +2119,7 @@ export default function ClipStudioDemo() {
                                                 sceneImageUrl: formattedKeyframe.image_url || formattedKeyframe.imageUrl
                                             };
                                             console.log("LOG: Created Draft Shot:", newDraftShot);
-                                            setShotList(prev => [newDraftShot, ...(prev || [])]);
+                                            setShotList([newDraftShot]); // FORCE SINGLE SHOT: Replace workshop instead of prepending
                                         } catch (err) {
                                             console.error("CRITICAL: Failed to auto-create draft shot:", err);
                                             // Do not rethrow, just let the flow continue (user just won't see the draft)
