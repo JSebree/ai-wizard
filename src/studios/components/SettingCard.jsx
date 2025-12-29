@@ -128,14 +128,14 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
             {/* Left: Preview + Gallery */}
             <div style={{
               width: "100%",
-              minHeight: 350,
-              maxHeight: 350,
+              minHeight: 300,
+              maxHeight: 300,
               flexShrink: 0,
               padding: 24,
               overflowY: "auto",
               borderBottom: "1px solid #E2E8F0"
             }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
-              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 230, position: "relative" }}>
+              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160, position: "relative" }}>
                 <a
                   href={primaryImage}
                   target="_blank"

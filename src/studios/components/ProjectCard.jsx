@@ -42,7 +42,7 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
                 </button>
 
                 {/* Left: Preview Area */}
-                <div className="w-full h-[350px] md:h-auto md:w-2/3 shrink-0 bg-black flex items-center justify-center relative group">
+                <div className="w-full h-[300px] md:h-auto md:w-2/3 shrink-0 bg-black flex items-center justify-center relative group">
                     {(video_url || videoUrl) ? (
                         <video
                             className="w-full h-full object-contain"

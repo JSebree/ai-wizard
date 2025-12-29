@@ -85,60 +85,65 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                         {/* Top/Left: Preview */}
                         <div style={{
                             width: "100%",
-                            minHeight: 350, // Fixed height on mobile
-                            maxHeight: 350,
+                            minHeight: 300, // Fixed height on mobile
+                            maxHeight: 300,
                             flexShrink: 0,
                             background: "#000",
                             borderRadius: 8,
+                            padding: 24,
                             overflow: "hidden",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             position: "relative"
                         }} className="md:w-auto md:flex-1 md:h-full md:max-h-full md:min-h-0">
-                            <a
-                                href={imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Open full resolution"
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                    position: "absolute",
-                                    top: 10,
-                                    left: 10,
-                                    textDecoration: "none",
-                                    color: "white",
-                                    fontSize: 18,
-                                    background: "rgba(0,0,0,0.5)",
-                                    width: 32,
-                                    height: 32,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    borderRadius: 4
-                                }}
-                            >
-                                ⤢
-                            </a>
-                            {imageUrl ? (
-                                <img
-                                    src={imageUrl}
-                                    alt={name}
-                                    style={{ width: "100%", height: "auto", display: "block", maxHeight: "80vh", objectFit: "contain" }}
-                                />
-                            ) : (
-                                <div style={{ color: "#fff", padding: 20 }}>No Image</div>
-                            )}
+                            <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160, position: "relative", width: "100%" }}>
+                                <a
+                                    href={imageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Open full resolution"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        position: "absolute",
+                                        top: 10,
+                                        left: 10,
+                                        textDecoration: "none",
+                                        color: "white",
+                                        fontSize: 18,
+                                        background: "rgba(0,0,0,0.5)",
+                                        width: 32,
+                                        height: 32,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: 4,
+                                        zIndex: 10
+                                    }}
+                                >
+                                    ⤢
+                                </a>
+                                {imageUrl ? (
+                                    <img
+                                        src={imageUrl}
+                                        alt={name}
+                                        style={{ width: "100%", height: "auto", display: "block", maxHeight: "40vh", objectFit: "contain" }}
+                                    />
+                                ) : (
+                                    <div style={{ color: "#fff", padding: 20 }}>No Image</div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Bottom/Right: Metadata */}
                         <div style={{
                             flex: "1 1 0%",
                             overflowY: "auto",
-                            paddingTop: 24,
+                            padding: 24,
+                            paddingTop: 0,
                             width: "100%"
                         }} className="md:w-[320px] md:flex-none md:pl-6 md:pt-0">
-                            <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 24, paddingRight: 30 }}>{name}</h3>
+                            <h3 style={{ marginTop: 24, fontSize: 20, fontWeight: 700, marginBottom: 24, paddingRight: 30 }} className="md:mt-0">{name}</h3>
 
                             <div style={{ display: "grid", gap: 20 }}>
                                 <div>
@@ -176,7 +181,7 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                                     {onDelete && (
                                         <button
                                             onClick={(e) => {
-                                                e.stopPropagation(); // Prevent closing?
+                                                e.stopPropagation();
                                                 onDelete();
                                             }}
                                             style={{
@@ -188,12 +193,6 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                                                 fontSize: 13,
                                                 fontWeight: 600,
                                                 cursor: "pointer"
-                                            }}
-                                            onMouseEnter={e => {
-                                                e.currentTarget.style.background = "#FEF2F2";
-                                            }}
-                                            onMouseLeave={e => {
-                                                e.currentTarget.style.background = "white";
                                             }}
                                         >
                                             Delete Keyframe
