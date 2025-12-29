@@ -146,14 +146,14 @@ export default function CharacterCard({ character, onClose, onModify, onDelete }
             {/* Left: Visuals */}
             <div style={{
               width: "100%",
-              minHeight: 300,
-              maxHeight: 300,
+              minHeight: 420,
+              maxHeight: 420,
               flexShrink: 0,
               padding: 24,
               overflowY: "auto",
               borderBottom: "1px solid #E2E8F0"
             }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
-              <div style={{ background: "#F8FAFC", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160, position: "relative", border: "1px solid #E2E8F0" }}>
+              <div style={{ background: "#F8FAFC", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 240, position: "relative", border: "1px solid #E2E8F0" }}>
                 <a
                   href={primaryImage}
                   target="_blank"
