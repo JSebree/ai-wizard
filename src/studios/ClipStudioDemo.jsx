@@ -85,6 +85,7 @@ const blobToBase64 = (blob) => {
 export default function ClipStudioDemo() {
     const [keyframes, setKeyframes] = useState([]);
     const [characters, setCharacters] = useState([]);
+    const [settings, setSettings] = useState([]); // [New] Settings for metadata resolution
     const [registryVoices, setRegistryVoices] = useState([]);
     const [selectedKeyframe, setSelectedKeyframe] = useState(null);
     const [shotList, setShotList] = useState(() => {
@@ -193,6 +194,12 @@ export default function ClipStudioDemo() {
                 localStorage.setItem("sceneme.characters", JSON.stringify(cleanChars));
             }
 
+            // Fetch Settings [New]
+            const { data: settingsData } = await supabase.from('settings').select('*');
+            if (settingsData) {
+                setSettings(settingsData);
+            }
+
             // Fetch saved clips from new table
             const { data: clipsData, error: clipsError } = await supabase.from('clips').select('*').order('created_at', { ascending: false });
             if (clipsError) console.error("Error loading clips:", clipsError);
@@ -290,7 +297,7 @@ export default function ClipStudioDemo() {
 
             prompt: targetScene.prompt || targetScene.description || "",
             motion: "static",
-            manualDuration: 3, // Default duration
+            manualDuration: 3.0, // [Safe Default] Under 3.4s limit
             dialogueBlocks: [{
                 id: uuidv4(),
                 characterId: targetScene.characterId || "",
@@ -786,10 +793,18 @@ export default function ClipStudioDemo() {
             // So we shouldn't add it again.
             const finalDuration = shot.isAudioLocked
                 ? (shot.totalAudioDuration || 0)
-                : shot.manualDuration;
+                : (shot.manualDuration || shot.duration); // Fallback to existing duration
 
             // Enrich dialogue blocks with names for the "Script" view
-            const enrichedBlocks = (shot.dialogueBlocks || []).map(b => {
+            // Handle both array and string (JSON) input for dialogueBlocks
+            let blocksToEnrich = shot.dialogueBlocks || shot.dialogue_blocks || [];
+            if (typeof blocksToEnrich === 'string') {
+                try {
+                    blocksToEnrich = JSON.parse(blocksToEnrich);
+                } catch (e) { blocksToEnrich = []; }
+            }
+
+            const enrichedBlocks = blocksToEnrich.map(b => {
                 const char = characters.find(c => c.id === b.characterId);
                 const regVoice = registryVoices.find(v => v.id === b.characterId);
                 return {
@@ -802,23 +817,27 @@ export default function ClipStudioDemo() {
             const payload = {
                 id: shot.id, // Prefer existing ID (for updates)
                 name: shot.name || `Clip ${new Date().toLocaleTimeString()}`,
-                scene_id: shot.sceneId || selectedKeyframe?.id,
-                scene_name: shot.sceneName || selectedKeyframe?.name || "Unknown Scene",
-                character_id: shot.dialogueBlocks?.[0]?.characterId || shot.characterId || selectedKeyframe?.characterId || null,
-                thumbnail_url: shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
+                scene_id: shot.scene_id || shot.sceneId || selectedKeyframe?.id,
+                scene_name: shot.scene_name || shot.sceneName || selectedKeyframe?.name || "Unknown Scene",
+                character_id: shot.character_id || shot.characterId || shot.dialogueBlocks?.[0]?.characterId || selectedKeyframe?.characterId || null,
+                thumbnail_url: shot.thumbnail_url || shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
                 video_url: shot.videoUrl || null, // Might be null if pending
-                last_frame_url: shot.lastFrameUrl || null, // Last frame from n8n
+                last_frame_url: shot.last_frame_url || shot.lastFrameUrl || null, // Last frame from n8n
                 raw_video_url: shot.rawVideoUrl || shot.videoUrl,
-                audio_url: shot.stitchedAudioUrl || null,
+                audio_url: shot.stitchedAudioUrl || shot.audio_url || null,
                 prompt: shot.prompt,
-                motion_type: shot.motion,
+                motion_type: shot.motion || shot.motion_type,
                 duration: parseFloat(finalDuration),
-                dialogue_blocks: shot.dialogueBlocks || [],
-                speaker_type: shot.speakerType,
+                dialogue_blocks: blocksToEnrich,
+                speaker_type: shot.speakerType || shot.speaker_type,
                 status: shot.status || "completed", // Allow passing 'rendering'
                 created_at: new Date().toISOString(),
-                start_delay: shot.startDelay || 0,
-                has_audio: !!shot.stitchedAudioUrl // Explicit flag
+                start_delay: shot.startDelay || shot.start_delay || 0,
+                has_audio: !!(shot.stitchedAudioUrl || shot.stitched_audio_url || shot.audio_url || shot.has_audio), // Explicit flag
+
+                // [v53] Ensure Metadata Persistence
+                setting_id: shot.setting_id || shot.settingId || selectedKeyframe?.setting_id || null,
+                camera_angle: shot.camera_angle || shot.cameraLabel || selectedKeyframe?.cameraLabel || null
             };
 
             let finalClip = { ...payload }; // Local state version
@@ -830,11 +849,15 @@ export default function ClipStudioDemo() {
                 delete dbPayload.raw_video_url;
                 delete dbPayload.scene_name;
 
+                // [v54 Fix] Remove UI-only props that don't exist in 'clips' table
+                delete dbPayload.setting_id;
+                delete dbPayload.camera_angle;
+
                 // Add schema-specific fields
-                dbPayload.stitched_audio_url = shot.stitchedAudioUrl;
-                dbPayload.start_delay = shot.startDelay;
+                dbPayload.stitched_audio_url = shot.stitchedAudioUrl || shot.stitched_audio_url;
+                dbPayload.start_delay = shot.startDelay || shot.start_delay;
                 dbPayload.dialogue_blocks = JSON.stringify(enrichedBlocks);
-                dbPayload.shot_type = shot.speakerType === 'on_screen' ? 'lipsync' : 'cinematic';
+                dbPayload.shot_type = (shot.speakerType === 'on_screen' || shot.speaker_type === 'on_screen') ? 'lipsync' : 'cinematic';
 
                 // CRITICAL FIX: Ensure video_url is present if available
                 if (shot.videoUrl) {
@@ -1169,27 +1192,67 @@ export default function ClipStudioDemo() {
     const handleInfCamReshoot = async (originalClip, params) => {
         console.log("Reshooting Clip:", originalClip.id, "Params:", params);
 
+        // [v51 Fix] Fetch fresh source data to ensure last_frame_url is present
+        // (Client state might be stale or partial)
+        let sourceClip = originalClip;
+        if (originalClip.id && !String(originalClip.id).startsWith('local_')) {
+            try {
+                const { data: freshData } = await supabase
+                    .from('clips')
+                    .select('*')
+                    .eq('id', originalClip.id)
+                    .single();
+
+                if (freshData) {
+                    console.log("[v51] Refreshed source clip data from DB:", freshData.id);
+                    sourceClip = freshData;
+                }
+            } catch (err) {
+                console.warn("[v51] Failed to refresh source clip:", err);
+            }
+        }
+
         // 1. Create a "Ghost" pending clip to show immediate feedback
         const tempId = `reshoot_${Date.now()}`;
         const ghostClip = {
-            ...originalClip,
+            ...sourceClip,
             id: tempId,
             status: 'rendering', // or 'generating'
-            name: `${originalClip.name} (${params.label || 'Reshoot'})`,
+            name: `${sourceClip.name} (${params.label || 'Reshoot'})`,
             created_at: new Date().toISOString(),
             video_url: "",
             // inherit other props
         };
 
-        // Add to Saved Clips immediately so user sees it
+        // Add to Saved Clips immediately (Local)
         setSavedClips(prev => [ghostClip, ...prev]);
+
+        // [Persistence] Save "Rendering" state to Supabase
+        // This ensures the job is visible even if the user refreshes/leaves
+        let dbId = null;
+        try {
+            const savedRecord = await saveToBin(ghostClip, false);
+            if (savedRecord && savedRecord.id) {
+                dbId = savedRecord.id;
+                console.log("Reshoot persisted with ID:", dbId);
+                // Update local ghost with real DB ID
+                setSavedClips(prev => prev.map(c => c.id === tempId ? { ...c, id: dbId } : c));
+            }
+        } catch (err) {
+            console.error("Failed to persist reshoot start:", err);
+            // Continue anyway, but it won't be saved until finish
+        }
 
         try {
             // 2. Prepare Payload
             // [Fix] Calculate frames based on duration (assuming 24fps)
             // Clamp to 81 to match extrinsics limit. Align to 4n+1.
-            const fps = 24;
-            let rawFrames = Math.round((originalClip.duration || 3.4) * fps);
+            // Clamp to 81 to match extrinsics limit. Align to 4n+1.
+            const fps = 24; // User updating backend to 24fps
+            const durationInput = parseFloat(sourceClip.duration || 3.4);
+            let rawFrames = Math.round(durationInput * fps);
+
+            console.log(`[Reshoot] Frames Calc (24fps): SourceDuration=${sourceClip.duration}, Parsed=${durationInput}, RawFrames=${rawFrames}`);
 
             // Limit to 81 (InfCam standard max per preset)
             if (rawFrames > 81) rawFrames = 81;
@@ -1200,33 +1263,36 @@ export default function ClipStudioDemo() {
 
             const payload = {
                 input: {
-                    video_url: originalClip.video_url || originalClip.videoUrl,
-                    prompt: originalClip.prompt || "Reshoot",
-                    cam_type: params.camType,
+                    video_url: sourceClip.videoUrl || sourceClip.video_url,
+                    audio_url: null,
+                    prompt: sourceClip.prompt || "Reshoot",
+                    cam_type: params.camType, // '10Type' preset name
                     reverse_camera: params.reverseCamera || false,
                     zoom_factor: params.zoom || 1.0,
-                    num_frames: targetFrames, // Pass clamped & aligned frames
-
-                    // [Spec Match] Parameters from handler.py / README
-                    height: 480, // Default model resolution
-                    width: 832,  // Default model resolution
-                    num_inference_steps: params.steps || 30, // Good balance
-                    tea_cache_l1_thresh: params.teaCache || 0.1, // Optimized speed
-                    cfg_scale: 5.0, // Handler default
-                    seed: params.seed || Math.floor(Math.random() * 1000000)
+                    num_frames: targetFrames,
+                    // Explicit Params to match Handler
+                    height: 480,
+                    width: 832,
+                    cfg_scale: 5.0,
+                    num_inference_steps: 30, // Default
+                    tea_cache_l1_thresh: 0.1, // Default
+                    seed: Math.floor(Math.random() * 2147483647) // Random Int (Backend crashes on null)
                 }
             };
 
-            // 3. Call Proxy
-            const response = await fetch(API_CONFIG.INFCAM_ENDPOINT, {
+            // 3. Send Request
+            let response = await fetch(`${API_CONFIG.INFCAM_ENDPOINT}/run`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json"
+                    // Auth is handled by proxy
+                },
                 body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 const errText = await response.text();
-                throw new Error(`InfCam Start Failed: ${response.status} ${errText}`);
+                throw new Error(`InfCam API Error: ${errText}`);
             }
 
             let data = await response.json();
@@ -1239,7 +1305,7 @@ export default function ClipStudioDemo() {
                 // Poll loop
                 while (true) {
                     await new Promise(r => setTimeout(r, 5000)); // 5s poll
-                    const statusRes = await fetch(`${API_CONFIG.INFCAM_ENDPOINT.replace('/run', '')}/status/${jobId}`, {
+                    const statusRes = await fetch(`${API_CONFIG.INFCAM_ENDPOINT}/status/${jobId}`, {
                         headers: { "Content-Type": "application/json" }
                     });
 
@@ -1264,47 +1330,55 @@ export default function ClipStudioDemo() {
             if (supabase) {
                 // [Fix] Generate ID explicitly (removed user_id as it causes schema error)
                 const newId = uuidv4();
-                // const { data: { user } } = await supabase.auth.getUser(); 
+                if (!resultUrl) {
+                    // Fallback handled by outer catch
+                    throw new Error("No result URL");
+                }
 
-                const { data: dbClip, error: dbError } = await supabase
-                    .from('clips')
-                    .insert([{
-                        id: newId,
-                        // user_id: user?.id, // Column apparently doesn't exist?
-                        name: ghostClip.name,
-                        prompt: ghostClip.prompt,
+                // [Simplified] Reuse Last Frame from Original Clip (User Request)
+                // Since this is a re-shoot of the same scene, the last frame is semantically similar enough for now.
+                // This avoids complex client-side capture or backend FFmpeg dependencies.
+                const lastFrameUrl = sourceClip.last_frame_url || sourceClip.lastFrameUrl || "";
+
+                if (dbId) {
+                    const { error: updateError } = await supabase
+                        .from('clips')
+                        .update({
+                            status: 'completed',
+                            video_url: resultUrl,
+                            last_frame_url: lastFrameUrl || null
+                        })
+                        .eq('id', dbId);
+                    if (updateError) console.error("Failed to update final reshoot (sync):", updateError);
+                } else {
+                    const finalClip = {
+                        ...sourceClip,
+                        id: undefined,
                         video_url: resultUrl,
-                        thumbnail_url: originalClip.thumbnail_url, // Reuse thumb or capture new? Reuse for now.
-                        scene_id: originalClip.scene_id,
-                        character_id: originalClip.character_id,
+                        last_frame_url: lastFrameUrl,
                         status: 'completed',
-                        duration: originalClip.duration,
-                        motion_type: `InfCam ${params.label || params.camType}`,
-                        // [Fix] Preserve Audio Metadata
-                        stitched_audio_url: originalClip.stitched_audio_url || originalClip.audio_url,
-                        dialogue_blocks: originalClip.dialogue_blocks, // Preserve detailed script/timing
-                        speaker_type: originalClip.speaker_type, // Preserve speaker info
-                        has_audio: !!(originalClip.stitched_audio_url || originalClip.audio_url) // Flag for UI to play separate audio
-                    }])
-                    .select()
-                    .single();
+                        created_at: new Date().toISOString()
+                    };
+                    await saveToBin(finalClip, false);
+                }
 
-                if (dbError) throw dbError;
+                setSavedClips(prev => prev.map(c =>
+                    (c.id === tempId || c.id === dbId) ? {
+                        ...c,
+                        id: dbId || c.id,
+                        status: 'completed',
+                        video_url: resultUrl,
+                        last_frame_url: lastFrameUrl
+                    } : c
+                ));
 
-                // Replace ghost with real DB clip
-                setSavedClips(prev => prev.map(c => c.id === tempId ? dbClip : c));
-            } else {
-                // Local Fallback
-                const localSuccess = { ...ghostClip, video_url: resultUrl, status: 'completed', id: `local_infcam_${Date.now()}` };
-                setSavedClips(prev => prev.map(c => c.id === tempId ? localSuccess : c));
             }
-
-
-        } catch (error) {
-            console.error("InfCam Error:", error);
-            // Update ghost to error state
-            setSavedClips(prev => prev.map(c => c.id === tempId ? { ...c, status: 'failed', error: error.message } : c));
-            alert(`Reshoot Failed: ${error.message}`);
+        } catch (err) {
+            console.error("InfCam Error:", err);
+            setSavedClips(prev => prev.map(c =>
+                (c.id === tempId || c.id === dbId) ? { ...c, status: 'failed', error: err.message } : c
+            ));
+            alert(`Reshoot Failed: ${err.message}`);
         }
     };
 
@@ -1506,13 +1580,43 @@ export default function ClipStudioDemo() {
                                                     : Number(finalDuration).toFixed(1)
                                                 }s
                                             </div>
-                                            {shot.isAudioLocked ? (
-                                                <div className="text-[10px] text-gray-800 font-medium flex items-center justify-center gap-1">
-                                                    <span>🔒 Locked to Audio</span>
+                                            {(shot.isAudioLocked || (shot.dialogueBlocks.length > 0 && shot.dialogueBlocks.some(b => b.audioUrl || b.text))) ? (
+                                                <div className="flex flex-col gap-2">
+                                                    {shot.isAudioLocked && (
+                                                        <div className="text-[10px] text-gray-800 font-medium flex items-center justify-center gap-1">
+                                                            <span>🔒 Locked to Audio</span>
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        onClick={() => {
+                                                            // Revert to non-speaking state (Clear ALL audio/text)
+                                                            updateShot(shot.tempId, {
+                                                                isAudioLocked: false,
+                                                                stitchedAudioUrl: "",
+                                                                manualDuration: 3.0, // Reset to safe default
+                                                                // Reset to single empty block
+                                                                dialogueBlocks: [{
+                                                                    id: uuidv4(),
+                                                                    characterId: shot.characterId || "",
+                                                                    text: "",
+                                                                    audioUrl: "",
+                                                                    duration: 0,
+                                                                    pauseDuration: 0.5,
+                                                                    isGenerating: false,
+                                                                    status: "draft",
+                                                                    inputMode: "text",
+                                                                    error: ""
+                                                                }]
+                                                            });
+                                                        }}
+                                                        className="text-[10px] text-red-500 hover:text-red-700 font-bold underline decoration-dotted"
+                                                    >
+                                                        Remove Audio
+                                                    </button>
                                                 </div>
                                             ) : (
                                                 <input
-                                                    type="range" min="1" max="10" step="0.5"
+                                                    type="range" min="1" max="3.4" step="0.1"
                                                     value={shot.manualDuration}
                                                     onChange={e => updateShot(shot.tempId, { manualDuration: parseFloat(e.target.value) })}
                                                     className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2"
@@ -1876,54 +1980,59 @@ export default function ClipStudioDemo() {
                             onReshoot={handleInfCamReshoot}
                             onDelete={handleDeleteClip}
                             characters={characters}
+                            settings={settings} // [New]
                             registryVoices={registryVoices}
-                            onGenerateKeyframe={async (clip, blob) => {
+                            onGenerateKeyframe={async (clip, source) => {
                                 // Removed confirm dialog
-                                console.log("PARENT: onGenerateKeyframe called with blob size:", blob?.size);
-
-                                if (!blob) {
-                                    alert("Error: No image captured from video.");
-                                    return;
-                                }
+                                let publicUrl = null;
 
                                 try {
+                                    if (typeof source === 'string') {
+                                        console.log("PARENT: onGenerateKeyframe called with URL:", source);
+                                        publicUrl = source;
+                                    } else if (source && (source instanceof Blob || source.size)) {
+                                        console.log("PARENT: onGenerateKeyframe called with blob size:", source.size);
 
-                                    // SUSPICIOUS BLOB CHECK [v12]
-                                    if (blob.size < 1000) {
-                                        const text = await blob.text();
-                                        console.error("Small Blob Detected:", text);
-                                        alert(`[v12 Diagnostic] Capture Failed.\n\nThe server returned an error instead of an image.\n\nContent: ${text.substring(0, 500)}`);
+                                        // SUSPICIOUS BLOB CHECK [v12]
+                                        if (source.size < 1000) {
+                                            const text = await source.text();
+                                            console.error("Small Blob Detected:", text);
+                                            alert(`[v12 Diagnostic] Capture Failed.\n\nThe server returned an error instead of an image.\n\nContent: ${text.substring(0, 500)}`);
+                                            return;
+                                        }
+
+                                        // Sanitize ID to prevent URL errors (remove spaces)
+                                        const safeId = String(clip.id).replace(/\s+/g, '_');
+                                        const filename = `${Date.now()}_${safeId}_end.png`;
+                                        console.log("Uploading via Webhook (kind='scene'):", filename);
+
+                                        const formData = new FormData();
+                                        formData.append("file", source, filename);
+                                        formData.append("name", "Frame Capture: " + clip.name);
+                                        formData.append("kind", "scene");
+
+                                        const uploadRes = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
+                                            method: "POST",
+                                            body: formData
+                                        });
+
+                                        if (!uploadRes.ok) {
+                                            throw new Error(`Upload Webhook Failed: ${uploadRes.status}`);
+                                        }
+
+                                        const uploadData = await uploadRes.json();
+                                        console.log("Upload Webhook Response:", uploadData);
+
+                                        publicUrl = uploadData.publicUrl || uploadData.url || uploadData.image_url || (Array.isArray(uploadData) && uploadData[0]?.url);
+                                    } else {
+                                        alert("Error: No valid image source captured.");
                                         return;
                                     }
 
-                                    // Sanitize ID to prevent URL errors (remove spaces)
-                                    const safeId = String(clip.id).replace(/\s+/g, '_');
-                                    const filename = `${Date.now()}_${safeId}_end.png`;
-                                    console.log("Uploading via Webhook (kind='scene'):", filename);
-
-                                    const formData = new FormData();
-                                    formData.append("file", blob, filename);
-                                    formData.append("name", "Frame Capture: " + clip.name);
-                                    formData.append("kind", "scene");
-
-                                    const uploadRes = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
-                                        method: "POST",
-                                        body: formData
-                                    });
-
-                                    if (!uploadRes.ok) {
-                                        throw new Error(`Upload Webhook Failed: ${uploadRes.status}`);
-                                    }
-
-                                    const uploadData = await uploadRes.json();
-                                    console.log("Upload Webhook Response:", uploadData);
-
-                                    const publicUrl = uploadData.publicUrl || uploadData.url || uploadData.image_url || (Array.isArray(uploadData) && uploadData[0]?.url);
-
                                     if (!publicUrl) {
-                                        throw new Error("No URL returned from upload webhook");
+                                        throw new Error("No URL returned or provided");
                                     }
-                                    console.log("Public URL generated:", publicUrl);
+                                    console.log("Public URL generated/used:", publicUrl);
 
                                     // Lookup original scene to inherit metadata
                                     // Lookup original scene to inherit metadata
@@ -2021,7 +2130,7 @@ export default function ClipStudioDemo() {
                                         setSelectedKeyframe(formattedKeyframe);
                                         window.scrollTo({ top: 0, behavior: 'smooth' });
 
-                                        const debugMsg = `[v12 Success]\n\nBlob Size: ${blob.size} bytes\nInherited From: ${sourceScene.name ? "Yes" : "No"}\nSetting ID: ${newKeyframePayload.setting_id}`;
+                                        const debugMsg = `[v12 Success]\n\nSource: ${typeof source === 'string' ? "Using Existing URL" : "New Link Generated"}\nInherited From: ${sourceScene.name ? "Yes" : "No"}\nSetting ID: ${newKeyframePayload.setting_id}`;
                                         // alert(debugMsg); // Silence success if valid
                                     }
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 
-export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, onGenerateKeyframe, characters, registryVoices }) {
+export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, onGenerateKeyframe, characters, settings, registryVoices }) {
     if (!clip) return null;
 
     const {
@@ -145,16 +145,12 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
         if (lastFrameUrl) {
             console.log("LOG: [v40] Using pre-generated last frame URL:", lastFrameUrl);
             try {
-                // [v46] Proxy the URL to ensure we get CORS headers from Cloudflare Function
-                const proxiedLastFrame = getProxiedUrl(lastFrameUrl);
-                console.log("LOG: [v46] Proxied Last Frame:", proxiedLastFrame);
-
-                const blob = await captureFromImage(proxiedLastFrame);
-                if (blob) {
-                    onGenerateKeyframe?.(clip, blob);
-                    setIsCapturing(false);
-                    return;
-                }
+                // [v50] Optimization: If we have a URL, pass it directly to skip re-upload
+                // The parent component (ClipStudioDemo) will handle the string vs blob check.
+                console.log("LOG: [v50] Passing existing last_frame_url directly:", lastFrameUrl);
+                onGenerateKeyframe?.(clip, lastFrameUrl);
+                setIsCapturing(false);
+                return;
             } catch (err) {
                 console.warn("Pre-generated last frame failed, falling back to extraction:", err);
             }
@@ -310,228 +306,232 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
     // Actually, improved logic: If video has NO audio track, we rely on audioRef.
     // videoRef controls are sufficient for timeline.
 
+    // --- Metadata Resolution ---
+    const characterName = characters?.find(c => c.id === clip.character_id || c.id === clip.characterId)?.name || "Unknown";
+    const settingName = settings?.find(s => s.id === clip.setting_id || s.id === clip.settingId)?.name || "Unknown";
+    const cameraLabel = clip.camera_angle || clip.cameraLabel || "Standard";
+    const visualStyle = "Photorealistic"; // Default for now
+
+
     return (
         <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in p-4 md:p-8"
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-xl shadow-xl p-6 w-full max-w-6xl relative flex flex-col max-h-[90vh]"
+                className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[85vh] flex overflow-hidden relative"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* ... (render button) ... */}
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8 h-full overflow-hidden">
-                    {/* LEFT: PREVIEW AREA */}
-                    <div className="flex flex-col gap-4 overflow-y-auto">
-                        <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[400px] relative group bg-clip-border">
-                            {videoSrc ? (
-                                <>
-                                    <video
-                                        ref={videoRef}
-                                        controls
-                                        autoPlay
-                                        loop
-                                        src={videoSrc}
-                                        className="w-full h-auto max-h-[60vh] z-10 relative" // Ensure z-index
-                                        onPlay={handleVideoPlay}
-                                        onPause={handleVideoPause}
-                                        onSeeking={handleVideoSeek}
-                                        onSeeked={handleVideoSeek}
-                                        onWaiting={() => audioRef.current?.pause()}
-                                        onPlaying={handleVideoPlay}
-                                    />
-                                    {/* Separate Audio Track for Reshot Clips */}
-                                    {audioSrc && (
-                                        <audio
-                                            ref={audioRef}
-                                            src={audioSrc}
-                                            preload="auto"
-                                            className="hidden"
+                {/* CLOSE BUTTON (Absolute Top Right) */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-black/10 rounded-full transition-colors text-gray-500 hover:text-black"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                {/* LEFT: MEDIA (Video/Image) */}
+                <div className="w-full lg:w-3/5 bg-black flex items-center justify-center relative group">
+                    {/* Expand/Reset Icons could go here if needed, keeping it clean for now */}
+
+                    {videoSrc ? (
+                        <>
+                            <video
+                                ref={videoRef}
+                                controls
+                                loop
+                                src={videoSrc}
+                                className="w-full h-full object-contain"
+                                onPlay={handleVideoPlay}
+                                onPause={handleVideoPause}
+                                onSeeking={handleVideoSeek}
+                                onSeeked={handleVideoSeek}
+                                onWaiting={() => audioRef.current?.pause()}
+                                onPlaying={handleVideoPlay}
+                            />
+                            {audioSrc && <audio ref={audioRef} src={audioSrc} preload="auto" className="hidden" />}
+                        </>
+                    ) : thumbSrc ? (
+                        <img src={thumbSrc} alt="Thumbnail" className="w-full h-full object-contain" />
+                    ) : (
+                        <div className="text-white text-sm">No Media Available</div>
+                    )}
+
+                    {/* Reshoot Overlay (Over Video) */}
+                    {isReshooting && (
+                        <div className="absolute inset-0 bg-black/90 z-20 flex items-center justify-center p-8 animate-fade-in">
+                            <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+                                <div className="text-center mb-4">
+                                    <h3 className="text-lg font-bold text-gray-900">🎥 Reshoot Scene</h3>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Camera Movement</label>
+                                        <select
+                                            value={reshootParams.camType}
+                                            onChange={(e) => {
+                                                const id = parseInt(e.target.value);
+                                                const group = CAMERA_GROUPS.find(g => g.options.find(o => o.id === id));
+                                                const opt = group?.options.find(o => o.id === id);
+                                                if (opt) setReshootParams(p => ({ ...p, camType: id, label: opt.label.replace(/ .*/, '') }));
+                                            }}
+                                            className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg p-2.5"
+                                        >
+                                            {CAMERA_GROUPS.map((group, gIdx) => (
+                                                <optgroup key={gIdx} label={group.label}>
+                                                    {group.options.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                                                </optgroup>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-xs font-bold text-gray-500 uppercase">Movement Strength</label>
+                                            <span className="text-xs font-bold text-blue-600">{reshootParams.zoom}x</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0.1" max="2.0" step="0.1"
+                                            value={reshootParams.zoom}
+                                            onChange={e => setReshootParams(p => ({ ...p, zoom: parseFloat(e.target.value) }))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                                         />
-                                    )}
-                                </>
-                            ) : thumbSrc ? (
-                                <img
-                                    src={thumbSrc}
-                                    alt="Thumbnail"
-                                    className="w-full h-auto max-h-[60vh] object-contain"
-                                />
-                            ) : (
-                                <div className="text-white">No Media</div>
-                            )}
+                                        <p className="text-[10px] text-gray-400 mt-1">
+                                            Controls the speed and intensity of the camera movement. Higher values create faster, more dramatic moves.
+                                        </p>
+                                    </div>
 
-                            {/* Reshoot Overlay */}
-                            {isReshooting && (
-                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-20 flex items-center justify-center p-8 transition-all animate-fade-in">
-                                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
-                                        <div className="text-center">
-                                            <h3 className="text-lg font-bold text-gray-900">🎥 Reshoot Scene</h3>
-                                            <p className="text-xs text-gray-500">Apply a new camera movement to this clip.</p>
+                                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-100">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-gray-700">Invert Cam Direction</span>
+                                            <span className="text-[10px] text-gray-400">Play the movement path backwards</span>
                                         </div>
-
-                                        <div className="space-y-3">
-                                            <div>
-                                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Camera Movement</label>
-                                                <div className="relative">
-                                                    <select
-                                                        value={reshootParams.camType}
-                                                        onChange={(e) => {
-                                                            const id = parseInt(e.target.value);
-                                                            const group = CAMERA_GROUPS.find(g => g.options.find(o => o.id === id));
-                                                            const opt = group?.options.find(o => o.id === id);
-                                                            if (opt) {
-                                                                setReshootParams(p => ({ ...p, camType: id, label: opt.label.replace(/ .*/, '') }));
-                                                            }
-                                                        }}
-                                                        className="w-full text-sm bg-gray-50 border border-gray-200 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 appearance-none"
-                                                    >
-                                                        {CAMERA_GROUPS.map((group, gIdx) => (
-                                                            <optgroup key={gIdx} label={group.label}>
-                                                                {group.options.map(opt => (
-                                                                    <option key={opt.id} value={opt.id}>
-                                                                        {opt.label}
-                                                                    </option>
-                                                                ))}
-                                                            </optgroup>
-                                                        ))}
-                                                    </select>
-                                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Zoom Strength */}
-                                            <div>
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <label className="text-xs font-bold text-gray-500 uppercase">Zoom Strength</label>
-                                                    <span className="text-xs font-bold text-blue-600">{reshootParams.zoom}x</span>
-                                                </div>
-                                                <input
-                                                    type="range"
-                                                    min="0.1"
-                                                    max="2.0"
-                                                    step="0.1"
-                                                    value={reshootParams.zoom}
-                                                    onChange={e => setReshootParams(p => ({ ...p, zoom: parseFloat(e.target.value) }))}
-                                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                                />
-                                                <p className="text-[10px] text-gray-400 mt-1">
-                                                    Controls the speed and intensity of the camera movement. Higher values create faster, more dramatic moves.
-                                                </p>
-                                            </div>
-
-                                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-gray-700">Invert Cam Direction</span>
-                                                    <span className="text-[10px] text-gray-400">Play the movement path backwards</span>
-                                                </div>
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={reshootParams.reverseCamera}
-                                                        onChange={e => setReshootParams(p => ({ ...p, reverseCamera: e.target.checked }))}
-                                                    />
-                                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                                </label>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex gap-2 pt-2">
-                                            <button
-                                                onClick={() => setIsReshooting(false)}
-                                                className="flex-1 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                onClick={handleConfirmReshoot}
-                                                className="flex-1 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
-                                            >
-                                                Start Reshoot
-                                            </button>
-                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" className="sr-only peer" checked={reshootParams.reverseCamera} onChange={e => setReshootParams(p => ({ ...p, reverseCamera: e.target.checked }))} />
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
                                     </div>
                                 </div>
-                            )}
+
+                                <div className="flex gap-2 pt-2">
+                                    <button onClick={() => setIsReshooting(false)} className="flex-1 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                                    <button onClick={handleConfirmReshoot} className="flex-1 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700">Start Reshoot</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* RIGHT: INFO PANEL */}
+                <div className="w-full lg:w-2/5 flex flex-col h-full bg-white relative z-10">
+                    <div className="flex-1 overflow-y-auto p-8">
+                        {/* Header */}
+                        <div className="mb-6 pr-8"> {/* Padding right for close button */}
+                            <h2 className="text-2xl font-bold text-gray-900 leading-tight mb-1">{name || "Untitled Clip"}</h2>
+                            {dateStr && <p className="text-xs text-gray-400 uppercase tracking-wide">{dateStr}</p>}
+                        </div>
+
+                        {/* Description */}
+                        <div className="mb-8">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
+                            <p className="text-gray-700 leading-relaxed text-sm">
+                                {prompt || "No description provided."}
+                            </p>
+                        </div>
+
+                        <hr className="border-gray-100 mb-8" />
+
+                        {/* Metadata Grid */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-500 font-medium">Setting</span>
+                                <span className="text-gray-900 font-bold">{settingName}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-500 font-medium">Character</span>
+                                <span className="text-gray-900 font-bold">{characterName}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-500 font-medium">Prop</span>
+                                <span className="text-gray-900 font-bold">None</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-500 font-medium">Color Grade</span>
+                                <span className="text-gray-900 font-bold">None</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-500 font-medium">Camera</span>
+                                <span className="text-gray-900 font-bold">{cameraLabel}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                <span className="text-gray-500 font-medium">Visual Style</span>
+                                <span className="text-gray-900 font-bold">{visualStyle}</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* RIGHT: DETAILS */}
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 leading-tight">{name || "Untitled Clip"}</h2>
-                                <p className="text-sm text-gray-500 mt-1">{dateStr}</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2 block">Prompt</label>
-                                    <p className="text-sm text-gray-700 bg-blue-50/50 p-3 rounded-lg border border-blue-100 leading-relaxed">
-                                        {prompt}
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Script</label>
-                                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 whitespace-pre-wrap font-mono leading-relaxed max-h-[150px] overflow-y-auto">
-                                        {scriptText}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* FOOTER ACTIONS */}
-                        <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col gap-3 shrink-0">
-                            {/* Stats */}
-                            <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
-                                <span className="flex items-center gap-1">
-                                    ⏱ <b>{Number(duration).toFixed(1)}s</b>
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    🎥 <b>{motionVal || "Static"}</b>
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
+                    {/* Footer Actions */}
+                    <div className="p-8 pt-4 bg-white border-t border-gray-100 shrink-0">
+                        {/* Button Grid */}
+                        <div className="flex flex-col gap-3">
+                            <div className="flex gap-3">
+                                {/* Reshoot */}
                                 {onReshoot && (
                                     <button
                                         onClick={() => setIsReshooting(true)}
-                                        className="col-span-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-lg shadow hover:shadow-lg hover:translate-y-[-1px] transition-all flex items-center justify-center gap-2"
+                                        disabled={parseFloat(duration) > 3.4}
+                                        className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2
+                                            ${parseFloat(duration) > 3.4
+                                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                                : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300"}`}
+                                        title={parseFloat(duration) > 3.4 ? "Reshoot limited to clips under 3.4s" : "Reshoot with Camera"}
                                     >
-                                        <span>🎥 Reshoot with Camera</span>
+                                        <span>🎥 Reshoot</span>
                                     </button>
                                 )}
 
-                                <button
-                                    onClick={() => onEdit?.(clip)}
-                                    className="py-2.5 bg-gray-900 text-white font-bold rounded-lg hover:bg-black transition-colors"
-                                >
-                                    Modify
-                                </button>
-
-                                <button
-                                    onClick={() => onClose()} // Just close
-                                    className="py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition-colors"
-                                >
-                                    Close
-                                </button>
+                                {/* Extend */}
+                                {onGenerateKeyframe && (
+                                    <button
+                                        onClick={handleCaptureFrame}
+                                        disabled={isCapturing}
+                                        className="flex-1 py-3 px-4 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {isCapturing ? "Capturing..." : "➕ Extend"}
+                                    </button>
+                                )}
                             </div>
 
-                            {onDelete && (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); onDelete(clip); }}
-                                    className="text-xs font-bold text-red-500 hover:text-red-700 self-center"
-                                >
-                                    Delete Clip
-                                </button>
-                            )}
+                            <div className="flex gap-3">
+                                {/* Delete */}
+                                {onDelete && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onDelete(clip); }}
+                                        className="flex-1 py-3 px-4 bg-white border border-red-200 text-red-600 font-bold text-sm rounded-lg hover:bg-red-50 hover:border-red-300 transition-all"
+                                    >
+                                        Delete Clip
+                                    </button>
+                                )}
+
+                                {/* Modify */}
+                                {onEdit && (
+                                    <button
+                                        onClick={() => onEdit(clip)}
+                                        className="flex-1 py-3 px-4 bg-black text-white font-bold text-sm rounded-lg hover:bg-gray-900 shadow-lg hover:shadow-xl transition-all"
+                                    >
+                                        Modify Clip
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            {/* Keeping ClipToDelete logic if it was rendered outside this block in parent, but here the modal is the preview, deletion confirm is separate */}
         </div>
     );
 }
