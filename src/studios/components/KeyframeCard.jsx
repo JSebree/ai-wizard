@@ -54,7 +54,9 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                         maxWidth: "56rem",
                         position: "relative",
                         maxHeight: "90vh",
-                        overflowY: "auto"
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden"
                     }}
                 >
                     <button

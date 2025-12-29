@@ -68,7 +68,7 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
                 </div>
 
                 {/* Right: Metadata Panel */}
-                <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-gray-100">
+                <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-gray-100 flex-1 min-h-0 overflow-hidden">
                     {/* Header */}
                     <div className="p-6 border-b border-gray-100 flex justify-between items-start">
                         <div>
