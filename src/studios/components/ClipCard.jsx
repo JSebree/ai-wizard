@@ -359,9 +359,9 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                         <div className="text-white text-sm">No Media Available</div>
                     )}
 
-                    {/* Reshoot Overlay (Over Video) */}
+                    {/* Reshoot Overlay (Over Video) -> Now Fixed Fullscreen for Mobile */}
                     {isReshooting && (
-                        <div className="absolute inset-0 bg-black/90 z-20 flex items-center justify-center p-8 animate-fade-in">
+                        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-8 animate-fade-in">
                             <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
                                 <div className="text-center mb-4">
                                     <h3 className="text-lg font-bold text-gray-900">🎥 Reshoot Scene</h3>

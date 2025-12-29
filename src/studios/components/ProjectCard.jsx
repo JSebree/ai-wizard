@@ -30,7 +30,7 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-xl shadow-xl w-full max-w-5xl h-[85vh] flex flex-col md:flex-row overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                className="bg-white rounded-xl shadow-xl w-full max-w-5xl h-[90vh] md:h-[85vh] flex flex-col md:flex-row overflow-y-auto md:overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Close Button Mobile */}
@@ -42,7 +42,7 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
                 </button>
 
                 {/* Left: Preview Area */}
-                <div className="w-full md:w-2/3 bg-black flex items-center justify-center relative group">
+                <div className="w-full md:w-2/3 min-h-[300px] md:min-h-0 shrink-0 bg-black flex items-center justify-center relative group">
                     {(video_url || videoUrl) ? (
                         <video
                             className="w-full h-full object-contain"
@@ -90,7 +90,7 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div className="flex-1 overflow-y-visible md:overflow-y-auto p-6 space-y-6">
                         {/* Stats Grid */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-slate-50 p-3 rounded-lg">

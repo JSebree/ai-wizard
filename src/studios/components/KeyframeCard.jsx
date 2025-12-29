@@ -80,7 +80,7 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
 
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
                         {/* Left: Huge Preview */}
-                        <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400, position: "relative" }}>
+                        <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, position: "relative" }}>
                             <a
                                 href={imageUrl}
                                 target="_blank"
