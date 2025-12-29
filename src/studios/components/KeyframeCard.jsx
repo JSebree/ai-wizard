@@ -78,9 +78,22 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                     {/* Delete Button (Trash Icon) */}
 
 
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6">
-                        {/* Left: Huge Preview */}
-                        <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, position: "relative" }}>
+                    {/* Use flex column for mobile, flex row for desktop */}
+                    <div style={{ height: "100%", overflow: "hidden" }} className="flex flex-col md:flex-row">
+                        {/* Top/Left: Preview */}
+                        <div style={{
+                            width: "100%",
+                            minHeight: 350, // Fixed height on mobile
+                            maxHeight: 350,
+                            flexShrink: 0,
+                            background: "#000",
+                            borderRadius: 8,
+                            overflow: "hidden",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            position: "relative"
+                        }} className="md:w-auto md:flex-1 md:h-full md:max-h-full md:min-h-0">
                             <a
                                 href={imageUrl}
                                 target="_blank"
@@ -116,8 +129,13 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                             )}
                         </div>
 
-                        {/* Right: Metadata */}
-                        <div style={{ position: "relative" }}>
+                        {/* Bottom/Right: Metadata */}
+                        <div style={{
+                            flex: "1 1 0%",
+                            overflowY: "auto",
+                            paddingTop: 24,
+                            width: "100%"
+                        }} className="md:w-[320px] md:flex-none md:pl-6 md:pt-0">
                             <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 24, paddingRight: 30 }}>{name}</h3>
 
                             <div style={{ display: "grid", gap: 20 }}>

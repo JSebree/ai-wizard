@@ -121,12 +121,20 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
           </button>
         </div>
 
-        <div style={{ padding: "24px", overflowY: "auto" }}>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-6">
+        <div style={{ height: "100%", overflow: "hidden" }} className="flex flex-col md:flex-row">
+          <div className="flex flex-col md:flex-row h-full w-full">
             {/* Left: Preview + Gallery */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{
+              width: "100%",
+              minHeight: 350,
+              maxHeight: 350,
+              flexShrink: 0,
+              padding: 24,
+              overflowY: "auto",
+              borderBottom: "1px solid #E2E8F0"
+            }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
               {/* Reduced minHeight and maxHeight to help content fit vertically */}
-              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 250, position: "relative" }}>
+              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 250, position: "relative" }}>
                 <a
                   href={primaryImage}
                   target="_blank"
@@ -188,64 +196,70 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
               )}
             </div>
 
-            {/* Right: Metadata */}
-            <div style={{ position: "relative" }}>
-              <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 20, paddingRight: 30 }}>{name}</h3>
+          </div>
 
-              <div style={{ display: "grid", gap: 16 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Prompt</label>
-                  <p style={{ fontSize: 13, color: "#334155", lineHeight: 1.5, margin: 0, background: "#F8FAFC", padding: 12, borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                    {displayPrompt || "No prompt"}
-                  </p>
-                </div>
+          {/* Right: Metadata */}
+          <div style={{
+            flex: "1 1 0%",
+            overflowY: "auto",
+            padding: 24,
+            width: "100%"
+          }} className="md:w-[280px] md:flex-none">
+            <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 20, paddingRight: 30 }}>{name}</h3>
 
-                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, color: "#64748B" }}>Mood</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{mood || "None"}</span>
-                  </div>
+            <div style={{ display: "grid", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#94A3B8", marginBottom: 6 }}>Prompt</label>
+                <p style={{ fontSize: 13, color: "#334155", lineHeight: 1.5, margin: 0, background: "#F8FAFC", padding: 12, borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                  {displayPrompt || "No prompt"}
+                </p>
+              </div>
+
+              <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, color: "#64748B" }}>Mood</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{mood || "None"}</span>
                 </div>
-                <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 12 }}>
-                  {onDelete && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete();
-                      }}
-                      style={{
-                        padding: "8px 20px",
-                        borderRadius: 999,
-                        background: "white",
-                        color: "#EF4444",
-                        border: "1px solid #EF4444",
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete Setting
-                    </button>
-                  )}
+              </div>
+              <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, textAlign: "right", display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                {onDelete && (
                   <button
-                    onClick={() => {
-                      onModify?.();
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
                     }}
                     style={{
                       padding: "8px 20px",
                       borderRadius: 999,
-                      background: "#000",
-                      color: "white",
-                      border: "none",
+                      background: "white",
+                      color: "#EF4444",
+                      border: "1px solid #EF4444",
                       fontSize: 13,
                       fontWeight: 600,
                       cursor: "pointer",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
                     }}
                   >
-                    Modify Setting
+                    Delete Setting
                   </button>
-                </div>
+                )}
+                <button
+                  onClick={() => {
+                    onModify?.();
+                  }}
+                  style={{
+                    padding: "8px 20px",
+                    borderRadius: 999,
+                    background: "#000",
+                    color: "white",
+                    border: "none",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                  }}
+                >
+                  Modify Setting
+                </button>
               </div>
             </div>
           </div>
