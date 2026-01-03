@@ -111,6 +111,17 @@ export default defineConfig(({ mode }) => {
             });
           }
         },
+        '/last-frames-proxy': {
+          target: 'https://a-roll-output.nyc3.digitaloceanspaces.com',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/last-frames-proxy/, ''),
+          configure: (proxy, options) => {
+            proxy.on('proxyRes', (proxyRes, req, res) => {
+              proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+            });
+          }
+        },
         '/seed-vc-proxy': {
           target: 'https://api.runpod.ai/v2/f9kykzikds5kc0',
           changeOrigin: true,
@@ -128,6 +139,18 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/infcam-proxy/, ''),
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req, res) => {
+              // Inject the key locally for dev using loaded env
+              proxyReq.setHeader('Authorization', `Bearer ${env.VITE_RUNPOD_API_KEY || env.RUNPOD_API_KEY}`);
+            });
+          }
+        },
+        '/foley-proxy': {
+          target: 'https://api.runpod.ai/v2/hpwhz8gov7ko7m',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/foley-proxy/, ''),
           configure: (proxy, options) => {
             proxy.on('proxyReq', (proxyReq, req, res) => {
               // Inject the key locally for dev using loaded env

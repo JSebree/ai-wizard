@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { API_CONFIG } from "../config/api";
+import { API_CONFIG, getProxiedUrl } from "../config/api";
 import ProjectCard from "./components/ProjectCard";
 import ProjectThumbnail from "./components/ProjectThumbnail"; // New Thumb
 
@@ -42,6 +42,7 @@ export default function ProductionStudioDemo() {
     const [isDeleting, setIsDeleting] = useState(false);
 
     const videoRef = useRef(null);
+    const clipAudioRef = useRef(null); // Sync audio for clips with separate voice track
 
 
 
@@ -61,13 +62,16 @@ export default function ProductionStudioDemo() {
                 setBin(clipData.map(s => ({
                     id: s.id,
                     name: s.name,
+                    video_url: s.video_url,
                     videoUrl: s.video_url,
                     thumbnailUrl: s.thumbnail_url,
                     prompt: s.prompt,
                     duration: s.duration,
                     motion: s.motion_type,
-                    hasAudio: s.has_audio,         // Load Flag
-                    type: s.speaker_type || "broll" // Load Type (default broll)
+                    hasAudio: s.has_audio,
+                    stitched_audio_url: s.stitched_audio_url, // For voice audio sync
+                    stitchedAudioUrl: s.stitched_audio_url,   // Alias
+                    type: s.speaker_type || "broll"
                 })));
             }
 
@@ -553,7 +557,7 @@ export default function ProductionStudioDemo() {
                                 className="flex-shrink-0 w-40 flex flex-col gap-2 cursor-pointer group active:cursor-grabbing"
                             >
                                 <div className="w-40 aspect-video bg-black rounded-lg overflow-hidden relative shadow-sm group-hover:shadow-md transition-all ring-2 ring-transparent group-hover:ring-black">
-                                    <img src={shot.thumbnailUrl} className="w-full h-full object-cover pointer-events-none" />
+                                    <img src={getProxiedUrl(shot.thumbnailUrl)} className="w-full h-full object-cover pointer-events-none" />
                                     {/* Visual Badges */}
                                     <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
                                         {shot.hasAudio ? (
@@ -609,7 +613,7 @@ export default function ProductionStudioDemo() {
                                     onClick={() => { setCurrentClipIndex(idx); setIsPlaying(false); }}
                                     className={`relative flex-shrink-0 w-36 h-24 bg-white rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${currentClipIndex === idx ? "border-black shadow-lg scale-105 z-10" : "border-slate-300 opacity-80 hover:opacity-100"}`}
                                 >
-                                    <img src={clip.thumbnailUrl} className="w-full h-full object-cover pointer-events-none" />
+                                    <img src={getProxiedUrl(clip.thumbnailUrl)} className="w-full h-full object-cover pointer-events-none" />
                                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
                                         <div className="text-white text-[10px] font-medium truncate">{idx + 1}. {clip.name}</div>
                                     </div>
@@ -660,7 +664,9 @@ export default function ProductionStudioDemo() {
                         {currentClip ? (
                             <video
                                 ref={videoRef}
-                                src={currentClip.videoUrl}
+                                src={getProxiedUrl(currentClip.video_url || currentClip.videoUrl)}
+                                crossOrigin="anonymous"
+                                controls
                                 onEnded={handleVideoEnded}
                                 onClick={togglePlay}
                                 className="w-full h-full object-contain"

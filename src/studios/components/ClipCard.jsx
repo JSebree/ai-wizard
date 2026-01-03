@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
+import { getProxiedUrl } from "../../config/api";
 
-export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, onGenerateKeyframe, characters, settings, registryVoices }) {
+export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, onAddSFX, onGenerateKeyframe, characters, settings, registryVoices }) {
     if (!clip) return null;
 
     const {
@@ -35,6 +36,10 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
         label: "Pan Right"
     });
 
+    const [isAddSFXOpen, setIsAddSFXOpen] = useState(false);
+    const [sfxPrompt, setSfxPrompt] = useState(clip.sfx_prompt || "");
+    const [isSFXGenerating, setIsSFXGenerating] = useState(false);
+
     const videoRef = useRef(null);
 
     const CAMERA_GROUPS = [
@@ -65,21 +70,6 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
         }
     ];
 
-    // Helper: Rewrite URL to use local proxy if it's from digitaloceanspaces
-    const getProxiedUrl = (url) => {
-        if (!url) return "";
-        let newUrl = url;
-        if (url.includes('media-catalog.nyc3.digitaloceanspaces.com')) {
-            newUrl = url.replace('https://media-catalog.nyc3.digitaloceanspaces.com', '/media-proxy');
-        } else if (url.includes('video-generations.nyc3.digitaloceanspaces.com')) {
-            newUrl = url.replace('https://video-generations.nyc3.digitaloceanspaces.com', '/generations-proxy');
-        } else if (url.includes('a-roll-output.nyc3.digitaloceanspaces.com')) {
-            newUrl = url.replace('https://a-roll-output.nyc3.digitaloceanspaces.com', '/last-frames-proxy');
-        } else if (url.includes('nyc3.digitaloceanspaces.com')) {
-            newUrl = url.replace('https://nyc3.digitaloceanspaces.com', '/video-proxy');
-        }
-        return newUrl;
-    };
 
     // Helper to capture from image (thumbnail fallback)
     const captureFromImage = async (src) => {
@@ -288,24 +278,6 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
         return `${name || "Unknown"}: ${d.text}`;
     }).join("\n\n") || "No dialogue.";
 
-    // Audio Sync Logic
-    const audioRef = useRef(null);
-    const audioSrc = (clip.has_audio || clip.stitched_audio_url) ? (clip.stitched_audio_url || clip.audio_url || clip.audioUrl) : null;
-
-    // Sync play/pause/seek
-    const handleVideoPlay = () => audioRef.current?.play();
-    const handleVideoPause = () => audioRef.current?.pause();
-    const handleVideoSeek = () => {
-        if (audioRef.current && videoRef.current) {
-            audioRef.current.currentTime = videoRef.current.currentTime;
-        }
-    };
-
-    // Ensure volume sync (if video is muted, audio shouldn't be, generally. But if user mutes video player? 
-    // Usually web video players mute both. We can just say video is visual only, audio handles sound?)
-    // Actually, improved logic: If video has NO audio track, we rely on audioRef.
-    // videoRef controls are sufficient for timeline.
-
     // --- Metadata Resolution ---
     const characterName = characters?.find(c => c.id === clip.character_id || c.id === clip.characterId)?.name || "Unknown";
     const settingName = settings?.find(s => s.id === clip.setting_id || s.id === clip.settingId)?.name || "Unknown";
@@ -337,22 +309,14 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                     {/* Expand/Reset Icons could go here if needed, keeping it clean for now */}
 
                     {videoSrc ? (
-                        <>
-                            <video
-                                ref={videoRef}
-                                controls
-                                loop
-                                src={videoSrc}
-                                className="w-full h-full object-contain"
-                                onPlay={handleVideoPlay}
-                                onPause={handleVideoPause}
-                                onSeeking={handleVideoSeek}
-                                onSeeked={handleVideoSeek}
-                                onWaiting={() => audioRef.current?.pause()}
-                                onPlaying={handleVideoPlay}
-                            />
-                            {audioSrc && <audio ref={audioRef} src={audioSrc} preload="auto" className="hidden" />}
-                        </>
+                        <video
+                            ref={videoRef}
+                            controls
+                            loop
+                            src={getProxiedUrl(videoSrc)}
+                            crossOrigin="anonymous"
+                            className="w-full h-full object-contain"
+                        />
                     ) : thumbSrc ? (
                         <img src={thumbSrc} alt="Thumbnail" className="w-full h-full object-contain" />
                     ) : (
@@ -471,6 +435,15 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                                 <span className="text-gray-500 font-medium">Visual Style</span>
                                 <span className="text-gray-900 font-bold">{visualStyle}</span>
                             </div>
+                            {/* SFX Prompt - Only show if clip has been enhanced with SFX */}
+                            {(clip.sfx_prompt || clip.sfxPrompt) && (
+                                <div className="flex justify-between items-start text-sm border-b border-gray-50 pb-2">
+                                    <span className="text-gray-500 font-medium">🔊 SFX</span>
+                                    <span className="text-gray-900 font-bold text-right max-w-[200px] truncate" title={clip.sfx_prompt || clip.sfxPrompt}>
+                                        {clip.sfx_prompt || clip.sfxPrompt}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -491,6 +464,17 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                                         title={parseFloat(duration) > 3.4 ? "Reshoot limited to clips under 3.4s" : "Reshoot with Camera"}
                                     >
                                         <span>🎥 Reshoot</span>
+                                    </button>
+                                )}
+
+                                {/* Add SFX */}
+                                {onAddSFX && (
+                                    <button
+                                        onClick={() => setIsAddSFXOpen(true)}
+                                        disabled={isSFXGenerating}
+                                        className="flex-1 py-3 px-4 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <span>{isSFXGenerating ? "🔊 Adding..." : "🔊 Add SFX"}</span>
                                     </button>
                                 )}
 
@@ -531,7 +515,57 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                     </div>
                 </div>
             </div>
+            {/* SFX Overlay */}
+            {
+                isAddSFXOpen && (
+                    <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-8 animate-fade-in" onClick={() => setIsAddSFXOpen(false)}>
+                        <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+                            <div className="text-center mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">🔊 Add Sound Effects</h3>
+                                <p className="text-xs text-gray-400 mt-1">Describe the sound effects you want to add.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <textarea
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm focus:border-black outline-none transition-colors"
+                                    rows={3}
+                                    placeholder="e.g. footsteps on gravel, door creaking, bird chirping..."
+                                    value={sfxPrompt}
+                                    onChange={e => setSfxPrompt(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={() => setIsAddSFXOpen(false)}
+                                    className="flex-1 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg"
+                                    disabled={isSFXGenerating}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        setIsSFXGenerating(true);
+                                        try {
+                                            await onAddSFX(clip, sfxPrompt);
+                                            setIsAddSFXOpen(false);
+                                        } catch (err) {
+                                            alert("Failed to add SFX: " + err.message);
+                                        } finally {
+                                            setIsSFXGenerating(false);
+                                        }
+                                    }}
+                                    disabled={isSFXGenerating || !sfxPrompt.trim()}
+                                    className="flex-1 py-2 text-xs font-bold bg-black text-white rounded-lg shadow hover:bg-gray-900 disabled:opacity-50"
+                                >
+                                    {isSFXGenerating ? "Processing..." : "Add SFX"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
             {/* Keeping ClipToDelete logic if it was rendered outside this block in parent, but here the modal is the preview, deletion confirm is separate */}
-        </div>
+        </div >
     );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from "../libs/supabaseClient";
-import { API_CONFIG } from "../config/api";
+import { API_CONFIG, getProxiedUrl } from "../config/api";
 import { v4 as uuidv4 } from 'uuid';
 import ClipCard from "./components/ClipCard";
 
@@ -99,11 +99,11 @@ export default function ClipStudioDemo() {
             return parsed.map(shot => {
                 if (shot.status === 'rendering' || shot.status === 'generating') {
                     // Check if we arguably have a videoUrl from a previous run
-                    if (shot.videoUrl) return { ...shot, status: 'preview_ready' };
+                    if (shot.videoUrl) return { ...shot, status: 'preview_ready', autoSFX: shot.autoSFX ?? true };
                     // Otherwise reset to allowable retry state
-                    return { ...shot, status: 'idle' };
+                    return { ...shot, status: 'idle', autoSFX: shot.autoSFX ?? true };
                 }
-                return shot;
+                return { ...shot, autoSFX: shot.autoSFX ?? true };
             });
         } catch (e) {
             console.error("Failed to load shotList draft:", e);
@@ -313,6 +313,8 @@ export default function ClipStudioDemo() {
             speakerType: "on_screen", // Default speaker type
             status: "draft", // draft, generating, preview_ready, completed
             videoUrl: "",
+            sfxPrompt: "",
+            autoSFX: true,
             error: "",
             useSeedVC: false,
         };
@@ -826,6 +828,8 @@ export default function ClipStudioDemo() {
                 raw_video_url: shot.rawVideoUrl || shot.videoUrl,
                 audio_url: shot.stitchedAudioUrl || shot.audio_url || null,
                 prompt: shot.prompt,
+                sfx_prompt: shot.sfxPrompt || null,
+                auto_sfx: shot.autoSFX ?? true,
                 motion_type: shot.motion || shot.motion_type,
                 duration: parseFloat(finalDuration),
                 dialogue_blocks: blocksToEnrich,
@@ -852,6 +856,8 @@ export default function ClipStudioDemo() {
                 // [v54 Fix] Remove UI-only props that don't exist in 'clips' table
                 delete dbPayload.setting_id;
                 delete dbPayload.camera_angle;
+                delete dbPayload.auto_sfx;
+                // sfx_prompt is now in the DB schema, so we keep it
 
                 // Add schema-specific fields
                 dbPayload.stitched_audio_url = shot.stitchedAudioUrl || shot.stitched_audio_url;
@@ -929,6 +935,8 @@ export default function ClipStudioDemo() {
         // [Persistence] Fetch User for Payload
         const { data: { user } } = await supabase.auth.getUser();
 
+        let dbId = null; // Declare outside for catch block access
+
         try {
             // 1. Create Initial DB Record (Pending/Rendering)
             console.log("Creating initial pending record...");
@@ -945,7 +953,7 @@ export default function ClipStudioDemo() {
             if (!dbRecord || !dbRecord.id) {
                 throw new Error("Failed to create initial clip record.");
             }
-            const dbId = dbRecord.id;
+            dbId = dbRecord.id;
 
             console.log("[renderClip] Step 1 Result: DB ID =", dbId);
 
@@ -1088,7 +1096,7 @@ export default function ClipStudioDemo() {
 
             if (!videoUrl) {
                 // If we failed to get a video URL, we must update the saved clip to show error
-                updateSavedClip(dbId, { status: "error", error: "No video URL returned." });
+                if (dbId) updateSavedClip(dbId, { status: "error", error: "No video URL returned." });
                 throw new Error("No video URL found in response.");
             }
 
@@ -1096,19 +1104,120 @@ export default function ClipStudioDemo() {
             const lastFrameUrl = data?.last_frame_url || data?.lastFrameUrl || data?.output?.last_frame_url || null;
             console.log("Extracted Last Frame URL:", lastFrameUrl);
 
+            // --- [v71] INTERMEDIATE SAVE ---
+            // Update local state so user can see the video immediately while SFX runs
+            const intermediateData = {
+                video_url: videoUrl,
+                videoUrl: videoUrl,
+                last_frame_url: lastFrameUrl,
+                thumbnail_url: lastFrameUrl, // [v72] Sync thumbnail
+                status: "rendering",
+                error: "Adding Foley SFX..."
+            };
+            updateSavedClip(dbId, intermediateData);
+            if (previewShot && previewShot.id === dbId) {
+                setPreviewShot(prev => ({ ...prev, ...intermediateData }));
+            }
+            if (supabase) {
+                await supabase.from('clips').update({
+                    video_url: videoUrl,
+                    last_frame_url: lastFrameUrl,
+                    thumbnail_url: lastFrameUrl // [v72] Update DB thumbnail
+                }).eq('id', dbId);
+            }
+
+            // --- [v67] FOLEY SFX CHAINING ---
+            let finalVideoUrl = videoUrl;
+            const effectiveSFXPrompt = (shot.sfxPrompt && shot.sfxPrompt.trim()) || (shot.autoSFX ? shot.prompt : null);
+
+            if (effectiveSFXPrompt && effectiveSFXPrompt.trim()) {
+                console.log("[renderClip] Step 1.5: Chaining Foley SFX...", { effectiveSFXPrompt, videoUrl });
+                updateSavedClip(dbId, { status: "rendering", error: "Adding SFX..." });
+
+                try {
+                    // Safety: Ensure we aren't sending a proxied URL
+                    const rawVideoUrl = videoUrl.includes('/video-proxy')
+                        ? videoUrl.replace('/video-proxy', 'https://nyc3.digitaloceanspaces.com')
+                        : videoUrl.includes('/generations-proxy')
+                            ? videoUrl.replace('/generations-proxy', 'https://video-generations.nyc3.digitaloceanspaces.com')
+                            : videoUrl;
+
+                    const foleyPayload = {
+                        input: {
+                            video_url: rawVideoUrl,
+                            url: rawVideoUrl, // Some workers expect 'url'
+                            prompt: effectiveSFXPrompt,
+                            no_voices: true,
+                            no_music: true,
+                            // [v73] FIX: Lipsync clips should PRESERVE dialogue (strip_vocals: false)
+                            // B-roll clips should strip any existing audio (strip_vocals: true)
+                            strip_vocals: !(shot.speakerType === 'on_screen' || shot.speaker_type === 'on_screen' ||
+                                shot.speakerType === 'narrator' || shot.speaker_type === 'narrator' ||
+                                shot.has_audio || shot.hasAudio)
+                        }
+                    };
+
+                    console.log("[renderClip] Sending Foley Payload:", foleyPayload);
+
+                    const sfxResponse = await fetch(API_CONFIG.FOLEY_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(foleyPayload)
+                    });
+
+                    if (!sfxResponse.ok) {
+                        const errorData = await sfxResponse.json().catch(() => ({}));
+                        console.error("[renderClip] Foley API Error:", sfxResponse.status, errorData);
+                        throw new Error(`SFX API Error ${sfxResponse.status}`);
+                    }
+
+                    let sfxData = await sfxResponse.json();
+                    console.log("Foley Job Queued:", sfxData.id);
+
+                    // Polling for Foley completion
+                    if (sfxData.id && (sfxData.status === "IN_QUEUE" || sfxData.status === "IN_PROGRESS")) {
+                        const jobId = sfxData.id;
+                        const statusEndpoint = API_CONFIG.FOLEY_ENDPOINT.replace('/run', '/status');
+                        while (true) {
+                            await new Promise(r => setTimeout(r, 4000));
+                            const statusRes = await fetch(`${statusEndpoint}/${jobId}`);
+                            if (!statusRes.ok) break;
+                            sfxData = await statusRes.json();
+                            if (sfxData.status === "COMPLETED") break;
+                            if (sfxData.status === "FAILED") throw new Error("SFX Job Failed");
+                        }
+                    }
+
+                    const sfxUrl = sfxData.output?.output_url || sfxData.video_url || sfxData.url;
+                    if (sfxUrl) {
+                        console.log("Foley SFX Chaining Success:", sfxUrl);
+                        finalVideoUrl = sfxUrl;
+                    }
+                } catch (sfxErr) {
+                    console.error("Foley SFX Chaining Failed:", sfxErr);
+                    // Continue with original videoUrl if SFX fails
+                }
+            }
+
             // [Refactor] UPDATE THE SAVED CLIP RECORD
             // We use the dbId we got earlier
 
             const updatedClipData = {
-                video_url: videoUrl, // snake_case for DB style object
-                videoUrl: videoUrl,  // camelCase for local state
+                video_url: finalVideoUrl, // snake_case for DB style object
+                videoUrl: finalVideoUrl,  // camelCase for local state
                 last_frame_url: lastFrameUrl,
+                thumbnail_url: lastFrameUrl, // [v72] Sync thumbnail
                 status: 'completed',
                 manualDuration: shot.isAudioLocked ? shot.totalAudioDuration : shot.manualDuration
             };
 
             // Update Local UI State
             updateSavedClip(dbId, updatedClipData);
+
+            // [v71 Fix] Refresh preview modal if it's the one we just rendered
+            if (previewShot && previewShot.id === dbId) {
+                setPreviewShot(prev => ({ ...prev, ...updatedClipData }));
+            }
 
             // 2. Update DB Record with Final URL
             console.log("[renderClip] Step 2: Final Save update...");
@@ -1122,8 +1231,9 @@ export default function ClipStudioDemo() {
                 const { error: updateError } = await supabase
                     .from('clips')
                     .update({
-                        video_url: videoUrl,
+                        video_url: finalVideoUrl,
                         last_frame_url: lastFrameUrl,
+                        thumbnail_url: lastFrameUrl, // [v72] Sync thumbnail
                         status: 'completed'
                     })
                     .eq('id', dbId);
@@ -1137,20 +1247,16 @@ export default function ClipStudioDemo() {
 
         } catch (err) {
             console.error("Render Error:", err);
-            // If the draft was already removed, we must update the saved clip to show error
-            if (shot.tempId) {
-                // Try to find if we possess a dbId attached to the shot (if we crashed post-save)
-                // But wait, "shot" here is the closure variable.
-                // If we already saved it, we need that DB ID. 
-                // We don't have it easily if it crashed before assignment, BUT
-                // The 'pendingShot' save happens first.
-            }
-            // Best effort: If we have a DB ID from step 1, update it.
-            // But we can't easily access `dbId` from catch block if it's declared in try.
-            // Simplified: User will see "Rendering..." hang if it crashes completely, 
-            // but `updateSavedClip` calls in the try block should handle most logic.
 
-            // Ideally we'd move dbId declaration up, but let's just alert for now or trust the flow.
+            const errorUpdates = { status: "completed", error: `Render failed: ${err.message}` };
+
+            if (dbId) {
+                updateSavedClip(dbId, errorUpdates);
+                if (previewShot && previewShot.id === dbId) {
+                    setPreviewShot(prev => ({ ...prev, ...errorUpdates }));
+                }
+            }
+
             alert("Rendering failed: " + err.message);
         }
     }, [updateShot, saveToBin, removeShot, updateSavedClip]);
@@ -1382,6 +1488,115 @@ export default function ClipStudioDemo() {
         }
     };
 
+    const handleFoleyAddSFX = async (originalClip, prompt) => {
+        console.log("handleFoleyAddSFX called for clip:", originalClip.id, "Prompt:", prompt);
+
+        // Use standard update saved clip pattern
+        updateSavedClip(originalClip.id, { status: "rendering", error: "Adding SFX..." });
+        if (previewShot && previewShot.id === originalClip.id) {
+            setPreviewShot(prev => ({ ...prev, status: "rendering", error: "Adding SFX..." }));
+        }
+
+        try {
+            // Safety: Ensure we aren't sending a proxied URL
+            const videoUrl = originalClip.video_url || originalClip.videoUrl;
+            const rawVideoUrl = videoUrl.includes('/video-proxy')
+                ? videoUrl.replace('/video-proxy', 'https://nyc3.digitaloceanspaces.com')
+                : videoUrl.includes('/generations-proxy')
+                    ? videoUrl.replace('/generations-proxy', 'https://video-generations.nyc3.digitaloceanspaces.com')
+                    : videoUrl;
+
+            // Determine if we should preserve original audio or use SFX-only
+            // If clip has audio (lipsync/narration), preserve it and ADD SFX on top
+            // If clip is silent (B-roll), just use pure SFX
+            const hasExistingAudio = originalClip.has_audio || originalClip.hasAudio ||
+                originalClip.speaker_type === 'on_screen' ||
+                originalClip.speaker_type === 'narrator' ||
+                originalClip.speakerType === 'on_screen' ||
+                originalClip.speakerType === 'narrator';
+
+            const shouldPreserveAudio = hasExistingAudio;
+            console.log(`[handleFoleyAddSFX] Clip has audio: ${hasExistingAudio}, preserve: ${shouldPreserveAudio}`);
+
+            const foleyPayload = {
+                input: {
+                    video_url: rawVideoUrl,
+                    url: rawVideoUrl, // Some workers expect 'url'
+                    prompt: prompt,
+                    no_voices: true,
+                    no_music: true,
+                    strip_vocals: !shouldPreserveAudio // false = preserve audio, true = SFX only
+                }
+            };
+
+            console.log("[handleFoleyAddSFX] Sending Foley Payload:", foleyPayload);
+
+            const response = await fetch(API_CONFIG.FOLEY_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(foleyPayload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("[handleFoleyAddSFX] Foley API Error:", response.status, errorData);
+                throw new Error(`SFX API Error ${response.status}`);
+            }
+
+            let data = await response.json();
+            console.log("Foley Job Queued (Card):", data.id);
+
+            const jobId = data.id;
+
+            if (jobId && (data.status === "IN_QUEUE" || data.status === "IN_PROGRESS")) {
+                const statusEndpoint = API_CONFIG.FOLEY_ENDPOINT.replace('/run', '/status');
+                while (true) {
+                    await new Promise(r => setTimeout(r, 4000));
+                    const statusRes = await fetch(`${statusEndpoint}/${jobId}`);
+                    if (!statusRes.ok) break;
+                    data = await statusRes.json();
+                    if (data.status === "COMPLETED") break;
+                    if (data.status === "FAILED") throw new Error("SFX Job Failed");
+                }
+            }
+
+            const newVideoUrl = data.output?.output_url || data.video_url || data.url;
+            if (newVideoUrl) {
+                const updatedData = {
+                    video_url: newVideoUrl,
+                    videoUrl: newVideoUrl,
+                    sfx_prompt: prompt,
+                    sfxPrompt: prompt,
+                    status: 'completed',
+                    error: ""
+                };
+                updateSavedClip(originalClip.id, updatedData);
+
+                if (supabase) {
+                    await supabase.from('clips').update({
+                        video_url: newVideoUrl,
+                        sfx_prompt: prompt  // Save SFX prompt to database
+                    }).eq('id', originalClip.id);
+                }
+
+                // Refresh preview if it's the active one
+                if (previewShot && previewShot.id === originalClip.id) {
+                    setPreviewShot(prev => ({ ...prev, ...updatedData }));
+                }
+            } else {
+                throw new Error("No video URL returned from SFX service");
+            }
+
+        } catch (err) {
+            console.error("Error adding SFX:", err);
+            updateSavedClip(originalClip.id, { status: "completed", error: `SFX Error: ${err.message}` });
+            if (previewShot && previewShot.id === originalClip.id) {
+                setPreviewShot(prev => ({ ...prev, status: "completed", error: `SFX Error: ${err.message}` }));
+            }
+            throw err;
+        }
+    };
+
     // EDIT LOGIC
     const handleEditClip = (clip) => {
         // Restore clip data to "workshop" (Story Studio context)
@@ -1413,9 +1628,10 @@ export default function ClipStudioDemo() {
             videoUrl: "",
             error: "",
             stitchedAudioUrl: "",
-            totalAudioDuration: 0,
             isAudioLocked: false,
             startDelay: clip.start_delay || 0,
+            sfxPrompt: clip.sfx_prompt || clip.sfxPrompt || "",
+            autoSFX: clip.auto_sfx ?? clip.autoSFX ?? true,
         };
 
         setShotList([restoredShot]); // FORCE SINGLE SHOT: Replace workshop instead of prepending
@@ -1531,7 +1747,12 @@ export default function ClipStudioDemo() {
                                         <div className="aspect-video bg-gray-200 rounded-lg overflow-hidden relative group">
                                             {(shot.videoUrl && (shot.status === 'preview_ready' || shot.status === 'completed')) ? (
                                                 <>
-                                                    <video src={shot.videoUrl} poster={shot.thumbnail_url} className="w-full h-full object-cover" />
+                                                    <video
+                                                        src={getProxiedUrl(shot.videoUrl)}
+                                                        poster={getProxiedUrl(shot.thumbnail_url)}
+                                                        crossOrigin="anonymous"
+                                                        className="w-full h-full object-cover"
+                                                    />
                                                     <button onClick={() => setPreviewShot(shot)} className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-4xl opacity-0 hover:opacity-100 transition-opacity">▶</button>
                                                 </>
                                             ) : (
@@ -1660,7 +1881,32 @@ export default function ClipStudioDemo() {
                                                     onChange={e => updateShot(shot.tempId, { prompt: e.target.value })}
                                                 />
                                             </div>
-
+                                            <div>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-xs font-bold text-slate-700 uppercase">🔊 SFX Prompt (Optional)</label>
+                                                    <label className="flex items-center gap-1.5 cursor-pointer group">
+                                                        <span className={`text-[10px] font-bold uppercase transition-colors ${shot.autoSFX ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                            {shot.autoSFX ? 'Auto SFX On' : 'Auto SFX Off'}
+                                                        </span>
+                                                        <input
+                                                            type="checkbox"
+                                                            className="hidden"
+                                                            checked={shot.autoSFX ?? true}
+                                                            onChange={e => updateShot(shot.tempId, { autoSFX: e.target.checked })}
+                                                        />
+                                                        <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${shot.autoSFX ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                                                            <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${shot.autoSFX ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-black outline-none transition-colors"
+                                                    placeholder={shot.autoSFX ? "Fallback: Uses visual description..." : "e.g. thunder and rain..."}
+                                                    value={shot.sfxPrompt || ""}
+                                                    onChange={e => updateShot(shot.tempId, { sfxPrompt: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
 
                                         <hr className="border-gray-100" />
@@ -1937,7 +2183,13 @@ export default function ClipStudioDemo() {
                                         <span className="text-[10px] font-bold">Rendering...</span>
                                     </div>
                                 ) : (
-                                    <video src={clip.video_url || clip.videoUrl} className="w-full h-full object-cover" />
+                                    <img
+                                        src={getProxiedUrl(clip.thumbnail_url || clip.last_frame_url || clip.scene_image_url || clip.sceneImageUrl)}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            // Optional: Hide or show placeholder
+                                        }}
+                                    />
                                 )}
                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                                 <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
@@ -1978,6 +2230,7 @@ export default function ClipStudioDemo() {
                             onClose={() => setPreviewShot(null)}
                             onEdit={handleEditClip}
                             onReshoot={handleInfCamReshoot}
+                            onAddSFX={handleFoleyAddSFX}
                             onDelete={handleDeleteClip}
                             characters={characters}
                             settings={settings} // [New]
@@ -2116,7 +2369,9 @@ export default function ClipStudioDemo() {
                                                 isAudioLocked: false,
                                                 startDelay: 0,
                                                 sceneId: formattedKeyframe.id,
-                                                sceneImageUrl: formattedKeyframe.image_url || formattedKeyframe.imageUrl
+                                                sceneImageUrl: formattedKeyframe.image_url || formattedKeyframe.imageUrl,
+                                                sfxPrompt: "",
+                                                autoSFX: true
                                             };
                                             console.log("LOG: Created Draft Shot:", newDraftShot);
                                             setShotList([newDraftShot]); // FORCE SINGLE SHOT: Replace workshop instead of prepending
@@ -2143,7 +2398,13 @@ export default function ClipStudioDemo() {
                     ) : (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewShot(null)}>
                             <div className="w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                                <video src={previewShot.video_url || previewShot.videoUrl} controls className="w-full h-auto max-h-[80vh]" />
+                                <video
+                                    src={getProxiedUrl(previewShot.video_url || previewShot.videoUrl)}
+                                    controls
+                                    autoPlay
+                                    crossOrigin="anonymous"
+                                    className="w-full h-auto max-h-[80vh]"
+                                />
                                 <div className="absolute top-4 right-4">
                                     <button onClick={() => setPreviewShot(null)} className="text-white text-2xl font-bold hover:text-gray-300">×</button>
                                 </div>
