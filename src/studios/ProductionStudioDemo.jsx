@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { API_CONFIG, getProxiedUrl } from "../config/api";
+import { generateEDL, downloadEDL } from "../utils/edlGenerator";
 import ProjectCard from "./components/ProjectCard";
 import ProjectThumbnail from "./components/ProjectThumbnail"; // New Thumb
 
@@ -807,6 +808,22 @@ export default function ProductionStudioDemo() {
                                     Download Last Render
                                 </a>
                             )}
+
+                            {/* EDL Export Button */}
+                            <button
+                                onClick={() => {
+                                    const edlContent = generateEDL(timeline, sceneName || 'Untitled Scene', { fps: 24 });
+                                    downloadEDL(edlContent, sceneName || 'scene');
+                                }}
+                                disabled={timeline.length === 0 || !sceneName.trim()}
+                                className={`w-full py-2 rounded-lg font-bold text-xs border transition-all flex items-center justify-center gap-2 ${timeline.length === 0 || !sceneName.trim()
+                                        ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
+                                    }`}
+                                title={!sceneName.trim() ? "Please enter a Scene Name" : "Export Edit Decision List for professional editing software"}
+                            >
+                                📋 Export EDL
+                            </button>
                         </div>
                     </div>
                 </div>
