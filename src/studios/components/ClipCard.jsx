@@ -38,6 +38,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
 
     const [isAddSFXOpen, setIsAddSFXOpen] = useState(false);
     const [sfxPrompt, setSfxPrompt] = useState(clip.sfx_prompt || "");
+    const [autoSFX, setAutoSFX] = useState(true);
     const [isSFXGenerating, setIsSFXGenerating] = useState(false);
 
     const videoRef = useRef(null);
@@ -526,10 +527,25 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                             </div>
 
                             <div className="space-y-4">
+                                <div className="flex justify-between items-center bg-gray-50 rounded-lg p-3 border border-gray-100 mb-3">
+                                    <span className="text-sm font-medium text-gray-700">Auto SFX</span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only peer"
+                                            checked={autoSFX}
+                                            onChange={e => setAutoSFX(e.target.checked)}
+                                        />
+                                        <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${autoSFX ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                                            <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${autoSFX ? 'translate-x-4' : 'translate-x-0'}`} />
+                                        </div>
+                                    </label>
+                                </div>
+
                                 <textarea
                                     className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm focus:border-black outline-none transition-colors"
                                     rows={3}
-                                    placeholder="e.g. footsteps on gravel, door creaking, bird chirping..."
+                                    placeholder={autoSFX ? "Optional: Auto-generates from video..." : "Enter prompt to enable SFX..."}
                                     value={sfxPrompt}
                                     onChange={e => setSfxPrompt(e.target.value)}
                                 />
@@ -555,7 +571,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
                                             setIsSFXGenerating(false);
                                         }
                                     }}
-                                    disabled={isSFXGenerating || !sfxPrompt.trim()}
+                                    disabled={isSFXGenerating || (!autoSFX && !sfxPrompt.trim())}
                                     className="flex-1 py-2 text-xs font-bold bg-black text-white rounded-lg shadow hover:bg-gray-900 disabled:opacity-50"
                                 >
                                     {isSFXGenerating ? "Processing..." : "Add SFX"}

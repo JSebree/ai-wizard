@@ -1127,11 +1127,14 @@ export default function ClipStudioDemo() {
             }
 
             // --- [v67] FOLEY SFX CHAINING ---
+            // If autoSFX is ON, always generate SFX from video
+            // User's sfxPrompt is used if provided, otherwise video-only (no prompt fallback)
             let finalVideoUrl = videoUrl;
-            const effectiveSFXPrompt = (shot.sfxPrompt && shot.sfxPrompt.trim()) || (shot.autoSFX ? shot.prompt : null);
+            const userProvidedPrompt = shot.sfxPrompt && shot.sfxPrompt.trim();
+            const shouldGenerateSFX = shot.autoSFX || userProvidedPrompt;
 
-            if (effectiveSFXPrompt && effectiveSFXPrompt.trim()) {
-                console.log("[renderClip] Step 1.5: Chaining Foley SFX...", { effectiveSFXPrompt, videoUrl });
+            if (shouldGenerateSFX) {
+                console.log("[renderClip] Step 1.5: Chaining Foley SFX...", { userProvidedPrompt, autoSFX: shot.autoSFX, videoUrl });
                 updateSavedClip(dbId, { status: "rendering", error: "Adding SFX..." });
 
                 try {
@@ -1142,19 +1145,11 @@ export default function ClipStudioDemo() {
                             ? videoUrl.replace('/generations-proxy', 'https://video-generations.nyc3.digitaloceanspaces.com')
                             : videoUrl;
 
+                    // Payload: include prompt only if user explicitly provided one
                     const foleyPayload = {
-                        input: {
-                            video_url: rawVideoUrl,
-                            url: rawVideoUrl, // Some workers expect 'url'
-                            prompt: effectiveSFXPrompt,
-                            no_voices: true,
-                            no_music: true,
-                            // [v73] FIX: Lipsync clips should PRESERVE dialogue (strip_vocals: false)
-                            // B-roll clips should strip any existing audio (strip_vocals: true)
-                            strip_vocals: !(shot.speakerType === 'on_screen' || shot.speaker_type === 'on_screen' ||
-                                shot.speakerType === 'narrator' || shot.speaker_type === 'narrator' ||
-                                shot.has_audio || shot.hasAudio)
-                        }
+                        input: userProvidedPrompt
+                            ? { video_url: rawVideoUrl, prompt: userProvidedPrompt, strip_vocals: false }
+                            : { video_url: rawVideoUrl, strip_vocals: false }
                     };
 
                     console.log("[renderClip] Sending Foley Payload:", foleyPayload);
@@ -1188,10 +1183,14 @@ export default function ClipStudioDemo() {
                         }
                     }
 
-                    const sfxUrl = sfxData.output?.output_url || sfxData.video_url || sfxData.url;
+                    console.log("[renderClip] SFX Job Final Data:", JSON.stringify(sfxData, null, 2));
+                    const sfxUrl = sfxData.output?.output_url || sfxData.output_url || sfxData.video_url || sfxData.url;
+                    console.log("[renderClip] Extracted sfxUrl:", sfxUrl);
                     if (sfxUrl) {
                         console.log("Foley SFX Chaining Success:", sfxUrl);
                         finalVideoUrl = sfxUrl;
+                    } else {
+                        console.warn("[renderClip] No SFX URL found in response!");
                     }
                 } catch (sfxErr) {
                     console.error("Foley SFX Chaining Failed:", sfxErr);
@@ -1370,7 +1369,7 @@ export default function ClipStudioDemo() {
             const payload = {
                 input: {
                     video_url: sourceClip.videoUrl || sourceClip.video_url,
-                    audio_url: null,
+                    audio_url: sourceClip.stitched_audio_url || sourceClip.stitchedAudioUrl || null,
                     prompt: sourceClip.prompt || "Reshoot",
                     cam_type: params.camType, // '10Type' preset name
                     reverse_camera: params.reverseCamera || false,
@@ -1428,9 +1427,63 @@ export default function ClipStudioDemo() {
             // The user's handler returns { "video_url": ... } from the function
             // So data.output should contain that object.
 
-            const resultUrl = data.output?.video_url || data.video_url;
+            let resultUrl = data.output?.video_url || data.video_url;
 
             if (!resultUrl) throw new Error("No video URL in InfCam response");
+
+            // 5b. Add SFX based on original clip settings
+            // Logic: Generate SFX if (Auto SFX is ON) OR (User provided a prompt)
+            const userProvidedPrompt = sourceClip.sfx_prompt || sourceClip.sfxPrompt;
+            const autoSFX = sourceClip.auto_sfx ?? sourceClip.autoSFX ?? true; // Default to true if missing
+
+            const shouldGenerateSFX = autoSFX || userProvidedPrompt;
+
+            if (shouldGenerateSFX) {
+                console.log("[Reshoot] Adding SFX...", { userProvidedPrompt, autoSFX });
+
+                try {
+                    // Payload with strip_vocals: false to preserve dialogue
+                    const foleyPayload = {
+                        input: userProvidedPrompt
+                            ? { video_url: resultUrl, prompt: userProvidedPrompt, strip_vocals: false }
+                            : { video_url: resultUrl, strip_vocals: false }
+                    };
+
+                    const sfxResponse = await fetch(API_CONFIG.FOLEY_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(foleyPayload)
+                    });
+
+                    if (sfxResponse.ok) {
+                        let sfxData = await sfxResponse.json();
+                        const sfxJobId = sfxData.id;
+
+                        // Poll if async
+                        if (sfxJobId && (sfxData.status === "IN_QUEUE" || sfxData.status === "IN_PROGRESS")) {
+                            console.log("[Reshoot] SFX Job Queued:", sfxJobId);
+                            const statusEndpoint = API_CONFIG.FOLEY_ENDPOINT.replace('/run', '/status');
+                            while (true) {
+                                await new Promise(r => setTimeout(r, 4000));
+                                const statusRes = await fetch(`${statusEndpoint}/${sfxJobId}`);
+                                if (!statusRes.ok) break;
+                                sfxData = await statusRes.json();
+                                if (sfxData.status === "COMPLETED") break;
+                                if (sfxData.status === "FAILED") throw new Error("SFX Job Failed");
+                            }
+                        }
+
+                        const sfxUrl = sfxData.output?.output_url || sfxData.output_url || sfxData.video_url;
+                        if (sfxUrl) {
+                            console.log("[Reshoot] SFX re-applied successfully:", sfxUrl);
+                            resultUrl = sfxUrl;
+                        }
+                    }
+                } catch (sfxErr) {
+                    console.error("[Reshoot] SFX re-application failed:", sfxErr);
+                    // Continue with the InfCam result (dialogue only, no SFX)
+                }
+            }
 
             // 6. Persist to DB
             if (supabase) {
@@ -1452,7 +1505,8 @@ export default function ClipStudioDemo() {
                         .update({
                             status: 'completed',
                             video_url: resultUrl,
-                            last_frame_url: lastFrameUrl || null
+                            last_frame_url: lastFrameUrl || null,
+                            sfx_prompt: userProvidedPrompt || null  // Preserve SFX prompt
                         })
                         .eq('id', dbId);
                     if (updateError) console.error("Failed to update final reshoot (sync):", updateError);
@@ -1474,7 +1528,8 @@ export default function ClipStudioDemo() {
                         id: dbId || c.id,
                         status: 'completed',
                         video_url: resultUrl,
-                        last_frame_url: lastFrameUrl
+                        last_frame_url: lastFrameUrl,
+                        sfx_prompt: userProvidedPrompt || c.sfx_prompt  // Preserve SFX prompt
                     } : c
                 ));
 
@@ -1518,15 +1573,11 @@ export default function ClipStudioDemo() {
             const shouldPreserveAudio = hasExistingAudio;
             console.log(`[handleFoleyAddSFX] Clip has audio: ${hasExistingAudio}, preserve: ${shouldPreserveAudio}`);
 
+            // Payload with strip_vocals: false to preserve dialogue
             const foleyPayload = {
-                input: {
-                    video_url: rawVideoUrl,
-                    url: rawVideoUrl, // Some workers expect 'url'
-                    prompt: prompt,
-                    no_voices: true,
-                    no_music: true,
-                    strip_vocals: !shouldPreserveAudio // false = preserve audio, true = SFX only
-                }
+                input: prompt && prompt.trim()
+                    ? { video_url: rawVideoUrl, prompt: prompt.trim(), strip_vocals: false }
+                    : { video_url: rawVideoUrl, strip_vocals: false }
             };
 
             console.log("[handleFoleyAddSFX] Sending Foley Payload:", foleyPayload);
@@ -1560,7 +1611,7 @@ export default function ClipStudioDemo() {
                 }
             }
 
-            const newVideoUrl = data.output?.output_url || data.video_url || data.url;
+            const newVideoUrl = data.output?.output_url || data.output_url || data.video_url || data.url;
             if (newVideoUrl) {
                 const updatedData = {
                     video_url: newVideoUrl,
@@ -1902,7 +1953,7 @@ export default function ClipStudioDemo() {
                                                 <input
                                                     type="text"
                                                     className="w-full bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-black outline-none transition-colors"
-                                                    placeholder={shot.autoSFX ? "Fallback: Uses visual description..." : "e.g. thunder and rain..."}
+                                                    placeholder={shot.autoSFX ? "Optional: Auto-generates from video..." : "Enter prompt to enable SFX..."}
                                                     value={shot.sfxPrompt || ""}
                                                     onChange={e => updateShot(shot.tempId, { sfxPrompt: e.target.value })}
                                                 />
