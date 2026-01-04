@@ -1369,7 +1369,11 @@ export default function ClipStudioDemo() {
             const payload = {
                 input: {
                     video_url: sourceClip.videoUrl || sourceClip.video_url,
-                    audio_url: sourceClip.stitched_audio_url || sourceClip.stitchedAudioUrl || null,
+                    // [v75] Preserve Audio Mix Logic:
+                    // If clip has SFX (sfx_prompt exists OR autoSFX is true), use the FULL VIDEO as audio source.
+                    audio_url: ((sourceClip.sfx_prompt || sourceClip.sfxPrompt) || (sourceClip.auto_sfx ?? sourceClip.autoSFX ?? true))
+                        ? (sourceClip.videoUrl || sourceClip.video_url)
+                        : (sourceClip.stitched_audio_url || sourceClip.stitchedAudioUrl || null),
                     prompt: sourceClip.prompt || "Reshoot",
                     cam_type: params.camType, // '10Type' preset name
                     reverse_camera: params.reverseCamera || false,
@@ -1433,10 +1437,22 @@ export default function ClipStudioDemo() {
 
             // 5b. Add SFX based on original clip settings
             // Logic: Generate SFX if (Auto SFX is ON) OR (User provided a prompt)
+            // [v75 Update] If we ALREADY preserved the mix (via audio_url = video_url), DO NOT regenerate SFX.
             const userProvidedPrompt = sourceClip.sfx_prompt || sourceClip.sfxPrompt;
-            const autoSFX = sourceClip.auto_sfx ?? sourceClip.autoSFX ?? true; // Default to true if missing
+            // [v76] Fix: Treat "Auto SFX" as having SFX too. If auto_sfx is explicitly TRUE in DB, we likely have SFX.
+            // But be careful: Default is true, so we check if previous render actually DID add SFX.
+            // If the clip has a 'video_url', and 'autoSFX' was on, it likely has SFX.
+            // Safer check: Use the same condition used to decide input.audio_url above.
 
-            const shouldGenerateSFX = autoSFX || userProvidedPrompt;
+            const autoSFX = sourceClip.auto_sfx ?? sourceClip.autoSFX ?? true;
+
+            // Strict Mix Preservation Check:
+            // 1. Explicit Prompt? -> Yes
+            // 2. Auto SFX enabled AND no explicit prompt (meaning it verified pure auto logic)? -> Yes
+            // Essentially, if we passed video_url as audio_url, we are preserving.
+            const mixPreserved = !!(sourceClip.sfx_prompt || sourceClip.sfxPrompt) || (autoSFX === true);
+
+            const shouldGenerateSFX = !mixPreserved && (autoSFX || userProvidedPrompt);
 
             if (shouldGenerateSFX) {
                 console.log("[Reshoot] Adding SFX...", { userProvidedPrompt, autoSFX });
