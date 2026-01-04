@@ -1494,10 +1494,9 @@ export default function ClipStudioDemo() {
                     throw new Error("No result URL");
                 }
 
-                // [Simplified] Reuse Last Frame from Original Clip (User Request)
-                // Since this is a re-shoot of the same scene, the last frame is semantically similar enough for now.
-                // This avoids complex client-side capture or backend FFmpeg dependencies.
-                const lastFrameUrl = sourceClip.last_frame_url || sourceClip.lastFrameUrl || "";
+                // [Updated] Use Backend-generated Last Frame if available, otherwise fallback (legacy)
+                const resultLastFrameUrl = data.output?.last_frame_url || data.last_frame_url;
+                const lastFrameUrl = resultLastFrameUrl || sourceClip.last_frame_url || sourceClip.lastFrameUrl || "";
 
                 if (dbId) {
                     const { error: updateError } = await supabase
