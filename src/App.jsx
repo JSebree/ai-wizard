@@ -3,12 +3,16 @@ import InterviewPage from "./interview/InterviewPage.jsx";
 import LandingPage from "./landing/LandingPage.jsx";
 import StudiosPage from "./studios/StudiosPage.jsx";
 import ClipStudioDemo from "./studios/ClipStudioDemo.jsx";
+import LoginPage from "./pages/LoginPage.jsx";
+import AuthCallback from "./pages/AuthCallback.jsx";
+import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import LogoLight from "./assets/SceneMe_black_icon_transparent.png"; // black icon for light mode
 import LogoDark from "./assets/SceneMe_white_icon_transparent.png"; // white icon for dark mode
 
 function AppHeader() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, loading, signOut } = useAuth();
 
   return (
     <header>
@@ -46,18 +50,39 @@ function AppHeader() {
             SceneMe
           </span>
         </Link>
-        {location.pathname === "/interview" && (
-          <button
-            type="button"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
-            }}
-            className="header-review-btn text-sm px-3 py-1 rounded select-none"
-            title="Go to Review step"
-          >
-            Review
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+          {location.pathname === "/interview" && (
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
+              }}
+              className="header-review-btn text-sm px-3 py-1 rounded select-none"
+              title="Go to Review step"
+            >
+              Review
+            </button>
+          )}
+
+          {/* Auth button */}
+          {!loading && (
+            user ? (
+              <button
+                onClick={signOut}
+                className="text-sm px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors"
+              >
+                Sign Out
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              >
+                Log in
+              </Link>
+            )
+          )}
+        </div>
       </div>
     </header>
   );
@@ -172,13 +197,17 @@ function MainLayout() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<MainLayout />}>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/interview" element={<InterviewPage />} />
-        <Route path="/studios" element={<StudiosPage />} />
-        <Route path="/clip-studio-demo" element={<StudiosPage />} />
-      </Route>
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/interview" element={<InterviewPage />} />
+          <Route path="/studios" element={<StudiosPage />} />
+          <Route path="/clip-studio-demo" element={<StudiosPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }
