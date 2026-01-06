@@ -13,8 +13,8 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: "autoUpdate",
-        // Safety: Disable PWA logic during local dev to prevent caching confusion
-        devOptions: { enabled: false },
+        // Enable PWA in dev to test install flow
+        devOptions: { enabled: true },
         includeAssets: ["apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png"],
         manifest: {
           name: "SceneMe Studios",
@@ -23,11 +23,19 @@ export default defineConfig(({ mode }) => {
           theme_color: "#000000",
           background_color: "#000000",
           display: "standalone",
+          orientation: "portrait",
+          categories: ["multimedia", "productivity", "entertainment", "ai"],
           start_url: "/",
+          id: "/",
           icons: [
-            { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
-            { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" }
+            { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+            { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" }
           ],
+          screenshots: [
+            // Recommendation: Add actual screenshots of the app here for Rich Install UI on Android
+            // { src: "/screenshot-mobile.png", sizes: "390x844", type: "image/png", form_factor: "narrow", label: "Mobile View" },
+            // { src: "/screenshot-desktop.png", sizes: "1920x1080", type: "image/png", form_factor: "wide", label: "Desktop View" }
+          ]
         },
         workbox: {
           navigateFallback: "/index.html",

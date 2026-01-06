@@ -123,80 +123,77 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
           </button>
         </div>
 
-        <div style={{ height: "100%", overflow: "hidden" }} className="flex flex-col md:flex-row">
-          <div className="flex flex-col md:flex-row h-full w-full">
-            {/* Left: Preview + Gallery */}
-            <div style={{
-              width: "100%",
-              minHeight: 300,
-              maxHeight: 300,
-              flexShrink: 0,
-              padding: 24,
-              overflowY: "auto",
-              borderBottom: "1px solid #E2E8F0"
-            }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
-              <div style={{ background: "#000", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160, position: "relative" }}>
-                <a
-                  href={primaryImage}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Open full resolution"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    position: "absolute",
-                    top: 12,
-                    left: 12,
-                    textDecoration: "none",
-                    color: "white",
-                    fontSize: 18,
-                    background: "rgba(0,0,0,0.5)",
-                    width: 32,
-                    height: 32,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 4,
-                    zIndex: 10
-                  }}
-                >
-                  ⤢
-                </a>
-                {primaryImage ? (
-                  <img
-                    src={primaryImage}
-                    alt={name}
-                    style={{ width: "100%", height: "auto", display: "block", maxHeight: "40vh", objectFit: "contain" }}
-                  />
-                ) : (
-                  <div style={{ color: "#fff", padding: 20 }}>No Image</div>
-                )}
-              </div>
-
-              {/* Gallery Strip */}
-              {galleryImages.length > 1 && (
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-                  {galleryImages.map((img) => (
-                    <div
-                      key={img.key}
-                      onClick={() => setFullImage(img.url)}
-                      style={{
-                        flexShrink: 0,
-                        width: 50,
-                        height: 50,
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        cursor: "pointer",
-                        border: primaryImage === img.url ? "2px solid #000" : "1px solid #E2E8F0",
-                        opacity: primaryImage === img.url ? 1 : 0.7
-                      }}
-                    >
-                      <img src={img.url} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    </div>
-                  ))}
-                </div>
+        <div style={{ flex: 1, overflow: "hidden" }} className="flex flex-col md:flex-row">
+          {/* Left: Preview + Gallery */}
+          <div style={{
+            width: "100%",
+            minHeight: 420,
+            maxHeight: 420,
+            flexShrink: 0,
+            padding: 24,
+            overflowY: "auto",
+            borderBottom: "1px solid #E2E8F0"
+          }} className="md:w-[60%] md:flex-1 md:h-full md:max-h-full md:border-b-0 md:border-r">
+            <div style={{ background: "#F8FAFC", borderRadius: 8, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 240, position: "relative", border: "1px solid #E2E8F0" }}>
+              <a
+                href={primaryImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open full resolution"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  textDecoration: "none",
+                  color: "white",
+                  fontSize: 18,
+                  background: "rgba(0,0,0,0.5)",
+                  width: 32,
+                  height: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 4,
+                  zIndex: 10
+                }}
+              >
+                ⤢
+              </a>
+              {primaryImage ? (
+                <img
+                  src={primaryImage}
+                  alt={name}
+                  style={{ width: "100%", height: "auto", display: "block", maxHeight: "40vh", objectFit: "contain" }}
+                />
+              ) : (
+                <div style={{ color: "#fff", padding: 20 }}>No Image</div>
               )}
             </div>
 
+            {/* Gallery Strip */}
+            {galleryImages.length > 1 && (
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                {galleryImages.map((img) => (
+                  <div
+                    key={img.key}
+                    onClick={() => setFullImage(img.url)}
+                    style={{
+                      flexShrink: 0,
+                      width: 50,
+                      height: 50,
+                      borderRadius: 6,
+                      overflow: "hidden",
+                      cursor: "pointer",
+                      border: primaryImage === img.url ? "2px solid #000" : "1px solid #E2E8F0",
+                      opacity: primaryImage === img.url ? 1 : 0.7
+                    }}
+                  >
+                    <img src={img.url} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Right: Metadata */}
@@ -205,8 +202,8 @@ export default function SettingCard({ setting, onClose, onModify, onDelete }) {
             overflowY: "auto",
             padding: 24,
             width: "100%"
-          }} className="md:w-[280px] md:flex-none">
-            <h3 style={{ marginTop: 0, fontSize: 20, fontWeight: 700, marginBottom: 20, paddingRight: 30 }}>{name}</h3>
+          }} className="md:w-[40%] md:flex-none">
+            <h3 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, marginBottom: 20, paddingRight: 30, lineHeight: 1.2 }}>{name}</h3>
 
             <div style={{ display: "grid", gap: 16 }}>
               <div>
