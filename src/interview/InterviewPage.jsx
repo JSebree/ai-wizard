@@ -311,8 +311,18 @@ function NavBar({ stepIndex, total, onReset }) {
   const pct = Math.round(((stepIndex + 1) / total) * 100);
   return (
     <div style={{ position: "sticky", top: 0, background: "#fff", padding: "8px 0 14px", zIndex: 5 }}>
-      {/* Top row with Reset aligned right */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
+      {/* Top row with Review (left) and Reset (right) */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("interview:goReviewStep"))}
+          className="btn"
+          title="Review all answers"
+          style={{ padding: "6px 10px" }}
+        >
+          Review
+        </button>
+
         <button
           type="button"
           onClick={onReset}

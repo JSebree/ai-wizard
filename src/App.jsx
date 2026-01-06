@@ -51,34 +51,27 @@ function AppHeader() {
           </span>
         </Link>
         <div className="flex items-center gap-4">
-          {location.pathname === "/interview" && (
-            <button
-              type="button"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("interview:goReviewStep"));
-              }}
-              className="header-review-btn text-sm px-3 py-1 rounded select-none"
-              title="Go to Review step"
-            >
-              Review
-            </button>
-          )}
 
           {/* Auth button */}
           {!loading && (
             user ? (
               <button
-                onClick={signOut}
+                onClick={async () => {
+                  await signOut();
+                  navigate("/");
+                }}
                 className="text-sm px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors"
+                title="Sign out of your account"
               >
                 Sign Out
               </button>
             ) : (
               <Link
                 to="/login"
-                className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                className="text-sm px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white transition-colors font-medium border border-gray-900"
+                title="Log in or create an account"
               >
-                Log in
+                Log in / Sign up
               </Link>
             )
           )}
