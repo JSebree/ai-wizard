@@ -59,6 +59,7 @@ export const AuthProvider = ({ children }) => {
                 redirectTo: `${window.location.origin}/auth/callback`
             }
         });
+
         if (error) {
             console.error("[AuthContext] signInWithGoogle error:", error);
             return { error };
