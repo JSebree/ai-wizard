@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
 import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
@@ -15,12 +16,12 @@ export function resetWizardFormGlobal() {
     localStorage.removeItem("ai-wizard-state");
     localStorage.removeItem("n8nNoCors");
     localStorage.removeItem("last_job_id");
-  } catch {}
+  } catch { }
   try {
     const url = new URL(window.location.href);
     url.searchParams.delete("jobId");
     window.history.replaceState({}, "", url);
-  } catch {}
+  } catch { }
   window.location.reload();
 }
 /**
@@ -73,7 +74,7 @@ function readJSON(key, fallback) {
 function writeJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch { }
 }
 
 function coerceVolume10(v) {
@@ -358,6 +359,7 @@ function NavBar({ stepIndex, total, onReset }) {
 // --------------------------- Main component -----------------------------
 
 export default function InterviewPage({ onComplete }) {
+  const { user } = useAuth();
   // Core answer state
   const [answers, setAnswers] = useState(() => {
     const defaults = getDefaultAnswers();
@@ -422,7 +424,7 @@ export default function InterviewPage({ onComplete }) {
         VOICES_CACHE_KEY,
         JSON.stringify({ ts: Date.now(), data: Array.isArray(list) ? list : [] })
       );
-    } catch {}
+    } catch { }
   }
 
   function normalizeVoices(list = []) {
@@ -449,7 +451,7 @@ export default function InterviewPage({ onComplete }) {
           return list;
         }
       }
-    } catch {}
+    } catch { }
 
     // 2) Fallback to Supabase REST (read-only)
     if (!SUPABASE_URL || !SUPABASE_ANON) return null;
@@ -476,7 +478,7 @@ export default function InterviewPage({ onComplete }) {
           return list;
         }
       }
-    } catch {}
+    } catch { }
 
     return null;
   }
@@ -563,9 +565,9 @@ export default function InterviewPage({ onComplete }) {
 
     // If we have an id but no label yet, try to backfill from voices[]
     if ((!answers.voiceLabel || !String(answers.voiceLabel).trim())
-        && Array.isArray(voices)
-        && answers.voiceId
-        && typeof answers.voiceId !== 'object') {
+      && Array.isArray(voices)
+      && answers.voiceId
+      && typeof answers.voiceId !== 'object') {
       const m = voices.find(v => v.id === answers.voiceId);
       if (m && m.name) {
         setAnswers((s) => ({ ...s, voiceLabel: m.name }));
@@ -596,9 +598,12 @@ export default function InterviewPage({ onComplete }) {
       typeof voiceId === "object"
         ? (voiceId.id || voiceId.voice_id || voiceId.tts_id || "")
         : voiceId;
-    const userEmail = readEmail();
-    const userFirstName = readFirstName();
-    const userLastName = readLastName();
+
+    const userEmail = user?.email || readEmail();
+    const userFullName = user?.user_metadata?.full_name || user?.user_metadata?.name || "";
+    const nameParts = userFullName.split(" ");
+    const userFirstName = (userFullName ? nameParts[0] : readFirstName()) || "";
+    const userLastName = (userFullName ? nameParts.slice(1).join(" ") : readLastName()) || "";
 
     return {
       scene: req(scene) ? scene : undefined,
@@ -637,7 +642,7 @@ export default function InterviewPage({ onComplete }) {
           answers.wantsMusic && typeof answers.musicIncludeVocals === "boolean"
             ? answers.musicIncludeVocals
             : undefined,
-        seed: (function() {
+        seed: (function () {
           const raw = answers.musicSeed;
           const s = (raw === undefined || raw === null) ? "" : String(raw).trim();
           if (s) {
@@ -716,8 +721,8 @@ export default function InterviewPage({ onComplete }) {
                     answers.wantsCutaways === true
                       ? "yes"
                       : answers.wantsCutaways === false
-                      ? "no"
-                      : ""
+                        ? "no"
+                        : ""
                   }
                   onChange={(v) =>
                     setAnswers((s) => ({ ...s, wantsCutaways: v === "yes" }))
@@ -882,8 +887,8 @@ export default function InterviewPage({ onComplete }) {
                 answers.wantsMusic === true
                   ? "yes"
                   : answers.wantsMusic === false
-                  ? "no"
-                  : ""
+                    ? "no"
+                    : ""
               }
               onChange={(v) =>
                 setAnswers((s) => {
@@ -914,8 +919,8 @@ export default function InterviewPage({ onComplete }) {
                     answers.musicIncludeVocals === true
                       ? "yes"
                       : answers.musicIncludeVocals === false
-                      ? "no"
-                      : ""
+                        ? "no"
+                        : ""
                   }
                   onChange={(v) =>
                     setAnswers((s) => ({
@@ -973,8 +978,8 @@ export default function InterviewPage({ onComplete }) {
               answers.wantsCaptions === true
                 ? "yes"
                 : answers.wantsCaptions === false
-                ? "no"
-                : ""
+                  ? "no"
+                  : ""
             }
             onChange={(v) =>
               setAnswers((s) => ({ ...s, wantsCaptions: v === "yes" }))
@@ -1062,7 +1067,7 @@ export default function InterviewPage({ onComplete }) {
             }
             if (idx >= 0 && idx < steps.length) {
               setStepIndex(idx);
-              try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+              try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { }
             }
           }}
         />
@@ -1076,7 +1081,7 @@ export default function InterviewPage({ onComplete }) {
     function onGoReview() {
       const last = steps.length - 1;
       if (last >= 0) setStepIndex(last);
-      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { }
     }
     window.addEventListener("interview:goReviewStep", onGoReview);
     return () => window.removeEventListener("interview:goReviewStep", onGoReview);
@@ -1145,7 +1150,7 @@ export default function InterviewPage({ onComplete }) {
       const idx = steps.findIndex(s => s.key === key);
       if (idx >= 0) {
         setStepIndex(idx);
-        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+        try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { }
       }
     }
 
@@ -1165,7 +1170,7 @@ export default function InterviewPage({ onComplete }) {
     if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= steps.length) {
       const idx = Math.max(0, Math.min(steps.length - 1, Number(stepIndex) || 0));
       setStepIndex(idx);
-      try { writeJSON(LS_KEY_STEP, idx); } catch {}
+      try { writeJSON(LS_KEY_STEP, idx); } catch { }
     }
   }, [steps.length]);
 
@@ -1185,13 +1190,13 @@ export default function InterviewPage({ onComplete }) {
           if (last >= 0) {
             setStepIndex(last);
             writeJSON(LS_KEY_STEP, last);
-            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { }
           }
         }
       }
-    } catch {}
+    } catch { }
     // Clear the template so refreshes don't re-apply it
-    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
+    try { localStorage.removeItem(TEMPLATE_KEY); } catch { }
   }, [steps.length]);
 
   const total = steps.length;
@@ -1206,8 +1211,8 @@ export default function InterviewPage({ onComplete }) {
     setSubmitting(true);
 
     // Signal submit immediately so ReviewStep can show the banner
-    try { sessionStorage.setItem('just_submitted', '1'); } catch {}
-    try { window.dispatchEvent(new Event('interview:submit')); } catch {}
+    try { sessionStorage.setItem('just_submitted', '1'); } catch { }
+    try { window.dispatchEvent(new Event('interview:submit')); } catch { }
 
     // Build the payload (wrap under { ui } for intake; adjust here if your n8n expects a different shape)
     const payload = { ui: uiPayload };
@@ -1237,27 +1242,27 @@ export default function InterviewPage({ onComplete }) {
       const statusUrl = data.statusUrl || undefined;
 
       // Persist jobId for the Review step auto-poller (existing code follows)
-      try { localStorage.setItem('last_job_id', String(returnedJobId || '')); } catch {}
+      try { localStorage.setItem('last_job_id', String(returnedJobId || '')); } catch { }
       try {
         const url = new URL(window.location.href);
         if (returnedJobId) url.searchParams.set('jobId', String(returnedJobId));
         window.history.replaceState({}, '', url);
-      } catch {}
+      } catch { }
 
       // Notify listeners (ReviewStep) that a new job has been created
       try {
         window.dispatchEvent(new CustomEvent('interview:submitted', {
           detail: { jobId: String(returnedJobId || ''), statusUrl }
         }));
-      } catch {}
+      } catch { }
       try {
         window.dispatchEvent(new CustomEvent('interview:newJobId', {
           detail: { jobId: String(returnedJobId || ''), statusUrl }
         }));
-      } catch {}
+      } catch { }
 
       // Stay on Review step (we're already there); ensure top-of-page
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { }
     } catch (err) {
       console.error(err);
       alert('Network error while submitting.');

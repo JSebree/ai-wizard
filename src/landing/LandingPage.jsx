@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 // Simple IOS Detection
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -276,24 +277,9 @@ const templates = [
   }
 ];
 
-const EMAIL_KEY = "interview_email_v1";
-const FIRSTNAME_KEY = "interview_firstname_v1";
-const LASTNAME_KEY = "interview_lastname_v1";
-
-function isValidEmail(s) {
-  const v = String(s || "").trim();
-  // Simple but effective check
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-}
-
 export default function LandingPage() {
   const nav = useNavigate();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [pendingTemplate, setPendingTemplate] = useState(null);
-  const [nextPath, setNextPath] = useState("/interview");
+  const { user } = useAuth();
   const [installPrompt, setInstallPrompt] = useState(null);
 
   useEffect(() => {
@@ -326,28 +312,35 @@ export default function LandingPage() {
     }
   }
 
-  function openForm(tpl = null, path = "/interview") {
-    setPendingTemplate(tpl);
-    setNextPath(path);
-    setShowForm(true);
-  }
-  function closeForm() {
-    setPendingTemplate(null);
-    setShowForm(false);
-    setNextPath("/interview"); // Reset
-  }
+  // Navigate to a path, injecting user info if a template is provided
+  function handleNavigate(path, tpl = null) {
+    // If not logged in, redirect to login
+    if (!user) {
+      nav("/login");
+      return;
+    }
 
-  // Prefill if user has already visited
-  useEffect(() => {
-    try {
-      const savedEmail = localStorage.getItem(EMAIL_KEY);
-      const savedFirstName = localStorage.getItem(FIRSTNAME_KEY);
-      const savedLastName = localStorage.getItem(LASTNAME_KEY);
-      if (savedEmail) setEmail(savedEmail);
-      if (savedFirstName) setFirstName(savedFirstName);
-      if (savedLastName) setLastName(savedLastName);
-    } catch { }
-  }, []);
+    // Get user info from auth context
+    const userEmail = user.email || "";
+    const userFullName = user.user_metadata?.full_name || user.user_metadata?.name || "";
+    const nameParts = userFullName.split(" ");
+    const userFirstName = nameParts[0] || "";
+    const userLastName = nameParts.slice(1).join(" ") || "";
+
+    // If a template was chosen, merge user info & save to localStorage
+    if (tpl) {
+      const payload = JSON.parse(JSON.stringify(tpl.json));
+      if (payload && payload.ui) {
+        payload.ui.userFirstName = userFirstName;
+        payload.ui.userLastName = userLastName;
+        payload.ui.userEmail = userEmail;
+      }
+      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch { }
+      try { localStorage.setItem("interview_step_v1", "scene"); } catch { }
+    }
+
+    nav(path);
+  }
 
   // Hide the global "Review" button ONLY on the Landing page
   useEffect(() => {
@@ -379,49 +372,6 @@ export default function LandingPage() {
       }
     };
   }, []);
-
-  function handleSubmitUser(e) {
-    if (e) e.preventDefault();
-
-    const fName = String(firstName || "").trim();
-    const lName = String(lastName || "").trim();
-    const v = String(email || "").trim();
-
-    if (!fName) return alert("Please enter your first name.");
-    if (!lName) return alert("Please enter your last name.");
-    if (!isValidEmail(v)) return alert("Please enter a valid email.");
-
-    // Persist user info
-    try { localStorage.setItem(FIRSTNAME_KEY, fName); } catch { }
-    try { localStorage.setItem(LASTNAME_KEY, lName); } catch { }
-    try { localStorage.setItem(EMAIL_KEY, v); } catch { }
-    try { localStorage.setItem("interview_step_v1", "scene"); } catch { }
-
-    // If a template was chosen, merge user info & proceed via existing logic
-    if (pendingTemplate) {
-      const tpl = pendingTemplate;
-      const payload = JSON.parse(JSON.stringify(tpl.json));
-      if (payload && payload.ui) {
-        payload.ui.userFirstName = fName;
-        payload.ui.userLastName = lName;
-        payload.ui.userEmail = v;
-      }
-      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch { }
-      closeForm();
-      try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(payload)); } catch { }
-      closeForm();
-      nav(nextPath);
-      return;
-    }
-
-    // No template → just go to destination
-    closeForm();
-    nav(nextPath);
-  }
-
-  function handleUseTemplate(tpl) {
-    openForm(tpl);
-  }
 
   return (
     <div style={{ maxWidth: 860, margin: "0 auto", padding: 24 }}>
@@ -462,7 +412,7 @@ export default function LandingPage() {
         >
           <button
             type="button"
-            onClick={() => openForm(null, "/interview")}
+            onClick={() => handleNavigate("/interview")}
             className="btn btn-primary"
             style={{
               padding: "12px 18px",
@@ -477,7 +427,7 @@ export default function LandingPage() {
           </button>
           <button
             type="button"
-            onClick={() => openForm(null, "/studios")}
+            onClick={() => handleNavigate("/studios")}
             className="btn btn-secondary"
             style={{
               padding: "10px 16px",
@@ -572,7 +522,7 @@ export default function LandingPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => openForm(tpl)}
+                    onClick={() => handleNavigate("/interview", tpl)}
                     className="btn btn-secondary"
                     style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #111827", background: "#fff", color: "#111827", fontWeight: 600, fontSize: 12 }}
                   >
@@ -618,89 +568,6 @@ export default function LandingPage() {
               >
                 Got it
               </button>
-            </div>
-          </div>
-        )
-      }
-      {
-        showForm && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000
-            }}
-            onClick={(e) => {
-              // close when clicking backdrop only
-              if (e.target === e.currentTarget) closeForm();
-            }}
-          >
-            <div style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
-              <h3 style={{ marginTop: 0, marginBottom: 6 }}>
-                {pendingTemplate ? "Use template" : "Create your own"}
-              </h3>
-              <p style={{ marginTop: 0, color: "#475569" }}>
-                Tell us where to send status updates and your finished video.
-              </p>
-              <form onSubmit={handleSubmitUser}>
-                <label htmlFor="firstName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>First name</label>
-                <input
-                  id="firstName"
-                  type="text"
-                  placeholder="First name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
-                  required
-                />
-                <label htmlFor="lastName" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Last name</label>
-                <input
-                  id="lastName"
-                  type="text"
-                  placeholder="Last name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", marginBottom: 12 }}
-                  required
-                />
-                <label htmlFor="email" style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Your email</label>
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1" }}
-                  required
-                />
-                <small style={{ display: "block", marginTop: 6, color: "#667085" }}>
-                  We’ll use this for status updates and delivery. No spam.
-                </small>
-
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                  <button
-                    type="button"
-                    onClick={closeForm}
-                    className="btn btn-secondary"
-                    style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #E5E7EB", background: "#fff", color: "#111827" }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #111827", background: "#111827", color: "#fff" }}
-                  >
-                    Continue
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         )
