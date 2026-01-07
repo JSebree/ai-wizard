@@ -487,10 +487,10 @@ export default function KeyframeStudioDemo() {
             return;
         }
 
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user: authUser } } = await supabase.auth.getUser();
 
         const newScenePayload = {
-            user_id: user?.id,
+            user_id: authUser?.id || user?.id,
             name: name.trim(),
             image_url: urlToSave,
             prompt: prompt,
@@ -703,8 +703,8 @@ export default function KeyframeStudioDemo() {
             if (supabase) {
                 // [v56] Inject User ID (Critical for RLS visibility)
                 // Note: caller usually provides user_id in 'keyframe' object, but we double check.
-                const { data: { user } } = await supabase.auth.getUser();
-                const ownerId = keyframe.user_id || user?.id;
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                const ownerId = keyframe.user_id || authUser?.id || user?.id; // Priority: Item > Fresh Auth > Context
 
                 // DATA CLEANUP: Remove fields not in DB schema
                 const dbPayload = {
@@ -1068,10 +1068,13 @@ export default function KeyframeStudioDemo() {
 
             if (!url) throw new Error("No URL returned from upload");
 
+            // [v81] Ensure User ID is fresh
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+
             const newPropPayload = {
                 name: defaultName,
                 image_url: url,
-                user_id: user?.id
+                user_id: authUser?.id || user?.id // Fallback to context
             };
 
             // Optimistic Update
