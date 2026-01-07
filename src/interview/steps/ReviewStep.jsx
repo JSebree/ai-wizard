@@ -146,7 +146,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         setShowBanner(true);
         sessionStorage.removeItem('just_submitted');
       }
-    } catch {}
+    } catch { }
   }, [jobId, status]);
 
   // Listen for footer-driven submits and begin polling immediately
@@ -163,7 +163,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           setShowBanner(true);
           sessionStorage.removeItem('just_submitted');
         }
-      } catch {}
+      } catch { }
       if (stopRef.current) { stopRef.current(); stopRef.current = null; }
       const statusUrl = providedStatusUrl || `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
       stopRef.current = startAutoPoll({
@@ -209,7 +209,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
             setShowBanner(true);
             sessionStorage.removeItem('just_submitted');
           }
-        } catch {}
+        } catch { }
         const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
         if (stopRef.current) { stopRef.current(); stopRef.current = null; }
         stopRef.current = startAutoPoll({
@@ -229,7 +229,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           },
         });
       }
-    } catch {}
+    } catch { }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -250,7 +250,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
               setShowBanner(true);
               sessionStorage.removeItem('just_submitted');
             }
-          } catch {}
+          } catch { }
           const statusUrl = `${STATUS_GET}?jobId=${encodeURIComponent(jid)}`;
           if (stopRef.current) { stopRef.current(); stopRef.current = null; }
           stopRef.current = startAutoPoll({
@@ -271,7 +271,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           });
           return; // stop checking
         }
-      } catch {}
+      } catch { }
       if (++tries < 15) timer = setTimeout(check, 800);
     }
     // Start short polling only if we have nothing yet
@@ -321,13 +321,13 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
       const statusUrl = data?.statusUrl || `${STATUS_GET}?jobId=${encodeURIComponent(returnedJobId)}`;
 
       if (returnedJobId) {
-        try { localStorage.setItem('last_job_id', String(returnedJobId)); } catch {}
+        try { localStorage.setItem('last_job_id', String(returnedJobId)); } catch { }
         try {
           const url = new URL(window.location.href);
           url.searchParams.set('jobId', String(returnedJobId));
           window.history.replaceState({}, '', url);
-        } catch {}
-        try { sessionStorage.setItem('just_submitted', '1'); } catch {}
+        } catch { }
+        try { sessionStorage.setItem('just_submitted', '1'); } catch { }
         try {
           window.dispatchEvent(new CustomEvent('interview:newJobId', {
             detail: {
@@ -335,7 +335,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
               statusUrl: typeof statusUrl !== 'undefined' ? statusUrl : undefined,
             }
           }));
-        } catch {}
+        } catch { }
       }
 
       setJobId(returnedJobId);
@@ -371,8 +371,8 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
     const click = () => {
       // Special-case landing goes to root
       if (to === 'landing') {
-        try { localStorage.setItem(LS_KEY_STEP, 'landing'); } catch {}
-        try { window.scrollTo({ top: 0 }); } catch {}
+        try { localStorage.setItem(LS_KEY_STEP, 'landing'); } catch { }
+        try { window.scrollTo({ top: 0 }); } catch { }
         window.location.href = '/';
         return;
       }
@@ -397,12 +397,12 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         const detail = { stepKey: targetKey ?? undefined, stepIndex: idx ?? undefined };
         window.dispatchEvent(new CustomEvent('interview:navigate', { detail }));
         window.dispatchEvent(new CustomEvent('interview:editStep', { detail }));
-      } catch {}
+      } catch { }
 
       // Persist intent so a hard reload or different shell can restore it
-      try { if (targetKey) localStorage.setItem(LS_KEY_STEP, String(targetKey)); } catch {}
+      try { if (targetKey) localStorage.setItem(LS_KEY_STEP, String(targetKey)); } catch { }
 
-      try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch {}
+      try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch { }
 
       // If we're currently on a /review route, navigate back to the base wizard
       // (so the shell can pick up the stored step key on mount).
@@ -413,7 +413,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           window.location.href = nextPath;
           return;
         }
-      } catch {}
+      } catch { }
 
       // Soft navigation is handled by listeners; fall back to reload
       setTimeout(() => { if (document.visibilityState !== 'hidden') window.location.reload(); }, 50);
@@ -434,13 +434,13 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
   function clearCurrentJob() {
     if (stopRef.current) { stopRef.current(); stopRef.current = null; }
     if (watchRef.current) { clearTimeout(watchRef.current); watchRef.current = null; }
-    try { localStorage.removeItem('last_job_id'); } catch {}
-    try { sessionStorage.removeItem('just_submitted'); } catch {}
+    try { localStorage.removeItem('last_job_id'); } catch { }
+    try { sessionStorage.removeItem('just_submitted'); } catch { }
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('jobId');
       window.history.replaceState({}, '', url);
-    } catch {}
+    } catch { }
     setJobId('');
     setStatus('');
     setFinalUrl('');
@@ -481,7 +481,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           });
           return;
         }
-      } catch {}
+      } catch { }
       if (++tries <= 60) {
         watchRef.current = setTimeout(check, 500);
       } else {
@@ -512,26 +512,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         Please review your selections. If everything looks good, click <b>Submit</b>.
       </p>
 
-      {/* Inline submission/status controls (legacy-style) */}
-      <div style={{ marginBottom: 12, padding: 12, border: '1px solid #E5E7EB', borderRadius: 10 }}>
-        {showBanner && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '8px 10px',
-            background: '#ECFDF5',
-            border: '1px solid #A7F3D0',
-            color: '#065F46',
-            borderRadius: 8,
-            fontSize: 13,
-          }}>
-            <span style={{ fontWeight: 600 }}>Submission received.</span>
-            <span style={{ opacity: 0.9 }}>We’re processing your video now.</span>
-          </div>
-        )}
 
-      </div>
 
       <div style={{ display: "grid", gap: 12 }}>
         <Section title="User" action={<EditLink to="landing" />}>
@@ -607,58 +588,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
         </Section>
       </div>
 
-      {finalUrl && (
-        <div className="mt-4" style={{ marginTop: 12 }}>
-          <a className="text-indigo-700 underline" href={finalUrl} target="_blank" rel="noreferrer">
-            Open final video
-          </a>
-          <div style={{ marginTop: 8 }}>
-            <video src={finalUrl} controls className="w-full" style={{ maxWidth: 720, borderRadius: 8, border: '1px solid #E5E7EB' }} />
-          </div>
-        </div>
-      )}
 
-      <div style={{ marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <div
-            className="text-sm"
-            style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
-          >
-            <span>
-              <strong>Job:</strong> {jobId || '—'} &nbsp; | &nbsp;
-              <strong>Status:</strong> {status || '—'}
-            </span>
-            {(jobId || status) && (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={clearCurrentJob}
-                style={{ padding: '2px 6px', fontSize: 11 }}
-                title="Clear current job"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <div style={{ fontSize: 12, color: '#7c3aed' }}>
-            Heads up: renders generally take 2-3 mins per sec of video.
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="button" className="btn" onClick={handleCopyJson}>
-            Copy JSON
-          </button>
-          <button type="button" className="btn" onClick={handleDownloadJson}>
-            Download JSON
-          </button>
-          {extraActions}
-          {!hideSubmit && (
-            <button type="button" className="btn btn-primary" onClick={() => onSubmit?.(ui)}>
-              Submit
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
