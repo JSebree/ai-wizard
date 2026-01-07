@@ -1,23 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
+import { supabase } from "../libs/supabaseClient";
 import { API_CONFIG, getProxiedUrl } from "../config/api";
 import { generateEDL, downloadEDL } from "../utils/edlGenerator";
 import ProjectCard from "./components/ProjectCard";
 import ProjectThumbnail from "./components/ProjectThumbnail"; // New Thumb
 
-import { createClient } from "@supabase/supabase-js";
-
 // Layout: 2 Columns. Left = Bin. Right = Player + Timeline.
 // Logic: Timeline is an array of clips. Player plays them sequentially.
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase =
-    supabaseUrl && supabaseAnonKey
-        ? createClient(supabaseUrl, supabaseAnonKey)
-        : null;
-
 export default function ProductionStudioDemo() {
+    const { user } = useAuth();
     const [bin, setBin] = useState([]);
     const [savedScenes, setSavedScenes] = useState([]);
     const [timeline, setTimeline] = useState([]);
@@ -188,6 +181,7 @@ export default function ProductionStudioDemo() {
 
         const projectData = {
             id: currentSceneId || crypto.randomUUID(),
+            user_id: user?.id,
             name: sceneName,
             data: { timeline, musicStyle, burnCaptions, audioTrack }, // Save strictly to data column
             video_url: url,
@@ -817,8 +811,8 @@ export default function ProductionStudioDemo() {
                                 }}
                                 disabled={timeline.length === 0 || !sceneName.trim()}
                                 className={`w-full py-2 rounded-lg font-bold text-xs border transition-all flex items-center justify-center gap-2 ${timeline.length === 0 || !sceneName.trim()
-                                        ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
+                                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
                                     }`}
                                 title={!sceneName.trim() ? "Please enter a Scene Name" : "Export Edit Decision List for professional editing software"}
                             >

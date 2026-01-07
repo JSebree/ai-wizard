@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../libs/supabaseClient";
 import SettingCard from "./components/SettingCard";
+import { useAuth } from "../context/AuthContext";
 import { API_CONFIG } from "../config/api";
 
 const STORAGE_KEY = "sceneme.settings";
 
 export default function SettingsStudioDemo() {
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -317,6 +319,7 @@ export default function SettingsStudioDemo() {
         mood: rawMood || null,
         base_image_url: imageUrl,
         kind: "setting",
+        user_id: user?.id || null,
       };
 
       const res = await fetch(endpoint, {
@@ -355,6 +358,7 @@ export default function SettingsStudioDemo() {
         mood: rawMood || null,
         base_image_url: imageUrl,
         kind: "setting",
+        user_id: user?.id || null,
       };
 
       void fetch(expansionEndpoint, {
@@ -632,18 +636,18 @@ export default function SettingsStudioDemo() {
           <div style={{ marginTop: 24 }}>
             <button
               onClick={handleGeneratePreview}
-              disabled={isGenerating || !name.trim() || !basePrompt.trim()}
-              title={(!name.trim() || !basePrompt.trim()) ? "Please enter a Name and Prompt first" : ""}
+              disabled={isGenerating || !name.trim() || !basePrompt.trim() || !!referenceImageUrl}
+              title={referenceImageUrl ? "Preview generation is disabled when using a reference image" : ((!name.trim() || !basePrompt.trim()) ? "Please enter a Name and Prompt first" : "")}
               style={{
                 width: "100%",
                 padding: "12px",
                 borderRadius: 999,
-                background: (isGenerating || !name.trim() || !basePrompt.trim()) ? "#94A3B8" : "#000",
+                background: (isGenerating || !name.trim() || !basePrompt.trim() || !!referenceImageUrl) ? "#94A3B8" : "#000",
                 color: "white",
                 fontWeight: 600,
                 fontSize: 14,
                 border: "none",
-                cursor: (isGenerating || !name.trim() || !basePrompt.trim()) ? "not-allowed" : "pointer",
+                cursor: (isGenerating || !name.trim() || !basePrompt.trim() || !!referenceImageUrl) ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

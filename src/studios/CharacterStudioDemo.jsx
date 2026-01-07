@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../libs/supabaseClient";
 import { API_CONFIG } from "../config/api";
+import { useAuth } from "../context/AuthContext";
 import CharacterCard from "./components/CharacterCard";
 
 const STORAGE_KEY = "sceneme.characters";
 
 export default function CharacterStudioDemo() {
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
@@ -337,7 +339,8 @@ export default function CharacterStudioDemo() {
           voice_id: finalVoiceId,
           // [v69] STRICT: Only send voice_ref_url if it's a clone. Registry voices don't need it.
           voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
-          kind: "character"
+          kind: "character",
+          user_id: user?.id || null
         })
       });
 
@@ -367,7 +370,8 @@ export default function CharacterStudioDemo() {
           voice_id: finalVoiceId,
           // [v70] FIX: Use 'voice_ref_url' to match DB column and Register payload vs 'audio_url'
           voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
-          kind: "character"
+          kind: "character",
+          user_id: user?.id || null
         })
       }).catch(console.error);
 
@@ -641,8 +645,9 @@ export default function CharacterStudioDemo() {
           <div style={{ marginTop: 24 }}>
             <button
               onClick={handleGeneratePreview}
-              disabled={isGeneratingPreview || !basePrompt}
-              style={{ width: "100%", padding: "12px", borderRadius: 999, background: (isGeneratingPreview || !basePrompt) ? "#94A3B8" : "#000", color: "white", fontWeight: 600, fontSize: 14, border: "none", cursor: "pointer" }}
+              disabled={isGeneratingPreview || !basePrompt || !!referenceImageUrl}
+              title={referenceImageUrl ? "Preview generation is disabled when using a reference image" : ""}
+              style={{ width: "100%", padding: "12px", borderRadius: 999, background: (isGeneratingPreview || !basePrompt || !!referenceImageUrl) ? "#94A3B8" : "#000", color: "white", fontWeight: 600, fontSize: 14, border: "none", cursor: (isGeneratingPreview || !basePrompt || !!referenceImageUrl) ? "not-allowed" : "pointer" }}
             >
               {isGeneratingPreview ? "Generating..." : "Generate Preview"}
             </button>

@@ -315,6 +315,8 @@ export default function ClipStudioDemo() {
             videoUrl: "",
             sfxPrompt: "",
             autoSFX: true,
+            endKeyframeId: null,
+            endKeyframeUrl: null,
             error: "",
             useSeedVC: false,
         };
@@ -824,7 +826,7 @@ export default function ClipStudioDemo() {
                 character_id: shot.character_id || shot.characterId || shot.dialogueBlocks?.[0]?.characterId || selectedKeyframe?.characterId || null,
                 thumbnail_url: shot.thumbnail_url || shot.sceneImageUrl || selectedKeyframe?.image_url || selectedKeyframe?.imageUrl,
                 video_url: shot.videoUrl || null, // Might be null if pending
-                last_frame_url: shot.last_frame_url || shot.lastFrameUrl || null, // Last frame from n8n
+                last_frame_url: shot.last_frame_url || shot.lastFrameUrl || ((shot.speakerType === 'narrator' || shot.speaker_type === 'narrator') ? shot.endKeyframeUrl : null) || null, // Last frame from n8n or End Keyframe
                 raw_video_url: shot.rawVideoUrl || shot.videoUrl,
                 audio_url: shot.stitchedAudioUrl || shot.audio_url || null,
                 prompt: shot.prompt,
@@ -1025,7 +1027,15 @@ export default function ClipStudioDemo() {
                 user_id: user?.id || null,
                 scene_id: shot.sceneId || null,
                 character_id: shot.characterId || null,
-                setting_id: shot.setting_id || null
+                id: dbId,
+                clip_id: dbId, // Alias
+                user_id: user?.id || null,
+                scene_id: shot.sceneId || null,
+                character_id: shot.characterId || null,
+                setting_id: shot.setting_id || null,
+
+                // [v80] End Keyframe (LTX 2 Support)
+                image_end: (shot.speakerType === 'narrator' && shot.endKeyframeUrl) ? shot.endKeyframeUrl : null
             };
 
             // Global Sanitizer (Recursively convert "" to null)
@@ -1698,6 +1708,8 @@ export default function ClipStudioDemo() {
             startDelay: clip.start_delay || 0,
             sfxPrompt: clip.sfx_prompt || clip.sfxPrompt || "",
             autoSFX: clip.auto_sfx ?? clip.autoSFX ?? true,
+            endKeyframeId: null, // Reset on edit for now unless we persisted it (DB schema update needed for persistence)
+            endKeyframeUrl: null,
         };
 
         setShotList([restoredShot]); // FORCE SINGLE SHOT: Replace workshop instead of prepending
@@ -1902,12 +1914,19 @@ export default function ClipStudioDemo() {
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <input
-                                                    type="range" min="1" max="3.4" step="0.1"
-                                                    value={shot.manualDuration}
-                                                    onChange={e => updateShot(shot.tempId, { manualDuration: parseFloat(e.target.value) })}
-                                                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2"
-                                                />
+                                                <div className="flex flex-col items-center w-full">
+                                                    <input
+                                                        type="range" min="1" max="10.0" step="0.1"
+                                                        value={shot.manualDuration}
+                                                        onChange={e => updateShot(shot.tempId, { manualDuration: parseFloat(e.target.value) })}
+                                                        className={`w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2 ${shot.manualDuration > 3.4 ? 'accent-amber-500' : ''}`}
+                                                    />
+                                                    {shot.manualDuration > 3.4 && (
+                                                        <span className="text-[9px] text-amber-600 font-bold mt-1 animate-fade-in text-center leading-tight">
+                                                            ⚠️ Extended clips cannot be reshot
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
 
@@ -1973,6 +1992,84 @@ export default function ClipStudioDemo() {
                                                     onChange={e => updateShot(shot.tempId, { sfxPrompt: e.target.value })}
                                                 />
                                             </div>
+
+                                            {/* [v80] End Keyframe Logic (Narrator Only) */}
+                                            {shot.speakerType === 'narrator' && (
+                                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                                                    <label className="text-xs font-bold text-slate-700 uppercase mb-2 block">End Frame (Optional)</label>
+                                                    <div className="relative">
+                                                        {/* CUSTOM SELECTOR TRIGGER */}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                // Toggle local UI state for dropdown (need to add to shot state or handle locally? Shot state is safest for list items)
+                                                                updateShot(shot.tempId, { isEndFrameSelectorOpen: !shot.isEndFrameSelectorOpen });
+                                                            }}
+                                                            className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-left flex items-center justify-between hover:border-black transition-colors"
+                                                        >
+                                                            {shot.endKeyframeUrl ? (
+                                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                                    <img src={shot.endKeyframeUrl} className="w-10 h-6 object-cover rounded shadow-sm bg-gray-200" alt="Selected" />
+                                                                    <span className="text-xs font-bold truncate">
+                                                                        {keyframes.find(k => k.id === shot.endKeyframeId)?.name || "Selected Scene"}
+                                                                    </span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-500 font-medium">Select an end frame...</span>
+                                                            )}
+                                                            <span className="text-[10px] text-gray-400">▼</span>
+                                                        </button>
+
+                                                        {/* CUSTOM DROPDOWN LIST */}
+                                                        {shot.isEndFrameSelectorOpen && (
+                                                            <>
+                                                                {/* Backdrop to close */}
+                                                                <div className="fixed inset-0 z-40" onClick={() => updateShot(shot.tempId, { isEndFrameSelectorOpen: false })} />
+
+                                                                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-[300px] overflow-y-auto flex flex-col p-1 animate-fade-in-up">
+                                                                    <div
+                                                                        onClick={() => {
+                                                                            updateShot(shot.tempId, { endKeyframeId: null, endKeyframeUrl: null, isEndFrameSelectorOpen: false });
+                                                                        }}
+                                                                        className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border-b border-gray-50"
+                                                                    >
+                                                                        <div className="w-10 h-6 bg-gray-100 rounded border border-dashed border-gray-300 flex items-center justify-center">
+                                                                            <span className="text-[10px] text-gray-400">×</span>
+                                                                        </div>
+                                                                        <span className="text-xs font-medium text-gray-500">None (Video Only)</span>
+                                                                    </div>
+
+                                                                    {keyframes
+                                                                        .filter(k => k.id !== shot.sceneId) // Exclude start frame
+                                                                        .map(k => (
+                                                                            <div
+                                                                                key={k.id}
+                                                                                onClick={() => {
+                                                                                    updateShot(shot.tempId, {
+                                                                                        endKeyframeId: k.id,
+                                                                                        endKeyframeUrl: k.image_url || k.imageUrl,
+                                                                                        isEndFrameSelectorOpen: false
+                                                                                    });
+                                                                                }}
+                                                                                className={`flex items-center gap-3 p-2 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors ${shot.endKeyframeId === k.id ? 'bg-blue-50 ring-1 ring-blue-200' : ''}`}
+                                                                            >
+                                                                                <img
+                                                                                    src={k.image_url || k.imageUrl || "https://placehold.co/100x60"}
+                                                                                    className="w-12 h-8 object-cover rounded shadow-sm bg-gray-200"
+                                                                                    alt={k.name}
+                                                                                />
+                                                                                <div className="flex flex-col overflow-hidden">
+                                                                                    <span className="text-xs font-bold text-gray-800 truncate">{k.name || "Untitled"}</span>
+                                                                                    <span className="text-[9px] text-gray-400 truncate">{k.cameraLabel || "Standard"}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <hr className="border-gray-100" />

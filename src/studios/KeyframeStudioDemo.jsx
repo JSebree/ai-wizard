@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useAuth } from "../context/AuthContext";
 import CharacterCard from "./components/CharacterCard.jsx";
 import SettingCard from "./components/SettingCard.jsx";
 import KeyframeCard from "./components/KeyframeCard.jsx";
@@ -261,7 +262,10 @@ export default function KeyframeStudioDemo() {
     const [selectedCharId, setSelectedCharId] = useState("");
     const [selectedCharAngle, setSelectedCharAngle] = useState("referenceImageUrl");
 
-    const [selectedGradeId, setSelectedGradeId] = useState("none");
+    const [selectedGradeId, setSelectedGradeId] = useState(COLOR_GRADES[0].id || "none");
+    const { user } = useAuth();
+
+    // -- Derived States --
     const [visualStyle, setVisualStyle] = useState(VISUAL_STYLES[0]); // Default: Photorealistic
 
     // API Generation State
@@ -1066,7 +1070,8 @@ export default function KeyframeStudioDemo() {
 
             const newPropPayload = {
                 name: defaultName,
-                image_url: url
+                image_url: url,
+                user_id: user?.id
             };
 
             // Optimistic Update
