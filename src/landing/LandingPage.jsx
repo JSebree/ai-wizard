@@ -8,7 +8,7 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
 // Template gallery (add more items over time)
 const TEMPLATE_KEY = "interview_template_v1";
-const templates = [
+export const templates = [
   {
     id: "nikola-tesla-doc-1",
     title: "Nikola Tesla — Documentary",

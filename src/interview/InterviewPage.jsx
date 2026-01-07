@@ -3,6 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
 import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
+import VodCard from "./VodCard.jsx";
+
 // ---- Global Reset Helper (legacy-compatible) ----
 export function resetWizardFormGlobal() {
   try {
@@ -24,6 +26,9 @@ export function resetWizardFormGlobal() {
   } catch { }
   window.location.reload();
 }
+
+const TEMPLATE_KEY = "interview_template_v1";
+
 /**
  * InterviewPage.jsx
  *
@@ -45,7 +50,8 @@ export function resetWizardFormGlobal() {
 // Local storage keys for refresh-proof persistence
 const LS_KEY_ANS = "interview_answers_v1";
 const LS_KEY_STEP = "interview_step_v1";
-const TEMPLATE_KEY = "interview_template_v1";
+// const TEMPLATE_KEY = "interview_template_v1"; // Moved up
+
 
 const EMAIL_KEY = "interview_email_v1";
 function readEmail() {
@@ -369,7 +375,7 @@ function NavBar({ stepIndex, total, onReset }) {
 // --------------------------- Main component -----------------------------
 
 export default function InterviewPage({ onComplete }) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   // Core answer state
   const [answers, setAnswers] = useState(() => {
     const defaults = getDefaultAnswers();
@@ -381,6 +387,10 @@ export default function InterviewPage({ onComplete }) {
   });
 
   const [stepIndex, setStepIndex] = useState(() => Number(readJSON(LS_KEY_STEP, 0)) || 0);
+
+  // VOD History State
+  const [vods, setVods] = useState([]);
+  const [vodsLoading, setVodsLoading] = useState(true);
 
   // (Moved event-listener effects live below steps definition)
   // --------------------------- Steps definition -------------------------
@@ -501,6 +511,47 @@ export default function InterviewPage({ onComplete }) {
   useEffect(() => {
     writeJSON(LS_KEY_STEP, stepIndex);
   }, [stepIndex]);
+
+  // Load VOD History
+  useEffect(() => {
+    if (!SUPABASE_URL || !SUPABASE_ANON || !user) {
+      setVodsLoading(false);
+      return;
+    }
+
+    async function loadVods() {
+      try {
+        const url = new URL("/rest/v1/express_vods", SUPABASE_URL);
+        url.searchParams.set("select", "*");
+        url.searchParams.set("user_id", `eq.${user.id}`);
+        url.searchParams.set("order", "created_at.desc");
+
+        // Use session token if available for RLS, otherwise fallback to Anon (likely fails RLS)
+        const token = session?.access_token || SUPABASE_ANON;
+
+        const res = await fetch(url.toString(), {
+          headers: {
+            apikey: SUPABASE_ANON,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setVods(data);
+        } else {
+          // If 401/403, might be token expiry or RLS
+          console.warn("[loadVods] fetch failed:", res.status, res.statusText);
+        }
+      } catch (err) {
+        console.error("Failed to load VODs", err);
+      } finally {
+        setVodsLoading(false);
+      }
+    }
+
+    loadVods();
+  }, [user, session, SUPABASE_URL, SUPABASE_ANON]);
 
   // Listen for app-level request to jump to first step without clearing answers
   useEffect(() => {
@@ -1271,6 +1322,43 @@ export default function InterviewPage({ onComplete }) {
         }));
       } catch { }
 
+      // --- PERSIST TO SUPABASE (Express VODs) ---
+      if (SUPABASE_URL && SUPABASE_ANON && user) {
+        try {
+          const vodPayload = {
+            user_id: user.id,
+            status: 'pending',
+            settings: payload, // Save full payload including 'ui' wrapper
+            job_id: String(returnedJobId || ''),
+            title: uiPayload.title || "Untitled Video",
+            thumbnail_url: null, // Could add if you generate one immediately
+            created_at: new Date().toISOString()
+          };
+
+          const token = session?.access_token || SUPABASE_ANON;
+
+          const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/express_vods`, {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_ANON,
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(vodPayload)
+          });
+
+          if (dbRes.ok) {
+            const newRows = await dbRes.json();
+            if (newRows && newRows.length > 0) {
+              setVods(prev => [newRows[0], ...prev]);
+            }
+          }
+        } catch (dbErr) {
+          console.error("Failed to save VOD record:", dbErr);
+        }
+      }
+
       // Stay on Review step (we're already there); ensure top-of-page
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { }
     } catch (err) {
@@ -1337,6 +1425,73 @@ export default function InterviewPage({ onComplete }) {
     resetWizardFormGlobal();
   }
 
+  function handleUseTemplate(vod) {
+    if (!vod || !vod.settings) return;
+
+    // settings might be { ui: {...} } or just {...}
+    const raw = typeof vod.settings === 'string' ? JSON.parse(vod.settings) : vod.settings;
+    const uiData = raw.ui || raw;
+
+    if (uiData) {
+      console.log("[handleUseTemplate] Loading UI data:", uiData);
+      try {
+        const defaults = getDefaultAnswers();
+        const mapped = mapTemplateToAnswers(uiData, defaults);
+
+        if (mapped) {
+          // Inject user details
+          if (user) {
+            const fullName = (user.user_metadata?.full_name || user.user_metadata?.name || user.email || "").trim();
+            if (fullName) mapped.userName = fullName;
+            if (user.email) mapped.userEmail = user.email;
+            mapped.userId = user.id;
+          }
+
+          console.log("[handleUseTemplate] Setting answers:", mapped);
+          setAnswers(mapped);
+
+          // Force jump to review
+          setTimeout(() => {
+            setStepIndex(steps.length - 1);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }, 10);
+
+        } else {
+          console.error("Map failed (returned null)");
+          alert("Error: Template data is invalid.");
+        }
+      } catch (err) {
+        console.error("Template load error:", err);
+        alert(`Failed to load template: ${err.message}`);
+      }
+    }
+  }
+
+  async function handleDeleteVod(vod) {
+    if (!confirm("Are you sure you want to delete this video?")) return;
+
+    // Optimistic update
+    setVods(prev => prev.filter(v => v.id !== vod.id));
+
+    try {
+      if (!SUPABASE_URL || !SUPABASE_ANON) return;
+
+      const token = session?.access_token || SUPABASE_ANON;
+      const url = new URL(`${SUPABASE_URL}/rest/v1/express_vods`);
+      url.searchParams.set("id", `eq.${vod.id}`);
+
+      await fetch(url.toString(), {
+        method: "DELETE",
+        headers: {
+          apikey: SUPABASE_ANON,
+          Authorization: `Bearer ${token}`,
+        }
+      });
+    } catch (err) {
+      console.error("Delete failed", err);
+      alert("Delete failed, please refresh.");
+    }
+  }
 
   // ------------------------------ render ---------------------------------
 
@@ -1383,6 +1538,45 @@ export default function InterviewPage({ onComplete }) {
             </div>
           )}
         </div>
+        {/* --- VOD History Section (Studio Style) --- */}
+        {user && (
+          <div style={{ marginTop: 48, borderTop: "1px solid #E5E7EB", paddingTop: 32 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1F2937", marginBottom: 16 }}>Saved Videos</h3>
+            {vodsLoading ? (
+              <div style={{ color: "#64748B", fontSize: 14 }}>Loading history...</div>
+            ) : vods.length === 0 ? (
+              <div style={{
+                padding: "48px 24px",
+                background: "#F8FAFC",
+                border: "1px dashed #E2E8F0",
+                borderRadius: 12,
+                textAlign: "center",
+                color: "#94A3B8",
+                fontSize: 14
+              }}>
+                No videos yet. Submit your first creation above!
+              </div>
+            ) : (
+              <div style={{
+                display: "flex",
+                gap: 16,
+                overflowX: "auto",
+                paddingBottom: 16,
+                // Hide scrollbar aesthetics but keep functionality
+                scrollbarWidth: "thin",
+              }}>
+                {vods.map(vod => (
+                  <VodCard
+                    key={vod.id}
+                    vod={vod}
+                    onUseTemplate={handleUseTemplate}
+                    onDelete={handleDeleteVod}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
