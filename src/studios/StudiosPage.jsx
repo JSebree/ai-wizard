@@ -70,7 +70,7 @@ export default function StudiosPage() {
       <header style={{ marginBottom: 24, textAlign: "center" }}>
         <p style={{ marginTop: 0, color: "#475569", lineHeight: "1.6" }}>
           <span style={{ display: "block", fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to SceneMe Studios.</span>
-          Take complete creative control over your cast, sets, and sound. Build consistent <b>Characters</b> and <b>Settings</b>, compose them into cinematic <b>Keyframes</b>, bring them to life in the <b>Clip Studio</b>, and direct full masterpieces in the <b>Scene Studio</b>—all from the palm of your hand.
+          <b>Creative control of your cast, sets, and sound.</b> Build consistent <b>Characters</b> and <b>Settings</b>, compose them into cinematic <b>Keyframes</b>, bring them to life in the <b>Clip Studio</b>, and direct full masterpieces in the <b>Scene Studio</b>—all from the palm of your hand.
         </p>
       </header>
 
