@@ -376,7 +376,7 @@ function NavBar({ stepIndex, total, onReset }) {
 // --------------------------- Main component -----------------------------
 
 export default function InterviewPage({ onComplete }) {
-  const { user, session } = useAuth();
+  const { user, session, isAdmin } = useAuth();
   const [selectedVod, setSelectedVod] = useState(null);
   // Core answer state
   const [answers, setAnswers] = useState(() => {
@@ -392,6 +392,7 @@ export default function InterviewPage({ onComplete }) {
 
   // VOD History State
   const [vods, setVods] = useState([]);
+  const [vodToDelete, setVodToDelete] = useState(null); // For unified delete modal
   const [vodsLoading, setVodsLoading] = useState(true);
 
   // (Moved event-listener effects live below steps definition)
@@ -526,6 +527,13 @@ export default function InterviewPage({ onComplete }) {
         const url = new URL("/rest/v1/express_vods", SUPABASE_URL);
         url.searchParams.set("select", "*");
 
+        // If not admin, restrict to own videos OR global
+        if (!isAdmin) {
+          url.searchParams.set("or", `(user_id.eq.${user.id},is_global.eq.true)`);
+        } else {
+          // Admin sees all (no filter)
+        }
+
         url.searchParams.set("order", "created_at.desc");
 
         // Use session token if available for RLS, otherwise fallback to Anon (likely fails RLS)
@@ -553,7 +561,7 @@ export default function InterviewPage({ onComplete }) {
     }
 
     loadVods();
-  }, [user, session, SUPABASE_URL, SUPABASE_ANON]);
+  }, [user, session, SUPABASE_URL, SUPABASE_ANON, isAdmin]);
 
   // Listen for app-level request to jump to first step without clearing answers
   useEffect(() => {
@@ -718,6 +726,41 @@ export default function InterviewPage({ onComplete }) {
       },
     };
   }, [answers]);
+
+  // --------------------------- Job Completion Handler -------------------
+  async function handleJobComplete({ jobId, finalVideoUrl }) {
+    if (!jobId || !finalVideoUrl) return;
+    console.log("[handleJobComplete] Job completed:", jobId, finalVideoUrl);
+
+    // 1. Update local state immediately
+    setVods(prev => prev.map(v =>
+      String(v.job_id) === String(jobId)
+        ? { ...v, status: 'completed', video_url: finalVideoUrl }
+        : v
+    ));
+
+    // 2. Update Supabase
+    if (SUPABASE_URL && SUPABASE_ANON && user) {
+      const token = session?.access_token || SUPABASE_ANON;
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/express_vods?job_id=eq.${encodeURIComponent(jobId)}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SUPABASE_ANON,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            status: 'completed',
+            video_url: finalVideoUrl
+          })
+        });
+      } catch (err) {
+        console.error("Failed to update VOD status to completed:", err);
+      }
+    }
+  }
 
   // --------------------------- Steps definition -------------------------
 
@@ -1116,6 +1159,7 @@ export default function InterviewPage({ onComplete }) {
       render: () => (
         <ReviewStep
           ui={uiPayload}
+          onJobComplete={handleJobComplete}
           onEditStep={(target) => {
             let idx = -1;
             if (typeof target === 'number') {
@@ -1278,7 +1322,7 @@ export default function InterviewPage({ onComplete }) {
     try { window.dispatchEvent(new Event('interview:submit')); } catch { }
 
     // Build the payload (wrap under { ui } for intake; adjust here if your n8n expects a different shape)
-    const payload = { ui: uiPayload };
+    const payload = { ui: uiPayload, user_id: user?.id };
 
     try {
       const headers = { 'Content-Type': 'application/json' };
@@ -1469,9 +1513,19 @@ export default function InterviewPage({ onComplete }) {
     }
   }
 
-  async function handleDeleteVod(vod) {
-    if (!confirm("Are you sure you want to delete this video?")) return;
+  // 1. Request Delete (opens modal)
+  function requestDeleteVod(vod) {
+    setVodToDelete(vod);
+  }
 
+  // 2. Confirm Delete (executes logic)
+  async function handleConfirmDelete() {
+    if (!vodToDelete) return;
+    const vod = vodToDelete;
+    // Close modal immediately
+    setVodToDelete(null);
+
+    const originalVods = [...vods];
     // Optimistic update
     setVods(prev => prev.filter(v => v.id !== vod.id));
 
@@ -1482,16 +1536,23 @@ export default function InterviewPage({ onComplete }) {
       const url = new URL(`${SUPABASE_URL}/rest/v1/express_vods`);
       url.searchParams.set("id", `eq.${vod.id}`);
 
-      await fetch(url.toString(), {
+      const res = await fetch(url.toString(), {
         method: "DELETE",
         headers: {
           apikey: SUPABASE_ANON,
           Authorization: `Bearer ${token}`,
         }
       });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Status ${res.status}: ${errorText}`);
+      }
     } catch (err) {
       console.error("Delete failed", err);
-      alert("Delete failed, please refresh.");
+      // Revert optimistic update
+      setVods(originalVods);
+      alert(`Delete failed: ${err.message}`);
     }
   }
 
@@ -1572,7 +1633,7 @@ export default function InterviewPage({ onComplete }) {
                     key={vod.id}
                     vod={vod}
                     onUseTemplate={handleUseTemplate}
-                    onDelete={handleDeleteVod}
+                    onDelete={(v) => requestDeleteVod(v)}
                     isOwner={user && vod.user_id === user.id}
                     onClick={() => setSelectedVod(vod)}
                   />
@@ -1584,15 +1645,52 @@ export default function InterviewPage({ onComplete }) {
       </div>
 
       {/* Detail Modal */}
-      <ExpressVideoCard
-        vod={selectedVod}
-        onClose={() => setSelectedVod(null)}
-        onDelete={(v) => {
-          handleDeleteVod(v);
-          setSelectedVod(null);
-        }}
-        onUseTemplate={handleUseTemplate}
-      />
+      {selectedVod && (
+        <ExpressVideoCard
+          vod={selectedVod}
+          onClose={() => setSelectedVod(null)}
+          onDelete={(v) => requestDeleteVod(v)}
+          onUseTemplate={(v) => handleUseTemplate(v)}
+        />
+      )}
+
+      {/* Unified Delete Modal */}
+      {vodToDelete && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", zIndex: 100,
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }} onClick={() => setVodToDelete(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+              Are you sure you want to delete <span style={{ fontWeight: 700 }}>"{vodToDelete.title || "Untitled"}"</span>? This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+              <button
+                onClick={() => setVodToDelete(null)}
+                style={{
+                  padding: "8px 16px", borderRadius: 6,
+                  border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                  fontWeight: 600, cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                style={{
+                  padding: "8px 16px", borderRadius: 6,
+                  border: "none", background: "#EF4444", color: "white",
+                  fontWeight: 600, cursor: "pointer"
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

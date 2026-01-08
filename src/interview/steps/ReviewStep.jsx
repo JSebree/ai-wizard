@@ -98,9 +98,10 @@ const LS_KEY_STEP = 'interview_step_v1';
  * Props:
  *   ui:         the assembled UI payload (same shape you show in the preview)
  *   onSubmit:   () => void
- *   onEditStep: (stepIndex: number) => void   // optional quick-jump
+ *   onEditStep: (stepKeyOrIndex) => void
+ *   onJobComplete: (jobData: { jobId: string, finalVideoUrl: string }) => void
  */
-export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true, extraActions = null, stepIndexMap = {} }) {
+export default function ReviewStep({ ui, onSubmit, onEditStep, onJobComplete, hideSubmit = true, extraActions = null, stepIndexMap = {} }) {
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "—");
   const safe = (v) => (v === undefined || v === null || v === "" ? "—" : String(v));
   const includeVocals = ui?.advanced?.includeVocals ?? ui?.musicIncludeVocals;
@@ -174,6 +175,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
           setBusy(false);
           stopRef.current = null;
+          if (onJobComplete) onJobComplete({ jobId: jid, finalVideoUrl: rec?.finalVideoUrl || '' });
         },
         onError: (msg) => {
           setStatus('ERROR');
@@ -220,6 +222,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
             if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
             setBusy(false);
             stopRef.current = null;
+            if (onJobComplete) onJobComplete({ jobId: jid, finalVideoUrl: rec?.finalVideoUrl || '' });
           },
           onError: (msg) => {
             setStatus('ERROR');
@@ -349,6 +352,7 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, hideSubmit = true
           if (rec?.finalVideoUrl) setFinalUrl(rec.finalVideoUrl);
           setBusy(false);
           stopRef.current = null;
+          if (onJobComplete) onJobComplete({ jobId: returnedJobId, finalVideoUrl: rec?.finalVideoUrl || '' });
         },
         onError: (msg) => {
           setStatus('ERROR');

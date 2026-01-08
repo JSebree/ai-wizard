@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 export default function ExpressVideoCard({ vod, onClose, onDelete, onUseTemplate }) {
     if (!vod) return null;
     const { user, isAdmin } = useAuth();
+    const [confirmDelete, setConfirmDelete] = React.useState(false);
 
     // Parse settings if string, otherwise use directly
     const settings = typeof vod.settings === "string" ? JSON.parse(vod.settings) : vod.settings || {};
@@ -151,10 +152,8 @@ export default function ExpressVideoCard({ vod, onClose, onDelete, onUseTemplate
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if (confirm("Are you sure you want to delete this video?")) {
-                                            onDelete(vod);
-                                            onClose();
-                                        }
+                                        onDelete(vod);
+                                        onClose();
                                     }}
                                     className="flex-1 bg-white border border-red-200 text-red-600 font-bold py-3 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm"
                                 >
