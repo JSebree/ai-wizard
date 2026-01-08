@@ -313,12 +313,17 @@ export default function LandingPage() {
   }
 
   // Navigate to a path, injecting user info if a template is provided
-  function handleNavigate(path, tpl = null) {
+  // Navigate to a path, injecting user info if a template is provided
+  // OR passing options (like state) if second arg is not a template
+  function handleNavigate(path, arg = null) {
     // If not logged in, redirect to login
     if (!user) {
       nav("/login");
       return;
     }
+
+    // Check if arg looks like a template object
+    const isTemplate = arg && arg.json;
 
     // Get user info from auth context
     const userEmail = user.email || "";
@@ -328,8 +333,8 @@ export default function LandingPage() {
     const userLastName = nameParts.slice(1).join(" ") || "";
 
     // If a template was chosen, merge user info & save to localStorage
-    if (tpl) {
-      const payload = JSON.parse(JSON.stringify(tpl.json));
+    if (isTemplate) {
+      const payload = JSON.parse(JSON.stringify(arg.json));
       if (payload && payload.ui) {
         payload.ui.userFirstName = userFirstName;
         payload.ui.userLastName = userLastName;
@@ -339,7 +344,9 @@ export default function LandingPage() {
       try { localStorage.setItem("interview_step_v1", "scene"); } catch { }
     }
 
-    nav(path);
+    // If it was a template, we just navigate to path (usually /interview)
+    // If it was options (state), we pass it to nav
+    nav(path, isTemplate ? undefined : arg);
   }
 
   // Hide the global "Review" button ONLY on the Landing page
@@ -414,7 +421,7 @@ export default function LandingPage() {
         >
           <button
             type="button"
-            onClick={() => handleNavigate("/interview")}
+            onClick={() => handleNavigate("/interview", { state: { reset: true } })}
             className="btn btn-primary"
             style={{
               padding: "12px 18px",
@@ -429,7 +436,7 @@ export default function LandingPage() {
           </button>
           <button
             type="button"
-            onClick={() => handleNavigate("/studios")}
+            onClick={() => handleNavigate("/studios", { state: { tab: "characters" } })}
             className="btn btn-secondary"
             style={{
               padding: "10px 16px",

@@ -17,6 +17,11 @@ export default function StudiosPage() {
 
   // Determine default tab based on URL or LocalStorage
   const getInitialTab = () => {
+    // Prioritize passed state from navigation (e.g. from Landing Page)
+    if (location.state?.tab && TAB_NAMES.includes(location.state.tab)) {
+      return location.state.tab;
+    }
+
     // Prioritize URL for clip studio demo
     if (location.pathname === "/clip-studio-demo") return "clips";
 

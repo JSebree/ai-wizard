@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
@@ -377,6 +378,21 @@ function NavBar({ stepIndex, total, onReset }) {
 
 export default function InterviewPage({ onComplete }) {
   const { user, session, isAdmin } = useAuth();
+  const location = useLocation();
+
+  // Handle reset request from navigation state
+  useEffect(() => {
+    if (location.state?.reset) {
+      console.log("Forcing Interview reset from navigation state");
+      try { localStorage.removeItem(LS_KEY_ANS); } catch { }
+      try { localStorage.removeItem(LS_KEY_STEP); } catch { }
+      // Reset state
+      setAnswers(getDefaultAnswers());
+      setStepIndex(0);
+      // Clear navigation state to prevent loops
+      window.history.replaceState({}, "");
+    }
+  }, [location.state]);
   const [selectedVod, setSelectedVod] = useState(null);
   // Core answer state
   const [answers, setAnswers] = useState(() => {
