@@ -393,10 +393,9 @@ export default function LandingPage() {
         }
       `}</style>
       <header style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>SceneMe</h1>
-        <p style={{ fontSize: 18, fontWeight: 700, margin: "12px 0 8px", color: "#111827" }}>
+        <h1 style={{ fontSize: 32, fontWeight: 800, margin: "0 0 12px", color: "#111827", lineHeight: 1.2 }}>
           Stop prompting. Start directing. From anywhere.
-        </p>
+        </h1>
         <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
           The first Hollywood-grade production studio that fits in your pocket. SceneMe transforms your ideas into consistent, high-fidelity videos—giving you complete control over characters, settings, and soundscapes. Whether you're using our one-click <strong>Express</strong> workflow or building a multi-scene masterpiece in <strong>SceneMe Studios</strong>, you have the power of a full production team right on your device.
         </p>
