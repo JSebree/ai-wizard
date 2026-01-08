@@ -394,8 +394,11 @@ export default function LandingPage() {
       `}</style>
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0 }}>SceneMe</h1>
-        <p style={{ marginTop: 8, color: "#475569" }}>
-          SceneMe transforms ideas into consistent AI videos—complete with character voices, visuals, and music. No juggling APIs, no stitching together messy clips—just bring your imagination, and SceneMe does the rest. Explore the one‑click Express workflow below, or step into <strong>SceneMe Studios</strong> to build reusable Characters, design immersive Settings, and craft cinematic multi-scene productions.
+        <p style={{ fontSize: 18, fontWeight: 700, margin: "12px 0 8px", color: "#111827" }}>
+          Stop prompting. Start directing. From anywhere.
+        </p>
+        <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
+          The first Hollywood-grade production studio that fits in your pocket. SceneMe transforms your ideas into consistent, high-fidelity videos—giving you complete control over characters, settings, and soundscapes. Whether you're using our one-click <strong>Express</strong> workflow or building a multi-scene masterpiece in <strong>SceneMe Studios</strong>, you have the power of a full production team right on your device.
         </p>
       </header>
 
