@@ -1560,6 +1560,13 @@ export default function InterviewPage({ onComplete }) {
 
   return (
     <div className="page">
+      <header style={{ marginBottom: 24, textAlign: "center" }}>
+        <p style={{ marginTop: 0, color: "#475569", lineHeight: "1.6" }}>
+          <span style={{ display: "block", fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to SceneMe Express.</span>
+          <b>High-fidelity cinema on demand.</b> You define the <b>Cast</b>, <b>Setting</b>, and <b>Action</b>, and our pocket production studio brings it to life. Create one-click masterpieces from anywhere.
+        </p>
+      </header>
+
       <NavBar
         stepIndex={stepIndex}
         total={total}
