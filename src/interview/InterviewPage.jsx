@@ -1634,7 +1634,7 @@ export default function InterviewPage({ onComplete }) {
                     vod={vod}
                     onUseTemplate={handleUseTemplate}
                     onDelete={(v) => requestDeleteVod(v)}
-                    isOwner={user && vod.user_id === user.id}
+                    isOwner={user && (vod.user_id === user.id || isAdmin)}
                     onClick={() => setSelectedVod(vod)}
                   />
                 ))}
