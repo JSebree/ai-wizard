@@ -380,16 +380,21 @@ export default function InterviewPage({ onComplete }) {
   const { user, session, isAdmin } = useAuth();
   const location = useLocation();
 
-  // Handle reset request from navigation state
+  // Handle navigation state requests (reset or rewind)
   useEffect(() => {
     if (location.state?.reset) {
-      console.log("Forcing Interview reset from navigation state");
+      // Legacy "Hard Reset" (if ever needed again)
+      console.log("Forcing full reset");
       try { localStorage.removeItem(LS_KEY_ANS); } catch { }
       try { localStorage.removeItem(LS_KEY_STEP); } catch { }
-      // Reset state
       setAnswers(getDefaultAnswers());
       setStepIndex(0);
-      // Clear navigation state to prevent loops
+      window.history.replaceState({}, "");
+    } else if (location.state?.startAtBeginning) {
+      // "Soft Reset" - keep answers, just go to step 0
+      console.log("Rewinding to start (keeping data)");
+      setStepIndex(0);
+      try { localStorage.setItem(LS_KEY_STEP, "0"); } catch { }
       window.history.replaceState({}, "");
     }
   }, [location.state]);

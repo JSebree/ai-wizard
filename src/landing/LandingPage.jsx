@@ -421,7 +421,7 @@ export default function LandingPage() {
         >
           <button
             type="button"
-            onClick={() => handleNavigate("/interview", { state: { reset: true } })}
+            onClick={() => handleNavigate("/interview", { state: { startAtBeginning: true } })}
             className="btn btn-primary"
             style={{
               padding: "12px 18px",
