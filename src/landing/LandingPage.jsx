@@ -392,7 +392,7 @@ export default function LandingPage() {
           }
         }
       `}</style>
-      <header style={{ marginBottom: 24 }}>
+      <header style={{ marginBottom: 24, textAlign: "center" }}>
         <h1 style={{ fontSize: 32, fontWeight: 800, margin: "0 0 12px", color: "#111827", lineHeight: 1.2 }}>
           Stop prompting. Start directing. From anywhere.
         </h1>
