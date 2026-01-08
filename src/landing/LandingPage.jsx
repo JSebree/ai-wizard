@@ -397,7 +397,7 @@ export default function LandingPage() {
           Stop prompting. Start directing. From anywhere.
         </h1>
         <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
-          The first Hollywood-grade production studio that fits in your pocket. SceneMe transforms your ideas into consistent, high-fidelity videos—giving you complete control over characters, settings, and soundscapes. Whether you're using our one-click <strong>Express Mode</strong> or building a multi-scene masterpiece in <strong>Studio Mode</strong>, you have the power of a full production team right on your device.
+          The first Hollywood-grade production studio that fits in your pocket. Create consistent, high-fidelity cinema with complete control over your cast, sets, and sound. Whether you're using our one-click <strong>Express Mode</strong> or building a multi-scene masterpiece in <strong>Studio Mode</strong>, you have the power of a full production team right on your device.
         </p>
       </header>
 
