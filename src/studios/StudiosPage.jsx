@@ -67,12 +67,11 @@ export default function StudiosPage() {
         padding: 24,
       }}
     >
-      <header style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>SceneMe Studios</h1>
-        <p style={{ marginTop: 8, color: "#475569", lineHeight: "1.6" }}>
-          Welcome to your new creative workflow. Start by building consistent <b>Characters</b> and <b>Settings</b>, then bring them together into stunning <b>Keyframes</b>. Note those moments, bring them to life in the <b>Clip Studio</b>, and finally, weave it all together into a complete masterpiece in the <b>Scene Studio</b>.
+      <header style={{ marginBottom: 24, textAlign: "center" }}>
+        <p style={{ marginTop: 0, color: "#475569", lineHeight: "1.6" }}>
+          <span style={{ display: "block", fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to SceneMe Studios.</span>
+          Take complete creative control over your cast, sets, and sound. Build consistent <b>Characters</b> and <b>Settings</b>, compose them into cinematic <b>Keyframes</b>, bring them to life in the <b>Clip Studio</b>, and direct full masterpieces in the <b>Scene Studio</b>—all from the palm of your hand.
         </p>
-
       </header>
 
       {/* Tabs */}
