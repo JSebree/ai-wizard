@@ -1,8 +1,10 @@
 import React, { useState, useRef } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { getProxiedUrl } from "../../config/api";
 
 export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, onAddSFX, onGenerateKeyframe, characters, settings, registryVoices }) {
     if (!clip) return null;
+    const { user, isAdmin } = useAuth();
 
     const {
         prompt,
@@ -493,7 +495,7 @@ export default function ClipCard({ clip, onClose, onEdit, onDelete, onReshoot, o
 
                             <div className="flex gap-3">
                                 {/* Delete */}
-                                {onDelete && (
+                                {onDelete && user && (clip.user_id === user.id || isAdmin) && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onDelete(clip); }}
                                         className="flex-1 py-3 px-4 bg-white border border-red-200 text-red-600 font-bold text-sm rounded-lg hover:bg-red-50 hover:border-red-300 transition-all"

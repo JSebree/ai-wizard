@@ -1,7 +1,9 @@
 import React from "react";
+import { useAuth } from "../../context/AuthContext";
 
 export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
     if (!scene) return null;
+    const { user, isAdmin } = useAuth();
 
     const {
         id,
@@ -166,19 +168,22 @@ export default function ProjectCard({ scene, onClose, onLoad, onDelete }) {
                                     <span>↓</span> Download
                                 </a>
                             )}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDelete(scene.id);
-                                }}            // onClose(); // Let parent handle closing if needed, or keep. Parent handler logic closes modal if matched.
-                                className="flex-1 bg-white border border-red-200 text-red-600 font-bold py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm"
-                            >
-                                <span>×</span> Delete
-                            </button>
+                            {(user && (scene.user_id === user.id || isAdmin)) && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDelete(scene.id);
+                                    }}
+                                    className="flex-1 bg-white border border-red-200 text-red-600 font-bold py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <span>×</span> Delete
+                                </button>
+                            )}
+
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

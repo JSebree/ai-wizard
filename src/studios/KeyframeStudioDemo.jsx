@@ -263,7 +263,7 @@ export default function KeyframeStudioDemo() {
     const [selectedCharAngle, setSelectedCharAngle] = useState("referenceImageUrl");
 
     const [selectedGradeId, setSelectedGradeId] = useState(COLOR_GRADES[0].id || "none");
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
 
     // -- Derived States --
     const [visualStyle, setVisualStyle] = useState(VISUAL_STYLES[0]); // Default: Photorealistic
@@ -358,6 +358,7 @@ export default function KeyframeStudioDemo() {
                         prop_id: s.prop_id,
                         gradeId: s.color_grade,
                         status: (s.image_url === "https://r2.sceneme.ai/assets/pending_placeholder.png" || s.image_url === "PENDING") ? 'pending' : 'complete',
+                        user_id: s.user_id,
                         ...s
                     }));
 
@@ -576,7 +577,8 @@ export default function KeyframeStudioDemo() {
                             visual_style: data[0].visual_style,
                             camera_angle: data[0].camera_angle,
                             color_grade: data[0].color_grade,
-                            createdAt: data[0].created_at
+                            createdAt: data[0].created_at,
+                            user_id: data[0].user_id
                         },
                         ...prev.filter(s => s.id !== tempId)
                     ]);
@@ -1897,15 +1899,17 @@ export default function KeyframeStudioDemo() {
                                             >
                                                 Modify
                                             </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setKeyframeToDelete(scene);
-                                                }}
-                                                className="flex-1 text-[10px] font-bold text-red-600 border border-slate-200 rounded py-1 hover:bg-red-50 hover:border-red-200 transition-colors"
-                                            >
-                                                Delete
-                                            </button>
+                                            {user && (scene.user_id === user.id || isAdmin) && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setKeyframeToDelete(scene);
+                                                    }}
+                                                    className="flex-1 text-[10px] font-bold text-red-600 border border-slate-200 rounded py-1 hover:bg-red-50 hover:border-red-200 transition-colors"
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

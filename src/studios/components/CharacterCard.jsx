@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
 
 export default function CharacterCard({ character, onClose, onModify, onDelete }) {
+  const { user, isAdmin } = useAuth();
   const [voices, setVoices] = useState(null);
   const [fullImage, setFullImage] = useState(null);
 
@@ -227,7 +229,7 @@ export default function CharacterCard({ character, onClose, onModify, onDelete }
               )}
 
               <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, marginTop: 8, display: "flex", justifyContent: "flex-end", gap: 12 }}>
-                {onDelete && (
+                {onDelete && user && (character.user_id === user.id || isAdmin) && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

@@ -7,7 +7,7 @@ import { API_CONFIG } from "../config/api";
 const STORAGE_KEY = "sceneme.settings";
 
 export default function SettingsStudioDemo() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [name, setName] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -84,6 +84,7 @@ export default function SettingsStudioDemo() {
         status: row.status,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        user_id: row.user_id
       }));
 
       setSettings(mapped);
@@ -761,13 +762,15 @@ export default function SettingsStudioDemo() {
                         >
                           Modify
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(setting.id); }}
-                          className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
-                          title="Delete"
-                        >
-                          Delete
-                        </button>
+                        {user && (setting.user_id === user.id || isAdmin) && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(setting.id); }}
+                            className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                            title="Delete"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

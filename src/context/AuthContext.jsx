@@ -100,25 +100,61 @@ export const AuthProvider = ({ children }) => {
 
     // Sign out
     const signOut = async () => {
+        setUser(null);
+        setSession(null);
+        setIsAdmin(false);
         const { error } = await supabase.auth.signOut();
         if (error) {
             console.error("[AuthContext] signOut error:", error);
         }
     };
 
+    const [isAdmin, setIsAdmin] = React.useState(false);
+
+    useEffect(() => {
+        const checkAdmin = async () => {
+            if (!user) {
+                setIsAdmin(false);
+                return;
+            }
+            try {
+                // Fetch is_admin flag from profiles
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('is_admin')
+                    .eq('id', user.id)
+                    .single();
+
+                if (data && data.is_admin) {
+                    setIsAdmin(true);
+                } else {
+                    // Fallback to metadata if needed, or just false
+                    setIsAdmin(
+                        user?.app_metadata?.role === 'admin' ||
+                        user?.user_metadata?.role === 'admin' ||
+                        user?.email?.endsWith('@sceneme.ai')
+                    );
+                }
+            } catch (err) {
+                console.warn("Admin check failed", err);
+                setIsAdmin(false);
+            }
+        };
+
+        checkAdmin();
+    }, [user]);
+
     const value = {
-        user,
-        session,
-        loading,
         signInWithGoogle,
         signUp,
         signInWithEmail,
         signOut,
+        user,
+        isAdmin, // Export isAdmin
+        session,
+        loading
     };
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
+

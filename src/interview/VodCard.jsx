@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function VodCard({ vod, onUseTemplate, onDelete }) {
+export default function VodCard({ vod, onUseTemplate, onDelete, isOwner = true, onClick }) {
     // Parsing settings safely
     const settings = typeof vod.settings === "string" ? JSON.parse(vod.settings) : vod.settings;
     const rawKind = settings?.ui?.advanced?.style || "Video";
@@ -13,6 +13,7 @@ export default function VodCard({ vod, onUseTemplate, onDelete }) {
 
     return (
         <div
+            onClick={onClick}
             style={{
                 flexShrink: 0,
                 width: 192, // w-48
@@ -86,22 +87,24 @@ export default function VodCard({ vod, onUseTemplate, onDelete }) {
                         Template
                     </button>
 
-                    <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onDelete && onDelete(vod); }}
-                        title="Delete Video"
-                        style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: "#EF4444", // text-red-500
-                            border: "none",
-                            background: "transparent",
-                            padding: "4px 4px",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Delete
-                    </button>
+                    {isOwner && (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onDelete && onDelete(vod); }}
+                            title="Delete Video"
+                            style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: "#EF4444", // text-red-500
+                                border: "none",
+                                background: "transparent",
+                                padding: "4px 4px",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Delete
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

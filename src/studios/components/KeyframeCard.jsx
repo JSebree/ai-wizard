@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 
 export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
+    const { user, isAdmin } = useAuth();
     const [fullImage, setFullImage] = useState(null);
 
     if (!scene) return null;
@@ -178,7 +180,7 @@ export default function KeyframeCard({ scene, onClose, onModify, onDelete }) {
                                     </div>
                                 </div>
                                 <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, display: "flex", justifyContent: "flex-end", gap: 12 }}>
-                                    {onDelete && (
+                                    {onDelete && user && (scene.user_id === user.id || isAdmin) && (
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();

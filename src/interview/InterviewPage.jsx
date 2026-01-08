@@ -4,6 +4,7 @@ import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
 import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
 import VodCard from "./VodCard.jsx";
+import ExpressVideoCard from "./components/ExpressVideoCard.jsx";
 
 // ---- Global Reset Helper (legacy-compatible) ----
 export function resetWizardFormGlobal() {
@@ -376,6 +377,7 @@ function NavBar({ stepIndex, total, onReset }) {
 
 export default function InterviewPage({ onComplete }) {
   const { user, session } = useAuth();
+  const [selectedVod, setSelectedVod] = useState(null);
   // Core answer state
   const [answers, setAnswers] = useState(() => {
     const defaults = getDefaultAnswers();
@@ -523,7 +525,7 @@ export default function InterviewPage({ onComplete }) {
       try {
         const url = new URL("/rest/v1/express_vods", SUPABASE_URL);
         url.searchParams.set("select", "*");
-        url.searchParams.set("user_id", `eq.${user.id}`);
+
         url.searchParams.set("order", "created_at.desc");
 
         // Use session token if available for RLS, otherwise fallback to Anon (likely fails RLS)
@@ -1571,6 +1573,8 @@ export default function InterviewPage({ onComplete }) {
                     vod={vod}
                     onUseTemplate={handleUseTemplate}
                     onDelete={handleDeleteVod}
+                    isOwner={user && vod.user_id === user.id}
+                    onClick={() => setSelectedVod(vod)}
                   />
                 ))}
               </div>
@@ -1578,6 +1582,17 @@ export default function InterviewPage({ onComplete }) {
           </div>
         )}
       </div>
+
+      {/* Detail Modal */}
+      <ExpressVideoCard
+        vod={selectedVod}
+        onClose={() => setSelectedVod(null)}
+        onDelete={(v) => {
+          handleDeleteVod(v);
+          setSelectedVod(null);
+        }}
+        onUseTemplate={handleUseTemplate}
+      />
     </div>
   );
 }

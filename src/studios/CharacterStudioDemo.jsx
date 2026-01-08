@@ -7,7 +7,7 @@ import CharacterCard from "./components/CharacterCard";
 const STORAGE_KEY = "sceneme.characters";
 
 export default function CharacterStudioDemo() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [name, setName] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
@@ -179,7 +179,8 @@ export default function CharacterStudioDemo() {
           torso_front: row.torso_front,
           headshot_front: row.headshot_front,
           headshot_left: row.headshot_left,
-          headshot_right: row.headshot_right
+          headshot_right: row.headshot_right,
+          user_id: row.user_id
         }));
         setCharacters(mapped);
         persistCharacters(mapped);
@@ -710,11 +711,13 @@ export default function CharacterStudioDemo() {
                         onClick={(e) => { e.stopPropagation(); handleModifyCharacter(char); }}
                         className="flex-1 text-[10px] font-bold text-slate-700 border border-slate-200 rounded py-1 hover:bg-white hover:border-slate-400 transition-colors"
                       >Modify</button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(char.id); }}
-                        className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
-                        title="Delete"
-                      >Delete</button>
+                      {user && (char.user_id === user.id || isAdmin) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(char.id); }}
+                          className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                          title="Delete"
+                        >Delete</button>
+                      )}
                     </div>
                   </div>
                 </div>

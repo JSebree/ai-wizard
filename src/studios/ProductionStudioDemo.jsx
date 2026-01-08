@@ -10,7 +10,7 @@ import ProjectThumbnail from "./components/ProjectThumbnail"; // New Thumb
 // Logic: Timeline is an array of clips. Player plays them sequentially.
 
 export default function ProductionStudioDemo() {
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
     const [bin, setBin] = useState([]);
     const [savedScenes, setSavedScenes] = useState([]);
     const [timeline, setTimeline] = useState([]);
@@ -105,12 +105,15 @@ export default function ProductionStudioDemo() {
                         data: { ...finalData, timeline: finalTimeline }, // Ensure timeline is inside data
                         timeline: finalTimeline, // Top-level for convenience
                         duration: s.duration || s.data?.duration, // Use top-level duration if available
+                        user_id: s.user_id,
                     };
                 }));
             }
         };
-        loadData();
-    }, []);
+        if (user?.id) {
+            loadData();
+        }
+    }, [user?.id]);
 
     // Watch for clip index changes to play next video
     useEffect(() => {
@@ -896,13 +899,15 @@ export default function ProductionStudioDemo() {
                                                 </span>
                                             )}
                                             {/* Quick Delete */}
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteScene(scene); }}
-                                                className="text-[10px] font-bold text-red-500 hover:text-red-700 px-0.5"
-                                                title="Delete"
-                                            >
-                                                Delete
-                                            </button>
+                                            {user && (scene.user_id === user.id || isAdmin) && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteScene(scene); }}
+                                                    className="text-[10px] font-bold text-red-500 hover:text-red-700 px-0.5"
+                                                    title="Delete"
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="text-[9px] font-bold text-black uppercase tracking-wider bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
                                             {(Number(scene.data?.timeline?.reduce((acc, c) => acc + (Number(c.duration) || 0), 0)) || Number(scene.duration) || 0).toFixed(1)}s

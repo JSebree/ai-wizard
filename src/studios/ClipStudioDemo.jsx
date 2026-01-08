@@ -3,6 +3,7 @@ import { supabase } from "../libs/supabaseClient";
 import { API_CONFIG, getProxiedUrl } from "../config/api";
 import { v4 as uuidv4 } from 'uuid';
 import ClipCard from "./components/ClipCard";
+import { useAuth } from "../context/AuthContext";
 
 // n8n Webhooks
 const TTS_WEBHOOK = API_CONFIG.GENERATE_VOICE_PREVIEW;
@@ -83,6 +84,7 @@ const blobToBase64 = (blob) => {
 };
 
 export default function ClipStudioDemo() {
+    const { user, isAdmin } = useAuth();
     const [keyframes, setKeyframes] = useState([]);
     const [characters, setCharacters] = useState([]);
     const [settings, setSettings] = useState([]); // [New] Settings for metadata resolution
@@ -2369,13 +2371,15 @@ export default function ClipStudioDemo() {
                                     >
                                         Modify
                                     </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteClip(clip); }}
-                                        className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
-                                        title="Delete"
-                                    >
-                                        Delete
-                                    </button>
+                                    {user && (clip.user_id === user.id || isAdmin) && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteClip(clip); }}
+                                            className="text-[10px] font-bold text-red-500 hover:text-red-700 px-1"
+                                            title="Delete"
+                                        >
+                                            Delete
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
