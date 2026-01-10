@@ -274,7 +274,7 @@ export default function ExpressAccordionView({
     const currentVoiceId = typeof payload.voiceId === 'object' ? payload.voiceId.id : payload.voiceId;
 
     return (
-        <div className="py-8 pb-10 animate-in fade-in duration-500">
+        <div className="py-8 pb-10">
 
             {/* Header Removed to match Wizard View */}
 
