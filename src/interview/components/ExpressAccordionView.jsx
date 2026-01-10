@@ -16,9 +16,39 @@ function SectionHeader({ number, title, subtitle }) {
     );
 }
 
-function AccordionItem({ number, title, isOpen, onToggle, children, summary }) {
+// Reusable Tile Component for Closed State
+function CollapsedTile({ number, title, children, onClick }) {
     return (
-        <div className={`bg-white rounded-xl transition-all duration-200 overflow-hidden border border-gray-100 ${isOpen ? 'shadow-lg ring-1 ring-black/5' : 'hover:border-gray-200 hover:shadow-sm'}`}>
+        <div
+            onClick={onClick}
+            className="group bg-white rounded-xl border border-gray-200 p-4 cursor-pointer shadow-sm hover:border-black/20 hover:shadow-md transition-all duration-200 flex items-center justify-between"
+        >
+            <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                <span className="text-xl font-bold text-gray-300 group-hover:text-gray-400 transition-colors">{number}</span>
+                <div className="h-8 w-px bg-gray-100 mx-1"></div>
+                <div className="flex items-center gap-4 flex-1 overflow-hidden">
+                    {children}
+                </div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-black group-hover:text-white transition-all ml-4 flex-shrink-0">
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className="stroke-current stroke-2"><path d="M1 1L5 5L9 1" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </div>
+        </div>
+    );
+}
+
+function AccordionItem({ number, title, isOpen, onToggle, children, summary, renderCollapsed }) {
+    // If closed and has custom collapsed view, render that
+    if (!isOpen && renderCollapsed) {
+        return (
+            <CollapsedTile number={number} title={title} onClick={onToggle}>
+                {renderCollapsed()}
+            </CollapsedTile>
+        );
+    }
+
+    return (
+        <div className={`bg-white rounded-xl transition-all duration-200 overflow-hidden border border-gray-100 ${isOpen ? 'shadow-lg ring-1 ring-black/5' : 'shadow-sm hover:border-gray-200 hover:shadow-md'}`}>
             <button
                 onClick={onToggle}
                 className="w-full flex items-center justify-between p-5 text-left group"
@@ -33,6 +63,7 @@ function AccordionItem({ number, title, isOpen, onToggle, children, summary }) {
                         )}
                     </div>
                 </div>
+                {/* Arrow */}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isOpen ? 'bg-gray-100 rotate-180 text-black' : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100'}`}>
                     <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className="stroke-current stroke-2"><path d="M1 1L5 5L9 1" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </div>
@@ -349,6 +380,23 @@ export default function ExpressAccordionView({
                     isOpen={openSection === 1}
                     onToggle={() => toggleSection(1)}
                     summary={summaries.talent}
+                    renderCollapsed={() => (
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Talent</span>
+                                <span className="text-xs text-gray-500 font-medium truncate max-w-[200px] md:max-w-md">
+                                    {payload.characterName || 'No talent selected'}
+                                </span>
+                            </div>
+                            {payload.savedCharacterId && savedCharacters.find(c => c.id === payload.savedCharacterId)?.previewUrl && (
+                                <img
+                                    src={savedCharacters.find(c => c.id === payload.savedCharacterId).previewUrl}
+                                    alt="Char"
+                                    className="w-8 h-8 rounded-full object-cover border border-gray-200 ml-auto"
+                                />
+                            )}
+                        </div>
+                    )}
                 >
                     <div className="space-y-6">
                         {/* Driver Selection */}
@@ -512,13 +560,30 @@ export default function ExpressAccordionView({
                 </AccordionItem>
 
 
-                {/* 02 THE ATMOSPHERE */}
                 <AccordionItem
                     number="02"
                     title="The Atmosphere"
                     isOpen={openSection === 2}
                     onToggle={() => toggleSection(2)}
                     summary={summaries.atmosphere}
+                    renderCollapsed={() => (
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Atmosphere</span>
+                                <span className="text-xs text-gray-500 font-medium truncate max-w-[200px] md:max-w-md">
+                                    {payload.setting || 'No setting selected'}
+                                </span>
+                            </div>
+                            {/* Tiny Setting Preview */}
+                            {payload.savedSettingId && savedSettings.find(s => s.id === payload.savedSettingId)?.previewUrl && (
+                                <img
+                                    src={savedSettings.find(s => s.id === payload.savedSettingId).previewUrl}
+                                    alt="Setting"
+                                    className="w-12 h-8 rounded object-cover border border-gray-200 ml-auto"
+                                />
+                            )}
+                        </div>
+                    )}
                 >
                     <div className="space-y-10">
                         {/* A. Plan Overview */}
@@ -701,6 +766,14 @@ export default function ExpressAccordionView({
                     isOpen={openSection === 3}
                     onToggle={() => toggleSection(3)}
                     summary={summaries.action}
+                    renderCollapsed={() => (
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Action</span>
+                            <span className="text-xs text-gray-500 font-medium truncate max-w-[200px] md:max-w-md">
+                                {payload.action || 'Describe the action...'}
+                            </span>
+                        </div>
+                    )}
                 >
                     <div className="space-y-6">
                         <div>
