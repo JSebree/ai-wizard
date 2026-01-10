@@ -562,7 +562,14 @@ export default function InterviewPage({ onComplete }) {
       }
     } catch { }
 
-    return null;
+    // 3) EMERGENCY FALLBACK: Hardcoded voices so user is never stuck
+    const EMERGENCY_VOICES = [
+      { id: "fe3b2cea-969a-4b5d-bc90-fde8578f1dd5", name: "Emma female en-us" },
+      { id: "07cddda1-6455-4541-a246-ea655f3bfd23", name: "Adam male en-us" }
+    ];
+    console.warn("Using emergency voice fallback");
+    setVoices(EMERGENCY_VOICES);
+    return EMERGENCY_VOICES;
   }
 
   // Persist on change (refresh-proof)
