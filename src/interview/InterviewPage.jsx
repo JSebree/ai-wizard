@@ -1441,7 +1441,7 @@ export default function InterviewPage({ onComplete }) {
             user_id: user.id,
             status: 'pending',
             settings: payload, // Save full payload including 'ui' wrapper
-            job_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(returnedJobId)) ? String(returnedJobId) : null,
+            job_id: String(returnedJobId || ''),
             title: uiPayload.title || "Untitled Video",
             thumbnail_url: null, // Could add if you generate one immediately
             created_at: new Date().toISOString()
