@@ -306,7 +306,7 @@ export default function ExpressAccordionView({
                         {/* Driver Selection */}
                         <div>
                             <Label>Driver</Label>
-                            <div className="flex bg-slate-50 p-1 rounded-lg border border-gray-200">
+                            <div className="flex flex-col md:flex-row bg-slate-50 p-1 rounded-lg border border-gray-200">
                                 <ToggleOption
                                     label="On-Screen Character"
                                     active={payload.driver !== 'narrator'}
@@ -444,7 +444,7 @@ export default function ExpressAccordionView({
                                         onChange={e => updatePayload('setting', e.target.value)}
                                     />
                                 </div>
-                                <div className="flex gap-4">
+                                <div className="flex flex-col md:flex-row gap-4">
                                     <div className="flex-1">
                                         <Label>Visual style</Label>
                                         <Select
@@ -453,7 +453,7 @@ export default function ExpressAccordionView({
                                             onChange={e => updatePayload('style', e.target.value)}
                                         />
                                     </div>
-                                    <div className="w-1/3">
+                                    <div className="w-full md:w-1/3">
                                         <Label>Resolution</Label>
                                         <Select
                                             options={["SD", "HD"]}
