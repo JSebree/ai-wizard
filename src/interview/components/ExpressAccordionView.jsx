@@ -39,7 +39,7 @@ function AccordionItem({ number, title, isOpen, onToggle, children, summary }) {
             </button>
 
             {isOpen && (
-                <div className="px-5 pb-6 pt-0 animate-in fade-in duration-300">
+                <div className="px-5 pb-6 pt-0">
                     <div className="h-px bg-gray-100 mb-6 w-full"></div>
                     {children}
                 </div>
@@ -323,7 +323,7 @@ export default function ExpressAccordionView({
                         </div>
 
                         {payload.driver !== 'narrator' && (
-                            <div className="space-y-6 animate-in slide-in-from-top-2">
+                            <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     {/* Col 1: Casting Name */}
                                     <div className="space-y-5">
@@ -378,7 +378,7 @@ export default function ExpressAccordionView({
                         )}
 
                         {payload.driver === 'narrator' && (
-                            <div className="space-y-5 animate-in slide-in-from-top-2">
+                            <div className="space-y-5">
                                 <SectionHeader number="A" title="Narration Voice" />
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div>
@@ -479,7 +479,7 @@ export default function ExpressAccordionView({
                                 </div>
 
                                 {payload.wantsMusic && (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pl-1 animate-in slide-in-from-top-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pl-1">
                                         <div className="md:col-span-1">
                                             <Label>Music style</Label>
                                             <Select
@@ -609,7 +609,7 @@ export default function ExpressAccordionView({
 
             {/* GENERATE ACTIONS */}
             {/* RESET ACTION (Floating in gap) */}
-            <div className="mt-8 flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-700">
+            <div className="mt-8 flex justify-end">
                 <button
                     onClick={onReset}
                     className="text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-red-500 transition-colors py-2"
@@ -619,7 +619,7 @@ export default function ExpressAccordionView({
             </div>
 
             {/* GENERATE ACTIONS */}
-            <div className="mt-4 pt-8 border-t border-gray-100 flex flex-col-reverse md:flex-row gap-6 items-center justify-end animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="mt-4 pt-8 border-t border-gray-100 flex flex-col-reverse md:flex-row gap-6 items-center justify-end">
                 <button
                     onClick={onGenerate}
                     disabled={!isGeneratable || isDeploying}
