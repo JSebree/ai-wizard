@@ -351,14 +351,14 @@ export default function ExpressAccordionView({
                                                         onChange={e => updatePayload('voice', e.target.value)}
                                                     >
                                                         <option value="" disabled>Select a voice...</option>
-                                                        {voices.map(v => (
+                                                        {(voices || []).map(v => (
                                                             <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
                                                         ))}
                                                     </select>
                                                     <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
                                                 </div>
 
-                                                <VoicePreviewButton voice={voices.find(v => v.id === currentVoiceId)} />
+                                                <VoicePreviewButton voice={(voices || []).find(v => v.id === currentVoiceId)} />
                                             </div>
                                         </div>
                                     </div>
@@ -391,13 +391,13 @@ export default function ExpressAccordionView({
                                                     onChange={e => updatePayload('voice', e.target.value)}
                                                 >
                                                     <option value="" disabled>Select a voice...</option>
-                                                    {voices.map(v => (
+                                                    {(voices || []).map(v => (
                                                         <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
                                                     ))}
                                                 </select>
                                                 <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
                                             </div>
-                                            <VoicePreviewButton voice={voices.find(v => v.id === currentVoiceId)} />
+                                            <VoicePreviewButton voice={(voices || []).find(v => v.id === currentVoiceId)} />
                                         </div>
                                     </div>
                                     <div>
