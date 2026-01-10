@@ -186,7 +186,9 @@ export default function ExpressAccordionView({
     onSubmit,
     isSubmitting,
     characterGender,
-    onReset
+    onReset,
+    savedCharacters = [],
+    savedSettings = []
 }) {
     const { user } = useAuth();
     const [openSection, setOpenSection] = useState(1);
@@ -225,7 +227,7 @@ export default function ExpressAccordionView({
             const next = { ...prev };
 
             // Direct Mapping
-            if (['characterName', 'character', 'setting', 'scene', 'wantsMusic', 'musicCategoryLabel', 'musicIncludeVocals', 'musicSeed', 'musicLyrics', 'action', 'referenceText', 'directorsNotes', 'wantsCaptions', 'wantsCutaways', 'research', 'title', 'driver', 'durationSec'].includes(key)) {
+            if (['characterName', 'character', 'setting', 'scene', 'wantsMusic', 'musicCategoryLabel', 'musicIncludeVocals', 'musicSeed', 'musicLyrics', 'action', 'referenceText', 'directorsNotes', 'wantsCaptions', 'wantsCutaways', 'research', 'title', 'driver', 'durationSec', 'voiceUrl'].includes(key)) {
                 next[key] = value;
             }
             // Aliased Mapping
@@ -238,14 +240,9 @@ export default function ExpressAccordionView({
             // Direct Advanced Mappings (Flat State)
             else if (key === 'style') next.stylePreset = value;
             else if (key === 'resolution') next.resolution = value;
+            // No volume slider in UI, default to 10 if not present
             else if (key === 'voiceVolume10') {
                 next.voiceVolume10 = value;
-                // We don't store decimal voiceVolume in flat state usually, but if needed:
-                // next.voiceVolume = value / 10; 
-            }
-            else if (key === 'musicVolume10') {
-                next.musicVolume10 = value;
-                // next.musicVolume = value / 10;
             }
 
             // Voice Logic
@@ -255,11 +252,62 @@ export default function ExpressAccordionView({
                 if (v) {
                     next.voiceId = voiceId;
                     next.voiceLabel = v.name;
+                    // reset clone url if picking a preset
+                    next.voiceUrl = null;
                 }
             }
 
             return next;
         });
+    };
+
+    const handleLoadCharacter = (id) => {
+        if (!id) {
+            // Reset to default (AI Built)
+            setAnswers(prev => ({
+                ...prev,
+                characterName: "",
+                character: "",
+                voiceId: "",
+                voiceUrl: null,
+                voiceLabel: "",
+                savedCharacterId: null
+            }));
+            return;
+        }
+
+        const char = savedCharacters.find(c => c.id === id);
+        if (char) {
+            setAnswers(prev => ({
+                ...prev,
+                characterName: char.name,
+                character: char.base_prompt,
+                voiceId: char.voice_id || "",
+                voiceUrl: char.voice_ref_url || null,
+                voiceLabel: char.voice_id === 'recording' ? 'Cloned Voice' : (voices.find(v => v.id === char.voice_id)?.name || "Unknown Voice"),
+                // Prioritize full body centered, fallback to reference/base
+                characterImage: char.fullbody_centered || char.referenceImageUrl || char.base_image_url || null,
+                savedCharacterId: char.id
+            }));
+        }
+    };
+
+    const handleLoadSetting = (id) => {
+        if (!id) {
+            updatePayload('setting', '');
+            setAnswers(prev => ({ ...prev, savedSettingId: null, settingImage: null }));
+            return;
+        }
+        const s = savedSettings.find(x => x.id === id);
+        if (s) {
+            updatePayload('setting', s.core_prompt || s.base_prompt);
+            setAnswers(prev => ({
+                ...prev,
+                savedSettingId: s.id,
+                // Always default to main reference
+                settingImage: s.base_image_url || s.base_hero || null
+            }));
+        }
     };
 
     // Summaries for collapsed states
@@ -324,88 +372,138 @@ export default function ExpressAccordionView({
 
                         {payload.driver !== 'narrator' && (
                             <div className="space-y-6 animate-in slide-in-from-top-2">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    {/* Col 1: Casting Name */}
-                                    <div className="space-y-5">
-                                        <SectionHeader number="A" title="Casting" />
+                                <SectionHeader number="A" title="Casting" />
+
+                                {/* 1. Character Carousel (Full Width) */}
+                                {savedCharacters && savedCharacters.length > 0 && (
+                                    <div className="mb-6">
+                                        <div className="mb-2 text-xs font-medium text-slate-500 uppercase tracking-wide">Select a Character</div>
+                                        <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                                            {/* AI Built Option */}
+                                            <div
+                                                onClick={() => handleLoadCharacter(null)}
+                                                className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group snap-start"
+                                            >
+                                                <div className={`w-16 h-16 rounded-full flex items-center justify-center border-2 transition-all duration-200 ${!payload.savedCharacterId ? 'border-black bg-slate-50' : 'border-slate-200 hover:border-slate-300'
+                                                    }`}>
+                                                    <span className={`text-xs font-medium ${!payload.savedCharacterId ? 'text-black' : 'text-slate-400'}`}>New</span>
+                                                </div>
+                                                <span className={`text-xs font-medium text-center truncate max-w-[80px] ${!payload.savedCharacterId ? 'text-black' : 'text-slate-500'
+                                                    }`}>Custom</span>
+                                            </div>
+
+                                            {savedCharacters
+                                                .filter(char => char.voice_id && (char.voice_id !== 'recording' || char.voice_ref_url)) // Filter out invalid voices
+                                                .map(char => {
+                                                    const isSelected = payload.savedCharacterId === char.id;
+                                                    return (
+                                                        <div
+                                                            key={char.id}
+                                                            onClick={() => handleLoadCharacter(char.id)}
+                                                            className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group snap-start"
+                                                        >
+                                                            <div className={`w-16 h-16 rounded-full overflow-hidden border-2 transition-all duration-200 ${isSelected ? 'border-black ring-1 ring-black ring-offset-2' : 'border-white shadow-sm group-hover:border-slate-300'
+                                                                }`}>
+                                                                {char.previewUrl ? (
+                                                                    <img
+                                                                        src={char.previewUrl}
+                                                                        alt={char.name}
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300 text-[10px] font-bold">
+                                                                        {char.name.substring(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <span className={`text-xs font-medium text-center truncate max-w-[80px] ${isSelected ? 'text-black' : 'text-slate-500'
+                                                                }`}>
+                                                                {char.name}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Manual Inputs - Only show if NO saved character is selected */}
+                                {!payload.savedCharacterId && (
+                                    <div className="animate-in slide-in-from-top-2 fade-in duration-300">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                                            {/* Col 1: Character Name */}
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <Label>Character / narrator name</Label>
+                                                    <Input
+                                                        placeholder="e.g. Detective Miller"
+                                                        value={payload.characterName || ''}
+                                                        onChange={e => updatePayload('characterName', e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Col 2: Voice Select */}
+                                            <div className="space-y-5">
+                                                <div>
+                                                    <Label>Voice</Label>
+                                                    <div className="relative flex items-center gap-2">
+                                                        <div className="relative flex-1">
+                                                            <select
+                                                                className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
+                                                                value={currentVoiceId || ''}
+                                                                onChange={e => updatePayload('voice', e.target.value)}
+                                                            >
+                                                                <option value="" disabled>Select a voice...</option>
+                                                                {currentVoiceId === 'recording' && (
+                                                                    <option value="recording">Cloned Voice (Loaded)</option>
+                                                                )}
+                                                                {(voices || []).map(v => (
+                                                                    <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
+                                                        </div>
+                                                        <VoicePreviewButton voice={payload.voiceUrl ? { preview_url: payload.voiceUrl } : (voices || []).find(v => v.id === currentVoiceId)} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div>
-                                            <Label>Character / narrator name</Label>
-                                            <Input
-                                                placeholder="e.g. Detective Miller"
-                                                value={payload.characterName || ''}
-                                                onChange={e => updatePayload('characterName', e.target.value)}
+                                            <Label>Character description</Label>
+                                            <TextArea
+                                                rows={3}
+                                                placeholder="e.g. Weary face, trenchcoat, rain-soaked..."
+                                                value={payload.character || ''}
+                                                onChange={e => updatePayload('character', e.target.value)}
                                             />
                                         </div>
                                     </div>
-
-                                    {/* Col 2: Voice Select */}
-                                    <div className="space-y-5">
-                                        <SectionHeader number="B" title="Voice & Performance" />
-                                        <div>
-                                            <Label>Voice</Label>
-                                            <div className="relative flex items-center gap-2">
-                                                <div className="relative flex-1">
-                                                    <select
-                                                        className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
-                                                        value={currentVoiceId || ''}
-                                                        onChange={e => updatePayload('voice', e.target.value)}
-                                                    >
-                                                        <option value="" disabled>Select a voice...</option>
-                                                        {(voices || []).map(v => (
-                                                            <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
-                                                        ))}
-                                                    </select>
-                                                    <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
-                                                </div>
-
-                                                <VoicePreviewButton voice={(voices || []).find(v => v.id === currentVoiceId)} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Full Width Description */}
-                                <div>
-                                    <Label>Character description</Label>
-                                    <TextArea
-                                        rows={3}
-                                        placeholder="e.g. Weary face, trenchcoat, rain-soaked..."
-                                        value={payload.character || ''}
-                                        onChange={e => updatePayload('character', e.target.value)}
-                                    />
-                                </div>
+                                )}
                             </div>
                         )}
 
                         {payload.driver === 'narrator' && (
                             <div className="space-y-5 animate-in slide-in-from-top-2">
                                 <SectionHeader number="A" title="Narration Voice" />
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div>
-                                        <Label>Voice</Label>
-                                        <div className="relative flex items-center gap-2">
-                                            <div className="relative flex-1">
-                                                <select
-                                                    className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
-                                                    value={currentVoiceId || ''}
-                                                    onChange={e => updatePayload('voice', e.target.value)}
-                                                >
-                                                    <option value="" disabled>Select a voice...</option>
-                                                    {(voices || []).map(v => (
-                                                        <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
-                                            </div>
-                                            <VoicePreviewButton voice={(voices || []).find(v => v.id === currentVoiceId)} />
+                                <div>
+                                    <Label>Voice</Label>
+                                    <div className="relative flex items-center gap-2">
+                                        <div className="relative flex-1">
+                                            <select
+                                                className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
+                                                value={currentVoiceId || ''}
+                                                onChange={e => updatePayload('voice', e.target.value)}
+                                            >
+                                                <option value="" disabled>Select a voice...</option>
+                                                {(voices || []).map(v => (
+                                                    <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <VolumeSlider
-                                            label="Voice volume (0.1–1.0)"
-                                            value={payload.advanced?.voiceVolume10}
-                                            onChange={v => updatePayload('voiceVolume10', v)}
-                                        />
+                                        <VoicePreviewButton voice={(voices || []).find(v => v.id === currentVoiceId)} />
                                     </div>
                                 </div>
                             </div>
@@ -422,21 +520,83 @@ export default function ExpressAccordionView({
                     onToggle={() => toggleSection(2)}
                     summary={summaries.atmosphere}
                 >
-                    <div className="space-y-8">
-                        {/* Visual Vibe */}
+                    <div className="space-y-10">
+                        {/* A. Plan Overview */}
                         <div>
-                            <SectionHeader number="A" title="Visual Vibe" />
-                            <div className="mb-5">
+                            <SectionHeader number="A" title="Plan Overview" />
+                            <div className="mb-2">
                                 <Label>Scene overview</Label>
                                 <TextArea
-                                    rows={2}
+                                    rows={3}
                                     placeholder="High level summary... (e.g. A tense standoff in a neon city)"
                                     value={payload.scene || ''}
                                     onChange={e => updatePayload('scene', e.target.value)}
                                 />
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                                <div>
+                        </div>
+
+                        {/* B. Visual Vibe */}
+                        <div>
+                            <SectionHeader number="B" title="Visual Vibe" />
+
+                            {/* Load Setting: Visual Carousel (Full Width) */}
+                            {savedSettings && savedSettings.length > 0 && (
+                                <div className="mb-6">
+                                    <div className="mb-2 text-xs font-medium text-slate-500 uppercase tracking-wide">Select a Setting</div>
+                                    <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                                        {/* New / Custom Option */}
+                                        <div
+                                            onClick={() => handleLoadSetting(null)}
+                                            className={`relative flex-shrink-0 w-40 h-24 rounded-lg overflow-hidden cursor-pointer group snap-start transition-all duration-200 border-2 ${!payload.savedSettingId ? 'border-black bg-slate-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                        >
+                                            <div className="w-full h-full flex flex-col items-center justify-center p-2">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border mb-1 ${!payload.savedSettingId ? 'border-black text-black' : 'border-slate-300 text-slate-300'}`}>
+                                                    <span className="text-xs font-bold">+</span>
+                                                </div>
+                                                <span className={`text-xs font-bold ${!payload.savedSettingId ? 'text-black' : 'text-slate-400'}`}>New</span>
+                                                <span className="text-[10px] text-slate-400 font-medium">Custom</span>
+                                            </div>
+                                        </div>
+
+                                        {savedSettings.map(setting => {
+                                            const isSelected = payload.savedSettingId === setting.id;
+                                            return (
+                                                <div
+                                                    key={setting.id}
+                                                    onClick={() => handleLoadSetting(setting.id)}
+                                                    className={`relative flex-shrink-0 w-40 h-24 rounded-lg overflow-hidden cursor-pointer group snap-start transition-all duration-200 ${isSelected ? 'ring-2 ring-black ring-offset-2' : 'border border-slate-200 hover:border-slate-300'
+                                                        }`}
+                                                >
+                                                    {setting.previewUrl ? (
+                                                        <img
+                                                            src={setting.previewUrl}
+                                                            alt={setting.name}
+                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300 text-[10px] font-bold px-2 text-center">
+                                                            {setting.name}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Gradient Overlay & Name */}
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-2.5">
+                                                        <span className="text-white text-[10px] font-bold truncate w-full shadow-sm drop-shadow-md">
+                                                            {setting.name}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+
+
+                            {/* Hide Setting Description if Saved Setting Selected */}
+                            {!payload.savedSettingId && (
+                                <div className="mb-5 animate-in slide-in-from-top-2 fade-in duration-300">
                                     <Label>Setting description</Label>
                                     <Input
                                         placeholder="e.g. Cyberpunk noodle bar, interior, night..."
@@ -444,7 +604,10 @@ export default function ExpressAccordionView({
                                         onChange={e => updatePayload('setting', e.target.value)}
                                     />
                                 </div>
-                                <div className="flex flex-col md:flex-row gap-4">
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                                <div className="flex flex-col md:flex-row gap-4 col-span-2">
                                     <div className="flex-1">
                                         <Label>Visual style</Label>
                                         <Select
@@ -467,7 +630,7 @@ export default function ExpressAccordionView({
 
                         {/* Audio Vibe */}
                         <div>
-                            <SectionHeader number="B" title="Audio Landscape" />
+                            <SectionHeader number="C" title="Audio Landscape" />
                             <div className="flex flex-col gap-4">
                                 <div className="flex items-center justify-between bg-slate-50 border border-gray-200 p-3 rounded-lg">
                                     <Label className="mb-0">Music</Label>
@@ -554,7 +717,6 @@ export default function ExpressAccordionView({
                             <Label>Reference text</Label>
                             <TextArea
                                 rows={4}
-                                className="font-mono text-xs"
                                 placeholder={`CHARACTER: "Line of dialogue here..."\n(Action text in parentheses)`}
                                 value={payload.referenceText}
                                 onChange={e => updatePayload('script', e.target.value)}
@@ -604,8 +766,8 @@ export default function ExpressAccordionView({
                             />
                         </div>
                     </div>
-                </AccordionItem>
-            </div>
+                </AccordionItem >
+            </div >
 
             {/* GENERATE ACTIONS */}
             {/* RESET ACTION (Floating in gap) */}
@@ -638,6 +800,6 @@ export default function ExpressAccordionView({
                 </button>
             </div>
 
-        </div>
+        </div >
     );
 }

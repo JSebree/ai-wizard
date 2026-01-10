@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../libs/supabaseClient";
 import VoiceStep from "./steps/VoiceStep.jsx";
 import ReviewStep from "./steps/ReviewStep.jsx";
 import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
@@ -580,6 +581,64 @@ export default function InterviewPage({ onComplete }) {
   useEffect(() => {
     writeJSON(LS_KEY_STEP, stepIndex);
   }, [stepIndex]);
+
+
+  // Load Saved Assets (Characters & Settings) for Express View
+  const [savedCharacters, setSavedCharacters] = useState([]);
+  const [savedSettings, setSavedSettings] = useState([]);
+
+  useEffect(() => {
+    if (!SUPABASE_URL || !SUPABASE_ANON || !user) return;
+
+    async function loadAssets() {
+      // 1. Characters
+      try {
+        let validChars = [];
+        // Match CharacterStudioDemo: Rely on RLS.
+        const { data } = await supabase
+          .from("characters")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (data) validChars = data;
+
+        // Filter: Must have a voice (either preset ID or "recording" w/ ref_url)
+        // Helper to resolve best image
+        const withImages = validChars.map(c => ({
+          ...c,
+          previewUrl: c.headshot_front || c.base_image_url || c.base_hero || null
+        }));
+
+        const filtered = withImages.filter(c => c.voice_id);
+        setSavedCharacters(filtered);
+      } catch (err) {
+        console.warn("Failed to load characters", err);
+      }
+
+      // 2. Settings
+      try {
+        let validSettings = [];
+        const { data } = await supabase
+          .from("setting")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (data) validSettings = data;
+
+        const withImages = validSettings.map(s => ({
+          ...s,
+          previewUrl: s.base_hero || s.base_image_url || null
+        }));
+
+        setSavedSettings(withImages);
+      } catch (err) {
+        console.warn("Failed to load settings", err);
+      }
+    }
+
+    loadAssets();
+  }, [user, session]);
+
 
   // Load VOD History
   useEffect(() => {
@@ -1642,6 +1701,8 @@ export default function InterviewPage({ onComplete }) {
             answers={answers}
             setAnswers={setAnswers}
             voices={voices}
+            savedCharacters={savedCharacters}
+            savedSettings={savedSettings}
             onSubmit={submitNowLegacy}
             isSubmitting={submitting}
             characterGender={characterGender}
