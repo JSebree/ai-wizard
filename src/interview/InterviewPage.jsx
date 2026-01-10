@@ -1585,7 +1585,7 @@ export default function InterviewPage({ onComplete }) {
   // ------------------------------ render ---------------------------------
 
   return (
-    <div className={`page mx-auto ease-in-out duration-300 ${viewMode === 'accordion' ? 'max-w-3xl px-4' : 'max-w-2xl px-6'}`}>
+    <div className={`page mx-auto ease-in-out duration-300 w-full ${viewMode === 'accordion' ? 'max-w-3xl px-4 pb-20 md:pb-0' : 'max-w-2xl px-6'}`}>
       <header style={{ marginBottom: 24, textAlign: "center" }}>
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -20, position: "relative", zIndex: 10 }}>
           {/* Toggle removed to enforce Express View default */}
