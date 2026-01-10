@@ -49,13 +49,13 @@ function AccordionItem({ number, title, isOpen, onToggle, children, summary }) {
 }
 
 function Label({ children, className = '' }) {
-    return <label className={`block text-xs font-bold text-gray-700 uppercase mb-1.5 ${className}`}>{children}</label>;
+    return <label className={`block text-xs font-bold text-slate-700 uppercase mb-2 ${className}`}>{children}</label>;
 }
 
 function Input({ className = '', ...props }) {
     return (
         <input
-            className={`w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all placeholder:text-gray-400 ${className}`}
+            className={`w-full bg-slate-50 border border-gray-200 text-sm text-gray-900 rounded-lg p-3 focus:bg-white focus:outline-none focus:border-black transition-all placeholder:text-gray-400 ${className}`}
             {...props}
         />
     );
@@ -64,7 +64,7 @@ function Input({ className = '', ...props }) {
 function TextArea({ className = '', ...props }) {
     return (
         <textarea
-            className={`w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all placeholder:text-gray-400 resize-none ${className}`}
+            className={`w-full bg-slate-50 border border-gray-200 text-sm text-gray-900 rounded-lg p-3 focus:bg-white focus:outline-none focus:border-black transition-all placeholder:text-gray-400 resize-none ${className}`}
             {...props}
         />
     );
@@ -74,7 +74,7 @@ function Select({ options, ...props }) {
     return (
         <div className="relative">
             <select
-                className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
+                className="w-full bg-slate-50 border border-gray-200 text-sm text-gray-900 rounded-lg p-3 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
                 {...props}
             >
                 {options.map(o => (
@@ -93,7 +93,7 @@ function Checkbox({ label, checked, onChange }) {
                 {checked && <svg width="8" height="6" viewBox="0 0 8 6" fill="none" className="stroke-white stroke-2"><path d="M1 3L3 5L7 1" strokeLinecap="round" strokeLinejoin="round" /></svg>}
             </div>
             <input type="checkbox" className="hidden" checked={checked} onChange={onChange} />
-            <span className={`text-xs font-bold uppercase transition-colors ${checked ? 'text-black' : 'text-gray-500 group-hover:text-gray-700'}`}>{label}</span>
+            <span className={`text-xs font-bold uppercase transition-colors ${checked ? 'text-black' : 'text-slate-500 group-hover:text-slate-700'}`}>{label}</span>
         </label>
     );
 }
@@ -427,7 +427,7 @@ export default function ExpressAccordionView({
                         <div>
                             <SectionHeader number="A" title="Visual Vibe" />
                             <div className="mb-5">
-                                <Label>Scene description</Label>
+                                <Label>Scene overview</Label>
                                 <TextArea
                                     rows={2}
                                     placeholder="High level summary... (e.g. A tense standoff in a neon city)"
@@ -437,7 +437,7 @@ export default function ExpressAccordionView({
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                                 <div>
-                                    <Label>Setting</Label>
+                                    <Label>Setting description</Label>
                                     <Input
                                         placeholder="e.g. Cyberpunk noodle bar, interior, night..."
                                         value={payload.setting}
