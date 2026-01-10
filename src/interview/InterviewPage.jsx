@@ -8,6 +8,39 @@ import VodCard from "./VodCard.jsx";
 import ExpressVideoCard from "./components/ExpressVideoCard.jsx";
 import ExpressAccordionView from "./components/ExpressAccordionView.jsx";
 
+// Simple Error Boundary for Mobile Debugging
+class DebugErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ExpressView Crashed:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center">
+          <h2 className="text-xl font-bold text-red-600 mb-2">Something went wrong</h2>
+          <pre className="text-xs text-left bg-gray-100 p-4 rounded overflow-auto text-red-800">
+            {this.state.error && this.state.error.toString()}
+          </pre>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-black text-white rounded"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ---- Global Reset Helper (legacy-compatible) ----
 export function resetWizardFormGlobal() {
   try {
@@ -1597,15 +1630,17 @@ export default function InterviewPage({ onComplete }) {
       </header>
 
       {viewMode === "accordion" ? (
-        <ExpressAccordionView
-          answers={answers}
-          setAnswers={setAnswers}
-          voices={voices}
-          onSubmit={submitNowLegacy}
-          isSubmitting={submitting}
-          characterGender={characterGender}
-          onReset={resetAll}
-        />
+        <DebugErrorBoundary>
+          <ExpressAccordionView
+            answers={answers}
+            setAnswers={setAnswers}
+            voices={voices}
+            onSubmit={submitNowLegacy}
+            isSubmitting={submitting}
+            characterGender={characterGender}
+            onReset={resetAll}
+          />
+        </DebugErrorBoundary>
       ) : (
         <>
           <NavBar
