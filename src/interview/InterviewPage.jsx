@@ -6,6 +6,7 @@ import ReviewStep from "./steps/ReviewStep.jsx";
 import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
 import VodCard from "./VodCard.jsx";
 import ExpressVideoCard from "./components/ExpressVideoCard.jsx";
+import ExpressAccordionView from "./components/ExpressAccordionView.jsx";
 
 // ---- Global Reset Helper (legacy-compatible) ----
 export function resetWizardFormGlobal() {
@@ -135,14 +136,15 @@ function mapTemplateToAnswers(ui, defaults) {
     // Advanced
     advancedEnabled:
       typeof adv.enabled === "boolean" ? adv.enabled : defaults.advancedEnabled,
-    stylePreset: adv.style ?? defaults.stylePreset,
-    resolution: adv.resolution ?? defaults.resolution,
+    // Robust checks for style/resolution which might be top-level or in advanced
+    stylePreset: (ui.stylePreset ?? adv.stylePreset ?? adv.style ?? defaults.stylePreset),
+    resolution: (ui.resolution ?? adv.resolution ?? defaults.resolution),
     musicVolume10:
-      adv.musicVolume !== undefined ? coerceVolume10(adv.musicVolume) : defaults.musicVolume10,
+      (ui.musicVolume10 ?? adv.musicVolume10 ?? (adv.musicVolume !== undefined ? coerceVolume10(adv.musicVolume) : defaults.musicVolume10)),
     voiceVolume10:
-      adv.voiceVolume !== undefined ? coerceVolume10(adv.voiceVolume) : defaults.voiceVolume10,
+      (ui.voiceVolume10 ?? adv.voiceVolume10 ?? (adv.voiceVolume !== undefined ? coerceVolume10(adv.voiceVolume) : defaults.voiceVolume10)),
     musicSeed:
-      adv.seed !== undefined && adv.seed !== null ? String(adv.seed) : defaults.musicSeed,
+      (ui.musicSeed ?? adv.seed ?? (adv.seed !== undefined && adv.seed !== null ? String(adv.seed) : defaults.musicSeed)),
   };
 }
 
@@ -415,6 +417,9 @@ export default function InterviewPage({ onComplete }) {
   const [vods, setVods] = useState([]);
   const [vodToDelete, setVodToDelete] = useState(null); // For unified delete modal
   const [vodsLoading, setVodsLoading] = useState(true);
+
+  // View Mode: 'wizard' (legacy step-by-step) or 'accordion' (new all-in-one)
+  const [viewMode, setViewMode] = useState('accordion');
 
   // (Moved event-listener effects live below steps definition)
   // --------------------------- Steps definition -------------------------
@@ -1580,145 +1585,167 @@ export default function InterviewPage({ onComplete }) {
   // ------------------------------ render ---------------------------------
 
   return (
-    <div className="page">
+    <div className={`page mx-auto ease-in-out duration-300 ${viewMode === 'accordion' ? 'max-w-3xl px-4' : 'max-w-2xl px-6'}`}>
       <header style={{ marginBottom: 24, textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -20, position: "relative", zIndex: 10 }}>
+          {/* Toggle removed to enforce Express View default */}
+        </div>
         <p style={{ marginTop: 0, color: "#475569", lineHeight: "1.6" }}>
           <span style={{ display: "block", fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to SceneMe Express.</span>
           <b>High-fidelity cinema on demand.</b> You define the <b>Cast</b>, <b>Setting</b>, and <b>Action</b>, and our pocket production studio brings it to life. Create one-click masterpieces from anywhere.
         </p>
       </header>
 
-      <NavBar
-        stepIndex={stepIndex}
-        total={total}
-        onReset={resetAll}
-      />
+      {viewMode === "accordion" ? (
+        <ExpressAccordionView
+          answers={answers}
+          setAnswers={setAnswers}
+          voices={voices}
+          onSubmit={submitNowLegacy}
+          isSubmitting={submitting}
+          characterGender={characterGender}
+          onReset={resetAll}
+        />
+      ) : (
+        <>
+          <NavBar
+            stepIndex={stepIndex}
+            total={total}
+            onReset={resetAll}
+          />
 
-      <div className="card">
-        <h2 style={{ marginTop: 0, marginBottom: 6 }}>{step.label}</h2>
-        {step.render()}
-      </div>
+          <div className="card">
+            <h2 style={{ marginTop: 0, marginBottom: 6 }}>{step.label}</h2>
+            {step.render()}
+          </div>
 
-      <div style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
-            ← Back
-          </button>
-
-          {stepIndex === total - 1 ? (
-            <button
-              type="button"
-              onClick={submitNowLegacy}
-              disabled={submitting}
-              className="btn btn-primary"
-              title="Submit"
-            >
-              {submitting ? 'Submitting…' : 'Submit'}
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={!step.valid()}
-                className="btn btn-primary"
-                title="Next step"
-              >
-                {stepIndex === total - 2 ? 'Review' : 'Next →'}
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button type="button" onClick={handlePrev} disabled={stepIndex === 0} className="btn btn-secondary">
+                ← Back
               </button>
+
+              {stepIndex === total - 1 ? (
+                <button
+                  type="button"
+                  onClick={submitNowLegacy}
+                  disabled={submitting}
+                  className="btn btn-primary"
+                  title="Submit"
+                >
+                  {submitting ? 'Submitting…' : 'Submit'}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={!step.valid()}
+                    className="btn btn-primary"
+                    title="Next step"
+                  >
+                    {stepIndex === total - 2 ? 'Review' : 'Next →'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      {/* --- VOD History Section (Studio Style) --- */}
+      {user && (
+        <div style={{ marginTop: 48, borderTop: "1px solid #E5E7EB", paddingTop: 32 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1F2937", marginBottom: 16 }}>Saved Videos</h3>
+          {vodsLoading ? (
+            <div style={{ color: "#64748B", fontSize: 14 }}>Loading history...</div>
+          ) : vods.length === 0 ? (
+            <div style={{
+              padding: "48px 24px",
+              background: "#F8FAFC",
+              border: "1px dashed #E2E8F0",
+              borderRadius: 12,
+              textAlign: "center",
+              color: "#94A3B8",
+              fontSize: 14
+            }}>
+              No videos yet. Submit your first creation above!
+            </div>
+          ) : (
+            <div style={{
+              display: "flex",
+              gap: 16,
+              overflowX: "auto",
+              paddingBottom: 16,
+              // Hide scrollbar aesthetics but keep functionality
+              scrollbarWidth: "thin",
+            }}>
+              {vods.map(vod => (
+                <VodCard
+                  key={vod.id}
+                  vod={vod}
+                  onUseTemplate={handleUseTemplate}
+                  onDelete={(v) => requestDeleteVod(v)}
+                  isOwner={user && (vod.user_id === user.id || isAdmin)}
+                  onClick={() => setSelectedVod(vod)}
+                />
+              ))}
             </div>
           )}
         </div>
-        {/* --- VOD History Section (Studio Style) --- */}
-        {user && (
-          <div style={{ marginTop: 48, borderTop: "1px solid #E5E7EB", paddingTop: 32 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1F2937", marginBottom: 16 }}>Saved Videos</h3>
-            {vodsLoading ? (
-              <div style={{ color: "#64748B", fontSize: 14 }}>Loading history...</div>
-            ) : vods.length === 0 ? (
-              <div style={{
-                padding: "48px 24px",
-                background: "#F8FAFC",
-                border: "1px dashed #E2E8F0",
-                borderRadius: 12,
-                textAlign: "center",
-                color: "#94A3B8",
-                fontSize: 14
-              }}>
-                No videos yet. Submit your first creation above!
-              </div>
-            ) : (
-              <div style={{
-                display: "flex",
-                gap: 16,
-                overflowX: "auto",
-                paddingBottom: 16,
-                // Hide scrollbar aesthetics but keep functionality
-                scrollbarWidth: "thin",
-              }}>
-                {vods.map(vod => (
-                  <VodCard
-                    key={vod.id}
-                    vod={vod}
-                    onUseTemplate={handleUseTemplate}
-                    onDelete={(v) => requestDeleteVod(v)}
-                    isOwner={user && (vod.user_id === user.id || isAdmin)}
-                    onClick={() => setSelectedVod(vod)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      )}
+
 
       {/* Detail Modal */}
-      {selectedVod && (
-        <ExpressVideoCard
-          vod={selectedVod}
-          onClose={() => setSelectedVod(null)}
-          onDelete={(v) => requestDeleteVod(v)}
-          onUseTemplate={(v) => handleUseTemplate(v)}
-        />
-      )}
+      {
+        selectedVod && (
+          <ExpressVideoCard
+            vod={selectedVod}
+            onClose={() => setSelectedVod(null)}
+            onDelete={(v) => requestDeleteVod(v)}
+            onUseTemplate={(v) => handleUseTemplate(v)}
+          />
+        )
+      }
 
       {/* Unified Delete Modal */}
-      {vodToDelete && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.5)", zIndex: 100,
-          display: "flex", alignItems: "center", justifyContent: "center"
-        }} onClick={() => setVodToDelete(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
-            <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
-            <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
-              Are you sure you want to delete <span style={{ fontWeight: 700 }}>"{vodToDelete.title || "Untitled"}"</span>? This action cannot be undone.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-              <button
-                onClick={() => setVodToDelete(null)}
-                style={{
-                  padding: "8px 16px", borderRadius: 6,
-                  border: "1px solid #D1D5DB", background: "white", color: "#374151",
-                  fontWeight: 600, cursor: "pointer"
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                style={{
-                  padding: "8px 16px", borderRadius: 6,
-                  border: "none", background: "#EF4444", color: "white",
-                  fontWeight: 600, cursor: "pointer"
-                }}
-              >
-                Delete
-              </button>
+      {
+        vodToDelete && (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.5)", zIndex: 100,
+            display: "flex", alignItems: "center", justifyContent: "center"
+          }} onClick={() => setVodToDelete(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "white", padding: 24, borderRadius: 12, maxWidth: 400, width: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+              <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700, color: "#1F2937" }}>Confirm Deletion</h3>
+              <p style={{ color: "#4B5563", marginBottom: 24, lineHeight: 1.5 }}>
+                Are you sure you want to delete <span style={{ fontWeight: 700 }}>"{vodToDelete.title || "Untitled"}"</span>? This action cannot be undone.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                <button
+                  onClick={() => setVodToDelete(null)}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6,
+                    border: "1px solid #D1D5DB", background: "white", color: "#374151",
+                    fontWeight: 600, cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6,
+                    border: "none", background: "#EF4444", color: "white",
+                    fontWeight: 600, cursor: "pointer"
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
