@@ -141,8 +141,10 @@ function mapTemplateToAnswers(ui, defaults) {
     // Voice (robust import from various template shapes)
     voiceId:
       (ui.voiceId ?? ui.voice_id ?? (ui.voice?.id ?? ui.voice?.voice_id) ?? defaults.voiceId),
-    voiceLabel:
+    voiceLabel: // fixed
       (ui.voiceLabel ?? ui.voice_name ?? ui.voice?.name ?? ui.voice?.voice_name ?? defaults.voiceLabel),
+    voiceUrl:
+      (ui.voiceUrl ?? ui.voice_ref_url ?? ui.voice?.voice_ref_url ?? defaults.voiceUrl),
     characterGender:
       (ui.characterGender ?? ui.voiceGender ?? defaults.characterGender),
     characterName: ui.characterName ?? defaults.characterName,
@@ -820,12 +822,29 @@ export default function InterviewPage({ onComplete }) {
           ? answers.musicLyrics
           : undefined,
       voiceId: req(normalizedVoiceId) ? normalizedVoiceId : undefined,
+      voiceUrl: answers.voiceUrl || undefined,
+      voice_ref_url: answers.voiceUrl || undefined,
       characterGender: answers.characterGender, // <-- use persisted value
       title: req(title) ? title : undefined,
       characterName: req(characterName) ? characterName : undefined,
       userEmail: userEmail || undefined,
       userFirstName: userFirstName || undefined,
+      userFirstName: userFirstName || undefined,
       userLastName: userLastName || undefined,
+      // Visual References
+      characterImage: answers.characterImage || undefined,
+      settingImage: answers.settingImage || undefined,
+      // Legacy / Keyframe Studio Interop (Preferred by Backend Node)
+      character_image_url: answers.characterImage || undefined,
+      setting_image_url: answers.settingImage || undefined,
+      camera_angle: answers.cameraAngle || "Standard",
+
+      // Generation Signal Overrides (REVERTED)
+      // User prefers backend defaults (0.7 / 2.2 / 2.4) now that image order is fixed.
+      // edit_strength: 0.65,
+      // identity_emphasis: 1.1,
+      // true_guidance_scale: 1.0,
+
       // Advanced (grouped)
       advanced: {
         enabled: Boolean(answers.advancedEnabled),
@@ -1691,7 +1710,7 @@ export default function InterviewPage({ onComplete }) {
         </div>
         <p style={{ marginTop: 0, color: "#475569", lineHeight: "1.6" }}>
           <span style={{ display: "block", fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 8 }}>Welcome to SceneMe Express.</span>
-          <b>High-fidelity cinema on demand.</b> You define the <b>Cast</b>, <b>Setting</b>, and <b>Action</b>, and our pocket production studio brings it to life. Create one-click masterpieces from anywhere.
+          <b>High-fidelity cinema on demand.</b> You define the <b>Cast</b>, <b>Set</b>, and <b>Action</b>, and our pocket production studio brings it to life. Create one-click masterpieces from anywhere.
         </p>
       </header>
 

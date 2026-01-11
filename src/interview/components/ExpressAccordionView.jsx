@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from "../../context/AuthContext";
 import { Link } from 'react-router-dom';
+import { API_CONFIG } from "../../config/api";
 
 // --- Reusable Components (Studio Style) ---
 
@@ -227,24 +228,100 @@ export default function ExpressAccordionView({
     // Alias for compatibility
     const payload = answers;
     const isDeploying = isSubmitting;
-    // Helper for validation (internal to this component)
     const meetsMin = (s, n) => {
         const str = String(s ?? "").trim();
         return str.length >= n;
     };
 
+    // --- Recording State ---
+    const [isRecording, setIsRecording] = useState(false);
+    const [voiceKind, setVoiceKind] = useState("preset"); // 'preset' | 'clone'
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            let mimeType = 'audio/webm';
+            if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+            else if (MediaRecorder.isTypeSupported('audio/aac')) mimeType = 'audio/aac';
+
+            const mediaRecorder = new MediaRecorder(stream, { mimeType });
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+            mediaRecorderRef.current.mimeTypeFromOpts = mimeType;
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) audioChunksRef.current.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const type = mediaRecorderRef.current.mimeTypeFromOpts || 'audio/webm';
+                const ext = type.split('/')[1];
+                const audioBlob = new Blob(audioChunksRef.current, { type });
+                const audioFile = new File([audioBlob], `recording_${Date.now()}.${ext}`, { type });
+                await uploadVoiceFile(audioFile);
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("Microphone access denied or not supported.");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const uploadVoiceFile = async (file) => {
+        if (!file) return;
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("kind", "voice_clone");
+            const res = await fetch(API_CONFIG.UPLOAD_REFERENCE_IMAGE, {
+                method: "POST",
+                body: formData
+            });
+
+            if (!res.ok) throw new Error("Voice upload failed: " + res.status);
+            const data = await res.json();
+            const url = data.publicUrl || data.url || data.image_url;
+
+            if (url) {
+                // Update Payload directly
+                setAnswers(prev => ({
+                    ...prev,
+                    voiceId: 'recording',
+                    voiceUrl: url,
+                    voiceLabel: 'Cloned Voice'
+                }));
+            }
+        } catch (err) {
+            console.error("Voice upload error", err);
+            alert("Failed to upload voice recording.");
+        }
+    };
+
     const isGeneratable = (() => {
         const hasTitle = !!answers.title;
-        const hasScene = meetsMin(answers.scene, 40);
-        const hasSetting = meetsMin(answers.setting, 40);
-        const hasAction = meetsMin(answers.action, 30);
-        const hasReference = meetsMin(answers.referenceText, 30);
+        // Relaxed constraints for smoother Express experience
+        const hasScene = meetsMin(answers.scene, 10);
+        const hasSetting = meetsMin(answers.setting, 10);
+        const hasAction = meetsMin(answers.action, 10);
+        const hasReference = meetsMin(answers.referenceText, 5); // Very short dialogue allowed
         const hasDuration = Number(answers.durationSec) > 0;
         const hasVoice = !!answers.voiceId;
 
         const isCharacterValid = answers.driver === 'narrator'
             ? true
-            : (!!answers.characterName && meetsMin(answers.character, 40));
+            : (!!answers.characterName && meetsMin(answers.character, 10));
 
         return hasTitle && hasScene && hasSetting && hasAction && hasReference && hasDuration && hasVoice && isCharacterValid;
     })();
@@ -258,7 +335,7 @@ export default function ExpressAccordionView({
             const next = { ...prev };
 
             // Direct Mapping
-            if (['characterName', 'character', 'setting', 'scene', 'wantsMusic', 'musicCategoryLabel', 'musicIncludeVocals', 'musicSeed', 'musicLyrics', 'action', 'referenceText', 'directorsNotes', 'wantsCaptions', 'wantsCutaways', 'research', 'title', 'driver', 'durationSec', 'voiceUrl'].includes(key)) {
+            if (['characterName', 'character', 'setting', 'scene', 'wantsMusic', 'musicCategoryLabel', 'musicIncludeVocals', 'musicSeed', 'musicLyrics', 'action', 'referenceText', 'directorsNotes', 'wantsCaptions', 'wantsCutaways', 'research', 'title', 'driver', 'durationSec', 'voiceUrl', 'cameraAngle'].includes(key)) {
                 next[key] = value;
             }
             // Aliased Mapping
@@ -292,6 +369,11 @@ export default function ExpressAccordionView({
         });
     };
 
+    const hasValidExt = (url) => {
+        if (!url) return false;
+        return !!url.match(/\.(jpeg|jpg|png|webp|gif|bmp)$/i);
+    };
+
     const handleLoadCharacter = (id) => {
         if (!id) {
             // Reset to default (AI Built)
@@ -304,11 +386,28 @@ export default function ExpressAccordionView({
                 voiceLabel: "",
                 savedCharacterId: null
             }));
-            return;
         }
-
         const char = savedCharacters.find(c => c.id === id);
         if (char) {
+            console.log("Debug Character Load:", {
+                name: char.name,
+                fullbody: char.fullbody_centered,
+                base: char.base_image_url
+            });
+
+            // Explicit Logic:
+            let preferredImage = null;
+            if (char.fullbody_centered) {
+                preferredImage = char.fullbody_centered;
+                if (!hasValidExt(preferredImage)) {
+                    preferredImage += "?.png"; // Query Shim
+                }
+            } else {
+                preferredImage = char.base_image_url;
+            }
+
+            console.log("Debug Final Image Selection:", preferredImage);
+
             setAnswers(prev => ({
                 ...prev,
                 characterName: char.name,
@@ -316,8 +415,7 @@ export default function ExpressAccordionView({
                 voiceId: char.voice_id || "",
                 voiceUrl: char.voice_ref_url || null,
                 voiceLabel: char.voice_id === 'recording' ? 'Cloned Voice' : (voices.find(v => v.id === char.voice_id)?.name || "Unknown Voice"),
-                // Prioritize full body centered, fallback to reference/base
-                characterImage: char.fullbody_centered || char.referenceImageUrl || char.base_image_url || null,
+                characterImage: preferredImage || null,
                 savedCharacterId: char.id
             }));
         }
@@ -331,12 +429,14 @@ export default function ExpressAccordionView({
         }
         const s = savedSettings.find(x => x.id === id);
         if (s) {
+            // Logic: Ensure base image has valid extension (Settings seem to usually have them)
+            const preferredImage = hasValidExt(s.base_image_url) ? s.base_image_url : (hasValidExt(s.base_hero) ? s.base_hero : null);
+
             updatePayload('setting', s.core_prompt || s.base_prompt);
             setAnswers(prev => ({
                 ...prev,
                 savedSettingId: s.id,
-                // Always default to main reference
-                settingImage: s.base_image_url || s.base_hero || null
+                settingImage: preferredImage,
             }));
         }
     };
@@ -344,7 +444,7 @@ export default function ExpressAccordionView({
     // Summaries for collapsed states
     const summaries = useMemo(() => {
         return {
-            talent: payload.driver === 'narrator' ? 'Voiceover Only' : (payload.characterName ? `${payload.characterName} (${payload.voiceLabel || 'No Voice'})` : "No talent selected"),
+            talent: payload.driver === 'narrator' ? 'Voiceover Only' : (payload.characterName ? `${payload.characterName} (${payload.voiceLabel || 'No Voice'})` : "No cast selected"),
             atmosphere: payload.setting ? `${payload.setting} • ${payload.musicCategoryLabel || 'No Music'}` : "Standard Atmosphere",
             action: payload.action || "No action described"
         };
@@ -376,16 +476,16 @@ export default function ExpressAccordionView({
                 {/* 01 THE TALENT */}
                 <AccordionItem
                     number="01"
-                    title="The Talent"
+                    title="The Cast"
                     isOpen={openSection === 1}
                     onToggle={() => toggleSection(1)}
                     summary={summaries.talent}
                     renderCollapsed={() => (
                         <div className="flex items-center gap-3 w-full">
                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Talent</span>
+                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Cast</span>
                                 <span className="text-xs text-gray-500 font-medium truncate max-w-[200px] md:max-w-md">
-                                    {payload.characterName || 'No talent selected'}
+                                    {payload.characterName || 'No cast selected'}
                                 </span>
                             </div>
                             {payload.savedCharacterId && savedCharacters.find(c => c.id === payload.savedCharacterId)?.previewUrl && (
@@ -478,7 +578,7 @@ export default function ExpressAccordionView({
                                 {/* Manual Inputs - Only show if NO saved character is selected */}
                                 {!payload.savedCharacterId && (
                                     <div className="animate-in slide-in-from-top-2 fade-in duration-300">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                                        <div className="flex flex-col gap-6 mb-6">
                                             {/* Col 1: Character Name */}
                                             <div className="space-y-5">
                                                 <div>
@@ -491,29 +591,77 @@ export default function ExpressAccordionView({
                                                 </div>
                                             </div>
 
-                                            {/* Col 2: Voice Select */}
+                                            {/* Col 2: Voice Select or Record */}
                                             <div className="space-y-5">
                                                 <div>
-                                                    <Label>Voice</Label>
-                                                    <div className="relative flex items-center gap-2">
-                                                        <div className="relative flex-1">
-                                                            <select
-                                                                className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
-                                                                value={currentVoiceId || ''}
-                                                                onChange={e => updatePayload('voice', e.target.value)}
-                                                            >
-                                                                <option value="" disabled>Select a voice...</option>
-                                                                {currentVoiceId === 'recording' && (
-                                                                    <option value="recording">Cloned Voice (Loaded)</option>
-                                                                )}
-                                                                {(voices || []).map(v => (
-                                                                    <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
-                                                                ))}
-                                                            </select>
-                                                            <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <Label className="mb-0">Voice</Label>
+                                                        <div className="flex bg-slate-100 rounded p-0.5">
+                                                            <button
+                                                                onClick={() => setVoiceKind("preset")}
+                                                                className={`px-3 py-1 text-[10px] font-bold uppercase rounded transition-all ${voiceKind === 'preset' ? 'bg-white text-black shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                                            >Library</button>
+                                                            <button
+                                                                onClick={() => setVoiceKind("clone")}
+                                                                className={`px-3 py-1 text-[10px] font-bold uppercase rounded transition-all ${voiceKind === 'clone' ? 'bg-white text-black shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                                            >Clone</button>
                                                         </div>
-                                                        <VoicePreviewButton voice={payload.voiceUrl ? { preview_url: payload.voiceUrl } : (voices || []).find(v => v.id === currentVoiceId)} />
                                                     </div>
+
+                                                    {voiceKind === 'preset' ? (
+                                                        <div className="relative flex items-center gap-2">
+                                                            <div className="relative flex-1">
+                                                                <select
+                                                                    className="w-full bg-slate-50 border border-gray-200 text-sm font-medium text-gray-900 rounded-lg px-3 py-2.5 focus:bg-white focus:outline-none focus:border-black transition-all cursor-pointer appearance-none"
+                                                                    value={currentVoiceId || ''}
+                                                                    onChange={e => updatePayload('voice', e.target.value)}
+                                                                >
+                                                                    <option value="" disabled>Select a voice...</option>
+                                                                    {currentVoiceId === 'recording' && (
+                                                                        <option value="recording">Cloned Voice (Loaded)</option>
+                                                                    )}
+                                                                    {(voices || []).map(v => (
+                                                                        <option key={v.id} value={v.id}>{v.name} &mdash; {v.labels?.gender || 'Voice'}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <div className="absolute right-3 top-3 pointer-events-none text-gray-400 text-[10px]">▼</div>
+                                                            </div>
+                                                            <VoicePreviewButton voice={payload.voiceUrl ? { preview_url: payload.voiceUrl } : (voices || []).find(v => v.id === currentVoiceId)} />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-1">
+                                                            {/* Upload Box */}
+                                                            <label className="border border-dashed border-slate-300 rounded-lg p-3 text-center cursor-pointer hover:bg-slate-50 transition-colors">
+                                                                <span className="text-xs text-slate-500 font-medium block">
+                                                                    {payload.voiceUrl ? "✅ Audio Uploaded" : "📁 Upload Audio File"}
+                                                                </span>
+                                                                <input type="file" accept="audio/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadVoiceFile(e.target.files[0])} />
+                                                            </label>
+
+                                                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300 uppercase justify-center">
+                                                                <div className="h-px bg-slate-200 flex-1"></div> OR <div className="h-px bg-slate-200 flex-1"></div>
+                                                            </div>
+
+                                                            <button
+                                                                onClick={isRecording ? stopRecording : startRecording}
+                                                                className={`w-full py-3 rounded-lg font-bold text-xs uppercase tracking-wide flex items-center justify-center gap-2 transition-all ${isRecording ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-white hover:border-slate-300'}`}
+                                                            >
+                                                                {isRecording ? (
+                                                                    <>
+                                                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                                                        Stop Recording
+                                                                    </>
+                                                                ) : (
+                                                                    <>🎙️ Record Voice</>
+                                                                )}
+                                                            </button>
+
+                                                            {/* Audio Preview */}
+                                                            {payload.voiceUrl && (
+                                                                <audio src={payload.voiceUrl} controls className="w-full h-8 mt-1" />
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -562,16 +710,16 @@ export default function ExpressAccordionView({
 
                 <AccordionItem
                     number="02"
-                    title="The Atmosphere"
+                    title="The Set"
                     isOpen={openSection === 2}
                     onToggle={() => toggleSection(2)}
                     summary={summaries.atmosphere}
                     renderCollapsed={() => (
                         <div className="flex items-center gap-3 w-full">
                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Atmosphere</span>
+                                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">The Set</span>
                                 <span className="text-xs text-gray-500 font-medium truncate max-w-[200px] md:max-w-md">
-                                    {payload.setting || 'No setting selected'}
+                                    {payload.setting || 'No set selected'}
                                 </span>
                             </div>
                             {/* Tiny Setting Preview */}
@@ -607,7 +755,7 @@ export default function ExpressAccordionView({
                             {/* Load Setting: Visual Carousel (Full Width) */}
                             {savedSettings && savedSettings.length > 0 && (
                                 <div className="mb-6">
-                                    <div className="mb-2 text-xs font-medium text-slate-500 uppercase tracking-wide">Select a Setting</div>
+                                    <div className="mb-2 text-xs font-medium text-slate-500 uppercase tracking-wide">Select a Set</div>
                                     <div className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                                         {/* New / Custom Option */}
                                         <div
@@ -671,24 +819,33 @@ export default function ExpressAccordionView({
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                                <div className="flex flex-col md:flex-row gap-4 col-span-2">
-                                    <div className="flex-1">
-                                        <Label>Visual style</Label>
-                                        <Select
-                                            options={["Photorealistic", "Cinematic", "Documentary", "Anime", "Pixar-style", "Watercolor", "Comic-book", "Noir"]}
-                                            value={payload.stylePreset || "Photorealistic"}
-                                            onChange={e => updatePayload('style', e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="w-full md:w-1/3">
-                                        <Label>Resolution</Label>
-                                        <Select
-                                            options={["SD", "HD"]}
-                                            value={payload.resolution || "SD"}
-                                            onChange={e => updatePayload('resolution', e.target.value)}
-                                        />
-                                    </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                                <div>
+                                    <Label>Visual style</Label>
+                                    <Select
+                                        options={["Photorealistic", "Cinematic", "Documentary", "Anime", "Pixar-style", "Watercolor", "Comic-book", "Noir"]}
+                                        value={payload.stylePreset || "Photorealistic"}
+                                        onChange={e => updatePayload('style', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>Resolution</Label>
+                                    <Select
+                                        options={["SD", "HD"]}
+                                        value={payload.resolution || "SD"}
+                                        onChange={e => updatePayload('resolution', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>Camera Angle</Label>
+                                    <Select
+                                        options={[
+                                            "Standard",
+                                            "Close & Intimate"
+                                        ]}
+                                        value={payload.cameraAngle || "Standard"}
+                                        onChange={e => updatePayload('cameraAngle', e.target.value)}
+                                    />
                                 </div>
                             </div>
                         </div>
