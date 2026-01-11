@@ -1029,11 +1029,7 @@ export default function ClipStudioDemo() {
                 user_id: user?.id || null,
                 scene_id: shot.sceneId || null,
                 character_id: shot.characterId || null,
-                id: dbId,
-                clip_id: dbId, // Alias
-                user_id: user?.id || null,
-                scene_id: shot.sceneId || null,
-                character_id: shot.characterId || null,
+
                 setting_id: shot.setting_id || null,
 
                 // [v80] End Keyframe (LTX 2 Support)

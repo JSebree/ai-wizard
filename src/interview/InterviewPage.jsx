@@ -181,6 +181,10 @@ function mapTemplateToAnswers(ui, defaults) {
       (ui.voiceVolume10 ?? adv.voiceVolume10 ?? (adv.voiceVolume !== undefined ? coerceVolume10(adv.voiceVolume) : defaults.voiceVolume10)),
     musicSeed:
       (ui.musicSeed ?? adv.seed ?? (adv.seed !== undefined && adv.seed !== null ? String(adv.seed) : defaults.musicSeed)),
+
+    // Persist Saved Asset IDs (Fix for Express Templates)
+    savedCharacterId: ui.savedCharacterId ?? defaults.savedCharacterId,
+    savedSettingId: ui.savedSettingId ?? defaults.savedSettingId,
   };
 }
 
@@ -226,6 +230,10 @@ function getDefaultAnswers() {
     musicVolume10: 1,
     voiceVolume10: 10,
     musicIncludeVocals: undefined,
+
+    // Saved Assets
+    savedCharacterId: null,
+    savedSettingId: null,
   };
 }
 
@@ -588,6 +596,44 @@ export default function InterviewPage({ onComplete }) {
   // Load Saved Assets (Characters & Settings) for Express View
   const [savedCharacters, setSavedCharacters] = useState([]);
   const [savedSettings, setSavedSettings] = useState([]);
+
+  // --- AUTO-MATCH TEMPLATE (Reactive) ---
+  // Matches template strings to saved library items whenever they become available
+  useEffect(() => {
+    // 1. Characters
+    if (answers.characterName && !answers.savedCharacterId && savedCharacters.length > 0) {
+      const match = savedCharacters.find(c =>
+        String(c.name || '').trim().toLowerCase() === String(answers.characterName).trim().toLowerCase()
+      );
+      if (match) {
+        console.log("[AutoMatch] Late-binding character:", match.name);
+        setAnswers(prev => ({
+          ...prev,
+          savedCharacterId: match.id,
+          character: match.base_prompt || match.core_prompt || prev.character,
+          characterImage: match.previewUrl || prev.characterImage
+        }));
+      }
+    }
+
+    // 2. Settings
+    if (answers.setting && !answers.savedSettingId && savedSettings.length > 0) {
+      const target = String(answers.setting).trim();
+      const match = savedSettings.find(s => {
+        const p1 = String(s.core_prompt || '').trim();
+        const p2 = String(s.base_prompt || '').trim();
+        return p1 === target || p2 === target;
+      });
+      if (match) {
+        console.log("[AutoMatch] Late-binding setting:", match.id);
+        setAnswers(prev => ({
+          ...prev,
+          savedSettingId: match.id,
+          settingImage: match.previewUrl || prev.settingImage
+        }));
+      }
+    }
+  }, [answers.characterName, answers.setting, savedCharacters.length, savedSettings.length, answers.savedCharacterId, answers.savedSettingId]);
 
   useEffect(() => {
     if (!SUPABASE_URL || !SUPABASE_ANON || !user) return;
