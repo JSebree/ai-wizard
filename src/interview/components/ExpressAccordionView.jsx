@@ -995,7 +995,7 @@ export default function ExpressAccordionView({
                         </div>
 
                         <div>
-                            <Label>Reference text</Label>
+                            <Label>Reference text (script context)</Label>
                             <TextArea
                                 rows={4}
                                 placeholder={`CHARACTER: "Line of dialogue here..."\n(Action text in parentheses)`}
