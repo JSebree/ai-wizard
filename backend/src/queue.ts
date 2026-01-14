@@ -2,8 +2,13 @@ import { Queue, Worker } from 'bullmq';
 import { CONFIG } from './config';
 import IORedis from 'ioredis';
 
-const connection = new IORedis(CONFIG.REDIS_URL, {
+const redisUrl = CONFIG.REDIS_URL;
+const isSecure = redisUrl.startsWith('rediss://');
+
+const connection = new IORedis(redisUrl, {
     maxRetriesPerRequest: null,
+    // Explicitly enable TLS for 'rediss' connections to avoid hangs
+    ...(isSecure ? { tls: { rejectUnauthorized: false } } : {})
 });
 
 export const videoQueue = new Queue('video-generation', { connection });
