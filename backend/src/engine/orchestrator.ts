@@ -125,6 +125,13 @@ export class VideoOrchestrator {
         const hasSetting = !!this.plan.settings.settingImage;
         const firstARoll = allShots.find(s => s.type === 'aroll');
 
+        // Determine if creative edit mode (non-photorealistic styles)
+        const styleKey = (this.plan.settings.style || '').toLowerCase();
+        const isPhotorealistic = styleKey.includes('photorealistic') || styleKey.includes('ultra-realistic') || styleKey === '' || styleKey === 'default';
+        const isCreativeEdit = !isPhotorealistic;
+
+        console.log(`[Orchestrator] Style: "${this.plan.settings.style}" -> isCreativeEdit: ${isCreativeEdit}`);
+
         if (hasCharacter || hasSetting) {
             // Combine both images for I2I generation (setting first, then character)
             const referenceImages = [
@@ -143,7 +150,8 @@ export class VideoOrchestrator {
                 width: this.plan.settings.width,
                 height: this.plan.settings.height,
                 image_urls: referenceImages,
-                strength: 0.7 // Balance between reference fidelity and prompt adherence
+                strength: 0.7, // Balance between reference fidelity and prompt adherence
+                isCreativeEdit // Pass to control creative_edit, identity_emphasis, true_guidance_scale
             }).then(res => {
                 console.log(`[Orchestrator] Master A-Roll Generated (I2I): ${res.image_url}`);
                 return res.image_url;

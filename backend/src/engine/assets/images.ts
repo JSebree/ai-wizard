@@ -20,6 +20,7 @@ export interface KeyframeInput {
     seed?: number;
     image_urls?: string[]; // Array support
     strength?: number;
+    isCreativeEdit?: boolean; // true for non-photorealistic styles
 }
 
 export interface KeyframeOutput {
@@ -32,6 +33,7 @@ export async function generateKeyframe(input: KeyframeInput): Promise<KeyframeOu
 
     // 1. Determine Mode & Endpoint
     const hasReferenceImages = input.image_urls && input.image_urls.length > 0;
+    const isCreative = input.isCreativeEdit ?? false;
 
     let targetEndpointRun = ENDPOINT_T2I;
     let targetEndpointStatus = ENDPOINT_T2I_STATUS;
@@ -43,6 +45,9 @@ export async function generateKeyframe(input: KeyframeInput): Promise<KeyframeOu
         targetEndpointStatus = ENDPOINT_I2I_STATUS;
 
         // Payload: "Express Keyframe.json" Style
+        // creative_edit = true for non-photorealistic styles
+        // identity_emphasis = 0.3 (creative) or 2.2 (photorealistic)
+        // true_guidance_scale = 5.0 (creative) or 2.4 (photorealistic)
         payload = {
             input: {
                 scene_prompt: input.prompt,
@@ -53,13 +58,13 @@ export async function generateKeyframe(input: KeyframeInput): Promise<KeyframeOu
                 guidance_scale: input.guidance_scale || 7.5,
                 seed: input.seed ?? -1,
 
-                // Img2Img Specifics
+                // Img2Img Specifics - values depend on creative mode
                 image_urls: input.image_urls,
                 reference_urls: input.image_urls,
-                creative_edit: false,
+                creative_edit: isCreative,
                 edit_strength: input.strength || 0.7,
-                identity_emphasis: 2.2,
-                true_guidance_scale: 2.4,
+                identity_emphasis: isCreative ? 0.3 : 2.2,
+                true_guidance_scale: isCreative ? 5.0 : 2.4,
                 preserve_identity: true,
 
                 output: {
@@ -101,8 +106,10 @@ export async function generateKeyframe(input: KeyframeInput): Promise<KeyframeOu
         console.log(`[Image I2I] Payload:`, JSON.stringify({
             scene_prompt: payload.input.scene_prompt?.substring(0, 100) + '...',
             image_urls: payload.input.image_urls,
+            creative_edit: payload.input.creative_edit,
             edit_strength: payload.input.edit_strength,
-            identity_emphasis: payload.input.identity_emphasis
+            identity_emphasis: payload.input.identity_emphasis,
+            true_guidance_scale: payload.input.true_guidance_scale
         }, null, 2));
     }
 
