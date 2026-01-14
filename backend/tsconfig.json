@@ -12,5 +12,11 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true
-    }
+    },
+    "exclude": [
+        "node_modules",
+        "src/scripts",
+        "src/test-*.ts",
+        "src/verify-*.ts"
+    ]
 }
