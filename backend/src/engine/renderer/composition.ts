@@ -224,19 +224,19 @@ export class CompositionEngine {
 
                 const vol = clip.volume ?? (track.name === 'music' ? 0.3 : 1.0);
 
-                // Volume Filter
+                // Volume Filter - use positional arg for compatibility
                 const volLabel = `${label}Vol`;
                 complexFilter.push({
                     filter: 'volume',
-                    options: { volume: vol },
+                    options: String(vol),  // positional: volume=0.05
                     inputs: `${idx}:a`,
                     outputs: volLabel
                 });
 
-                // ADelay Filter
+                // ADelay Filter - use positional arg for compatibility
                 complexFilter.push({
                     filter: 'adelay',
-                    options: { delays: `${delayMs}|${delayMs}` },
+                    options: `${delayMs}|${delayMs}`,  // positional: adelay=7080|7080
                     inputs: volLabel,
                     outputs: label
                 });
@@ -257,7 +257,7 @@ export class CompositionEngine {
             // Usually aEmbedded exists, so this path is rare
             complexFilter.push({
                 filter: 'anullsrc',
-                options: { r: 44100, cl: 'stereo' },
+                options: { sample_rate: 44100, channel_layout: 'stereo' },
                 outputs: 'aMain'
             });
         }
