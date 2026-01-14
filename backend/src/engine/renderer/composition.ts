@@ -168,7 +168,7 @@ export class CompositionEngine {
                 // Generate Silence matching duration
                 // Using anullsrc. Note: simple 'anullsrc' produces infinite stream, strictly need 'd' or 't'
                 const silentLabel = `[s${idx}]`;
-                complexFilter.push(`anullsrc=r=44100:cl=stereo:d=${duration}[${silentLabel}]`);
+                complexFilter.push(`anullsrc=r=44100:cl=stereo:d=${duration}${silentLabel}`);
                 concatInputs.push(`${streamLabel}${silentLabel}`);
             }
         }
