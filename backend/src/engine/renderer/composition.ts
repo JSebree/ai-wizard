@@ -1,16 +1,18 @@
 
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from '@ffmpeg-installer/ffmpeg';
-import ffprobePath from '@ffprobe-installer/ffprobe';
 import { EDL, Clip, Track } from '../common/types';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 import { CONFIG } from '../../config';
 
-// Set paths
-ffmpeg.setFfmpegPath(ffmpegPath.path);
-ffmpeg.setFfprobePath(ffprobePath.path);
+// Use system-installed FFmpeg (from Dockerfile static build)
+// Falls back to PATH lookup if not explicitly set
+const FFMPEG_PATH = process.env.FFMPEG_PATH || '/usr/local/bin/ffmpeg';
+const FFPROBE_PATH = process.env.FFPROBE_PATH || '/usr/local/bin/ffprobe';
+ffmpeg.setFfmpegPath(FFMPEG_PATH);
+ffmpeg.setFfprobePath(FFPROBE_PATH);
+console.log(`[Composition] Using FFmpeg: ${FFMPEG_PATH}`);
 
 export interface CompositionOptions {
     outputDir: string;
