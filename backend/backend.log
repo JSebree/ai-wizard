@@ -146,3 +146,76 @@ Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requ
 [Video] Poll 120/400: IN_PROGRESS (elapsed: 1200s)
 [Video] Poll 126/400: IN_PROGRESS (elapsed: 1260s)
 [Video] Poll 132/400: IN_PROGRESS (elapsed: 1320s)
+[Video] Raw A-Roll Output Type: object
+[Video] Raw A-Roll Output: {
+  "artifacts": {
+    "format": "mp4",
+    "video_base64": null,
+    "video_url": "https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_14e346c8-8915-4e9b-af83-4fedf111d506.mp4"
+  },
+  "debug": {
+    "height": 544,
+    "input_type": "image",
+    "max_frame": 343,
+    "person_count": "single",
+    "prompt_id": "52994616-139e-4c78-a1ec-d1abaf34548f",
+    "width": 960,
+    "workflow": "/I2V_single.json"
+  },
+  "id": "task_14e346c8-8915-4e9b-af83-4fedf111d506",
+  "metrics": {
+    "gpu": "unknown",
+    "latency_ms": 736034
+  },
+  "model": "InfiniteTalk/ComfyUI",
+  "status": "succeeded",
+  "warnings": []
+}
+[Video] Extracted A-Roll URL: https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_14e346c8-8915-4e9b-af83-4fedf111d506.mp4
+[Orchestrator] Phase 2 complete.
+[Orchestrator] buildEDL: Adding Audio Clip for S02-1 (Type=broll, Voice=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/1c93d2c546cc4091ac5510915f52e6db.wav, Dur=13.76)
+[Orchestrator] buildEDL: Skipping Audio for B-Roll S02-2: voiceUrl=undefined, voiceDur=undefined
+[Orchestrator] buildEDL: Skipping Audio for B-Roll S02-3: voiceUrl=undefined, voiceDur=undefined
+[Orchestrator] EDL Built. Video Clips: 5, Audio Clips: 1
+[JobStatus] assembling (85%): Generating Music...
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[Music] Starting generation for: Cinematic background music (32.08s)...
+[Music] Job submitted: 264f1bb3-995a-48d4-96ca-b00fa46f5511-u2
+[Music] Status: IN_PROGRESS
+[Music] Status: COMPLETED
+Music added to EDL: https://music-generations.nyc3.digitaloceanspaces.com/fe03296b1688422cbecd7669f1523713.wav
+[JobStatus] assembling (90%): Rendering video (Local)...
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[Composition] Starting render for Job 1
+[Composition] Downloading assets...
+[Composition] Processing Audio Track 'narration' with 1 clips.
+[Composition] Processing Audio Track 'Music' with 1 clips.
+FFmpeg Start: ffmpeg -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/S01_task_b33e83c5_803f_426d_b454_97e9c0c92aac.mp4 -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/S02_1_broll_1768410419861_ugn052.mp4 -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/S02_2_broll_1768410419861_mj273.mp4 -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/S02_3_broll_1768410419861_mfbh9.mp4 -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/S03_task_14e346c8_8915_4e9b_af83_4fedf111d506.mp4 -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/S02_1_audio_1c93d2c546cc4091ac5510915f52e6db.wav -i /Users/cbree/dev/ai-wizard/backend/temp/renders/1/temp/music_1_fe03296b1688422cbecd7669f1523713.wav -y -filter_complex [0:v]scale=w=1024:h=576:force_original_aspect_ratio=decrease[vBase0];[vBase0]pad=w=1024:h=576:x=(ow-iw)/2:y=(oh-ih)/2[vPad0];[vPad0]setsar=1[vSar0];[vSar0]fps=30[vFps0];[vFps0]format=yuv420p[v0];[1:v]scale=w=1024:h=576:force_original_aspect_ratio=decrease[vBase1];[vBase1]pad=w=1024:h=576:x=(ow-iw)/2:y=(oh-ih)/2[vPad1];[vPad1]setsar=1[vSar1];[vSar1]fps=30[vFps1];[vFps1]format=yuv420p[v1];anullsrc=r=44100:cl=stereo:d=4.586666666666667[s1];[2:v]scale=w=1024:h=576:force_original_aspect_ratio=decrease[vBase2];[vBase2]pad=w=1024:h=576:x=(ow-iw)/2:y=(oh-ih)/2[vPad2];[vPad2]setsar=1[vSar2];[vSar2]fps=30[vFps2];[vFps2]format=yuv420p[v2];anullsrc=r=44100:cl=stereo:d=4.586666666666667[s2];[3:v]scale=w=1024:h=576:force_original_aspect_ratio=decrease[vBase3];[vBase3]pad=w=1024:h=576:x=(ow-iw)/2:y=(oh-ih)/2[vPad3];[vPad3]setsar=1[vSar3];[vSar3]fps=30[vFps3];[vFps3]format=yuv420p[v3];anullsrc=r=44100:cl=stereo:d=4.586666666666667[s3];[4:v]scale=w=1024:h=576:force_original_aspect_ratio=decrease[vBase4];[vBase4]pad=w=1024:h=576:x=(ow-iw)/2:y=(oh-ih)/2[vPad4];[vPad4]setsar=1[vSar4];[vSar4]fps=30[vFps4];[vFps4]format=yuv420p[v4];[v0][0:a][v1][s1][v2][s2][v3][s3][v4][4:a]concat=n=5:v=1:a=1[vMain][aEmbedded];[5:a]volume=volume=1[aT0C0Vol];[aT0C0Vol]adelay=delays=7840|7840[aT0C0];[6:a]volume=volume=0.05[aT1C0Vol];[aT1C0Vol]adelay=delays=0|0[aT1C0];[aEmbedded][aT0C0][aT1C0]amix=inputs=3:duration=longest[aMain] -map [vMain] -map [aMain] -c:v libx264 -c:a aac -pix_fmt yuv420p -shortest /Users/cbree/dev/ai-wizard/backend/temp/renders/1/baby_zuck_part_4_1768411783847.mp4
+[Composition] Render complete: /Users/cbree/dev/ai-wizard/backend/temp/renders/1/baby_zuck_part_4_1768411783847.mp4
+[S3] Uploading baby_zuck_part_4_1768411785905.mp4 to media-catalog/renders
+[S3] Upload successful: https://nyc3.digitaloceanspaces.com/media-catalog/renders/baby_zuck_part_4_1768411785905.mp4
+Remote Render URL: https://nyc3.digitaloceanspaces.com/media-catalog/renders/baby_zuck_part_4_1768411785905.mp4
+[JobStatus] assembling (95%): Generating Captions...
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[Captions] Requesting captions for: https://nyc3.digitaloceanspaces.com/media-catalog/renders/baby_zuck_part_4_1768411785905.mp4
+[Captions] Sending job to n8n: https://n8n.simplifies.click/webhook/render-captions
+[Captions] Job Response: {
+  status: 'completed',
+  jobId: '1',
+  output_url: 'https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/6379fcb8-c63f-4e12-8f26-a00a7cf8a91a_captioned.mp4',
+  debug: {
+    original_url: 'https://nyc3.digitaloceanspaces.com/media-catalog/renders/baby_zuck_part_4_1768411785905.mp4',
+    doMusic: 'false',
+    doUpscale: 'true'
+  }
+}
+[Captions] Received URL directly: https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/6379fcb8-c63f-4e12-8f26-a00a7cf8a91a_captioned.mp4
+Captioned URL: https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/6379fcb8-c63f-4e12-8f26-a00a7cf8a91a_captioned.mp4
+[JobStatus] assembling (98%): Upscaling video...
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[Upscaler] Starting job for https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/6379fcb8-c63f-4e12-8f26-a00a7cf8a91a_captioned.mp4 (Preset: fast)
+[Upscaler] Job ID: d4d6861c-b45e-4700-95fe-9075a5244da8-u1
+Upscaled URL: https://nyc3.digitaloceanspaces.com/video-generations/upscaled/episodes/baby-zuck-part-4-1768411832949.mp4
+[JobStatus] completed (100%): Video Ready!
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+Job 1 completed!

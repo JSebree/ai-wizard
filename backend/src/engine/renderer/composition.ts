@@ -196,7 +196,7 @@ export class CompositionEngine {
                 // Using anullsrc as a filter source
                 complexFilter.push({
                     filter: 'anullsrc',
-                    options: { r: 44100, cl: 'stereo', d: duration },
+                    options: { sample_rate: 44100, channel_layout: 'stereo', duration: duration },
                     outputs: silentLabel
                 });
                 concatInputs.push(`[${silentLabel}]`);
