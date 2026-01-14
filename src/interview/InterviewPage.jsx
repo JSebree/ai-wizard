@@ -1611,8 +1611,10 @@ export default function InterviewPage({ onComplete }) {
       voiceId: uiPayload.voiceId, // Explicitly pass voice selection
       voiceUrl: uiPayload.voiceUrl, // Pass cloned voice URL if present
       wantsMusic: uiPayload.wantsMusic,
+      musicCategoryLabel: uiPayload.musicCategoryLabel, // FIX: Pass music style category!
       wantsCaptions: uiPayload.wantsCaptions,
       stylePreset: uiPayload.advanced?.style,
+      cameraAngle: uiPayload.camera_angle || uiPayload.cameraAngle, // FIX: Pass camera angle!
       doUpscale: uiPayload.advanced?.resolution === 'HD',
     };
 

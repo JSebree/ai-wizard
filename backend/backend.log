@@ -293,3 +293,78 @@ Job 2 failed inside worker: Error: Image Gen Failed: "Image generation failed: C
     at async Worker.bullmq_1.Worker.connection.connection [as processFn] (/Users/cbree/dev/ai-wizard/backend/src/queue.ts:17:28)
     at async /Users/cbree/dev/ai-wizard/backend/node_modules/bullmq/src/classes/worker.ts:990:26
 Job 2 failed: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 5.38 MiB is free. Including non-PyTorch memory, this process has 14.24 GiB memory in use. Of the allocated memory 13.66 GiB is allocated by PyTorch, and 182.51 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+{"level":30,"time":1768424717586,"pid":97234,"hostname":"Jericks-MacBook-Air.local","reqId":"req-3","req":{"method":"POST","url":"/api/generate","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":59798},"msg":"incoming request"}
+{"level":30,"time":1768424717597,"pid":97234,"hostname":"Jericks-MacBook-Air.local","reqId":"req-3","res":{"statusCode":200},"responseTime":11.352833032608032,"msg":"request completed"}
+Processing job 3: {
+  userId: '3ad0105d-7dfd-4790-b1c5-9bade4fb2406',
+  title: 'Demarco poetry 2',
+  driver: 'character',
+  route: 'combo',
+  sceneDescription: 'A spoken word poetry reading from Demarco, live on stage',
+  actionDescription: 'Demarco recites poetry on stage live',
+  durationSec: 30,
+  characterDescription: 'African American male in his mid twenties. Athletic with expressive tattoos and hair. ',
+  characterImage: 'https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_headshot_front',
+  settingDescription: 'Stage of a concert venue',
+  settingImage: 'https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg',
+  voiceId: 'recording',
+  voiceUrl: 'https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4',
+  wantsMusic: true,
+  wantsCaptions: true,
+  stylePreset: 'Photorealistic',
+  doUpscale: false,
+  vodId: 'b11d7c5a-a9b2-4a1b-a9ad-accc30362ce7'
+}
+[JobStatus] scripting (10%): Starting AI Director...
+Supabase fetch failed for b11d7c5a-a9b2-4a1b-a9ad-accc30362ce7: JSON object requested, multiple (or no) rows returned
+[ScriptGen] Generating script for route: combo
+[ScriptGen] Combo Attempt 1/3...
+[ScriptGen] Validation Passed on attempt 1.
+[JobStatus] visuals (30%): Script generated. Visualizing scenes...
+Supabase fetch failed for b11d7c5a-a9b2-4a1b-a9ad-accc30362ce7: JSON object requested, multiple (or no) rows returned
+[Orchestrator] Starting job for session: 3
+[JobStatus] visuals (35%): Analyzing script segments...
+[Orchestrator] Segment SEG-01: track=aroll, dialogue="I stand here, under the lights, feeling the weight..." (253 chars)
+[Orchestrator] Segment SEG-02: track=broll, dialogue="The words flow through the air, and the audience l..." (204 chars)
+[Orchestrator] Segment SEG-03: track=aroll, dialogue="As I near the end of my poem, my voice grows more ..." (260 chars)
+[Orchestrator] Processing 4 shots (from 3 segments)...
+[Voice] Generating TTS: "I stand here, under the lights..."
+[Voice] Glitch Check Attempt 1/5...
+[Voice] Generating TTS: "The words flow through the air..."
+[Voice] Glitch Check Attempt 1/5...
+[Voice] Generating TTS: "As I near the end of my poem, ..."
+[Voice] Glitch Check Attempt 1/5...
+[Orchestrator] Using user-provided Master A-Roll image.
+[Image] Generating keyframe: "Style: Ultra-realistic 8k photograph, highly detai..."
+Supabase fetch failed for b11d7c5a-a9b2-4a1b-a9ad-accc30362ce7: JSON object requested, multiple (or no) rows returned
+[Image] Job started (T2I): 8bed98c2-00b5-423b-ac72-2baa17255340-u2
+[Voice] Job started: 82b62e27-a938-439c-9926-0944d4f58a66-u1
+[Voice] Job started: 7235be15-a5a1-4e59-b86c-57d5ed1836e0-u1
+[Voice] Job started: 03068ba4-382a-4d8f-8118-f004c4ee31a6-u2
+Job Failed Error: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 40.31 MiB is free. Process 2484653 has 65.13 GiB memory in use. Process 2032062 has 14.07 GiB memory in use. Of the allocated memory 13.48 GiB is allocated by PyTorch, and 186.53 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+    at generateKeyframe (/Users/cbree/dev/ai-wizard/backend/src/engine/assets/images.ts:136:19)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:171:36
+    at async Promise.all (index 0)
+    at async VideoOrchestrator.execute (/Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:154:13)
+    at async processVideoJob (/Users/cbree/dev/ai-wizard/backend/src/director.ts:165:21)
+    at async Worker.bullmq_1.Worker.connection.connection [as processFn] (/Users/cbree/dev/ai-wizard/backend/src/queue.ts:17:28)
+    at async /Users/cbree/dev/ai-wizard/backend/node_modules/bullmq/src/classes/worker.ts:990:26
+[JobStatus] failed (0%): Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 40.31 MiB is free. Process 2484653 has 65.13 GiB memory in use. Process 2032062 has 14.07 GiB memory in use. Of the allocated memory 13.48 GiB is allocated by PyTorch, and 186.53 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+Supabase fetch failed for b11d7c5a-a9b2-4a1b-a9ad-accc30362ce7: JSON object requested, multiple (or no) rows returned
+Job 3 failed inside worker: Error: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 40.31 MiB is free. Process 2484653 has 65.13 GiB memory in use. Process 2032062 has 14.07 GiB memory in use. Of the allocated memory 13.48 GiB is allocated by PyTorch, and 186.53 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+    at generateKeyframe (/Users/cbree/dev/ai-wizard/backend/src/engine/assets/images.ts:136:19)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:171:36
+    at async Promise.all (index 0)
+    at async VideoOrchestrator.execute (/Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:154:13)
+    at async processVideoJob (/Users/cbree/dev/ai-wizard/backend/src/director.ts:165:21)
+    at async Worker.bullmq_1.Worker.connection.connection [as processFn] (/Users/cbree/dev/ai-wizard/backend/src/queue.ts:17:28)
+    at async /Users/cbree/dev/ai-wizard/backend/node_modules/bullmq/src/classes/worker.ts:990:26
+Job 3 failed: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 40.31 MiB is free. Process 2484653 has 65.13 GiB memory in use. Process 2032062 has 14.07 GiB memory in use. Of the allocated memory 13.48 GiB is allocated by PyTorch, and 186.53 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+[Orchestrator] Voice Gen Complete for S02-1: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/f9ddc4a3070f40bcbd0b5595b457480e.wav, voiceDur=9.76
+[Orchestrator] Voice Gen Complete for S01: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/77a265fd4ace4295a62a74b9e18b5cc6.wav, voiceDur=20.56
+[Voice] Attempt 1 failed: Voice Gen Timeout
+[Voice] Glitch Check Attempt 2/5...
+[Voice] Job started: 5c012025-0426-433e-a0b8-05168239f397-u2
+[Orchestrator] Voice Gen Complete for S03: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/e4d4f5831ac54e448caa7e826427a9da.wav, voiceDur=24.64
