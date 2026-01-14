@@ -740,21 +740,17 @@ export default function InterviewPage({ onComplete }) {
 
   // PROGRESS POLLER: If any VOD is processing, poll every 5s for updates
   useEffect(() => {
-    // Only poll if we have pending items
-    const hasProcessing = vods.some(v => v.status === 'processing' || v.status === 'queued');
-    if (!hasProcessing) return;
+    // Only poll if we have items that are still running
+    const hasActiveJobs = vods.some(v => v.status === 'processing' || v.status === 'queued' || v.status === 'scripting' || v.status === 'researching' || v.status === 'producing');
 
-    if (!SUPABASE_URL || !SUPABASE_ANON) return;
+    if (!hasActiveJobs || !SUPABASE_URL || !SUPABASE_ANON) return;
 
     const intervalId = setInterval(async () => {
       try {
         const url = new URL("/rest/v1/express_vods", SUPABASE_URL);
         url.searchParams.set("select", "*");
-        // url.searchParams.set("status", "eq.processing"); // REMOVED: Fetch all to preserve history 
-        // Actually, we want to see if they completed too. 
-        // Let's just re-fetch the list, or cleaner: update only active ones.
-        // For simplicity/robustness: re-fetch all for now.
 
+        // Re-apply same filters as main load to keep list consistent
         if (!isAdmin) {
           url.searchParams.set("or", `(user_id.eq.${user?.id},is_global.eq.true)`);
         }
@@ -771,18 +767,18 @@ export default function InterviewPage({ onComplete }) {
 
         if (res.ok) {
           const freshVods = await res.json();
-          // Merge updates into Vods to avoid UI jumps if list order changed? 
-          // Since we order by created_at.desc, it should be stable.
-          // Just replacing is easiest, React handles diffing.
+          // Update state to show new status!
           setVods(freshVods);
         }
       } catch (e) {
-        console.warn("Polling failed:", e);
+        // Silent fail on poll error
       }
     }, 5000);
 
     return () => clearInterval(intervalId);
   }, [vods, SUPABASE_URL, SUPABASE_ANON, session, isAdmin, user]);
+
+
 
   // Listen for app-level request to jump to first step without clearing answers
   useEffect(() => {
