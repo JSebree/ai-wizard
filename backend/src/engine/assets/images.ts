@@ -117,7 +117,7 @@ export async function generateKeyframe(input: KeyframeInput): Promise<KeyframeOu
     // 3. Poll for Completion
     let finalUrl: string | null = null;
     let attempts = 0;
-    while (!finalUrl && attempts < 60) { // 60 * 2s = 120s timeout
+    while (!finalUrl && attempts < 300) { // 300 * 2s = 600s = 10 minute timeout (I2I can be slow)
         await new Promise(r => setTimeout(r, 2000));
         attempts++;
 
