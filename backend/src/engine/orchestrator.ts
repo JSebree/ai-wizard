@@ -67,13 +67,19 @@ export class VideoOrchestrator {
             const enforceSolo = this.shouldEnforceSolo(seg);
             const safetyRail = enforceSolo ? "Single solo subject, centered in frame." : "Primary subject in focus.";
 
+            // Build A-Roll prompt: Camera first, then style, then action, end with identity cue
+            const arollPrompt = [
+                mapCamera(this.plan.settings.cameraAngle), // e.g. "Eye-level shot"
+                mapStyle(this.plan.settings.style), // e.g. "Ultra-realistic 8k photograph..."
+                `${safetyRail} Add ${seg.action || 'character in scene'}.`,
+                "Neutral unobtrusive face" // Identity preservation cue for I2I
+            ].filter(Boolean).join(' ');
+
             return [{
                 id: `S${(index + 1).toString().padStart(2, '0')}`,
                 segId: seg.segId || `SEG-${(index + 1).toString().padStart(2, '0')}`,
                 shotKey: `${seg.segId || 'SEG01'}-S${(index + 1).toString().padStart(2, '0')}`,
-                prompt: `Style: ${mapStyle(this.plan.settings.style)}. ` + (isARoll
-                    ? `${safetyRail} Character: ${seg.character}. Setting: ${seg.visual}. Action: ${seg.action}. Camera: ${mapCamera(this.plan.settings.cameraAngle)}.`
-                    : (seg.visual || "Cinematic b-roll")),
+                prompt: isARoll ? arollPrompt : (seg.visual || "Cinematic b-roll"),
                 dialogue: seg.dialogue,
                 durationSec: seg.duration || 4,
                 type: isARoll ? 'aroll' : 'broll'

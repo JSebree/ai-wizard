@@ -96,6 +96,16 @@ export async function generateKeyframe(input: KeyframeInput): Promise<KeyframeOu
         };
     }
 
+    // Debug: Log full payload for I2I
+    if (hasReferenceImages) {
+        console.log(`[Image I2I] Payload:`, JSON.stringify({
+            scene_prompt: payload.input.scene_prompt?.substring(0, 100) + '...',
+            image_urls: payload.input.image_urls,
+            edit_strength: payload.input.edit_strength,
+            identity_emphasis: payload.input.identity_emphasis
+        }, null, 2));
+    }
+
     // 2. Start Job
     const startRes = await fetch(targetEndpointRun, {
         method: 'POST',
