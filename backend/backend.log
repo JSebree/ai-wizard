@@ -219,3 +219,77 @@ Upscaled URL: https://nyc3.digitaloceanspaces.com/video-generations/upscaled/epi
 [JobStatus] completed (100%): Video Ready!
 Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
 Job 1 completed!
+{"level":30,"time":1768417449074,"pid":97234,"hostname":"Jericks-MacBook-Air.local","reqId":"req-2","req":{"method":"POST","url":"/api/generate","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":63204},"msg":"incoming request"}
+{"level":30,"time":1768417449084,"pid":97234,"hostname":"Jericks-MacBook-Air.local","reqId":"req-2","res":{"statusCode":200},"responseTime":9.441707849502563,"msg":"request completed"}
+Processing job 2: {
+  userId: '3ad0105d-7dfd-4790-b1c5-9bade4fb2406',
+  title: 'Baby Zuck part 4',
+  driver: 'character',
+  route: 'combo',
+  sceneDescription: 'A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day',
+  actionDescription: 'the infant Mark Zuckerberg is sitting at the evening news anchor desk, moving naturally as if in a live conversation as he breaks news. ',
+  durationSec: 30,
+  characterDescription: 'Mark Zuckerberg as a cute cherubic infant with cute chubby cheeks and expressive eyes, sitting in an evening news anchor table and dressed in an anchor host',
+  settingDescription: 'Infant Mark Zuckerberg sits at an evening news anchor desk, studio lit room as he discusses breaking AI news topics of the day.',
+  voiceId: '4080632d-4364-44f2-9e27-451574f1b96f',
+  wantsMusic: true,
+  wantsCaptions: true,
+  stylePreset: 'Pixar-style',
+  doUpscale: true,
+  vodId: 'a282d700-ab8e-4f95-8c4b-f406a7b4ceeb'
+}
+[JobStatus] scripting (10%): Starting AI Director...
+Supabase fetch failed for a282d700-ab8e-4f95-8c4b-f406a7b4ceeb: JSON object requested, multiple (or no) rows returned
+[ScriptGen] Generating script for route: combo
+[ScriptGen] Combo Attempt 1/3...
+[ScriptGen] Validation Passed on attempt 1.
+[JobStatus] visuals (30%): Script generated. Visualizing scenes...
+Supabase fetch failed for a282d700-ab8e-4f95-8c4b-f406a7b4ceeb: JSON object requested, multiple (or no) rows returned
+[Orchestrator] Starting job for session: 2
+[JobStatus] visuals (35%): Analyzing script segments...
+[Orchestrator] Segment SEG-01: track=aroll, dialogue="Good evening, I'm Baby Zuck, and welcome to our sp..." (204 chars)
+[Orchestrator] Segment SEG-02: track=broll, dialogue="In the world of AI, we're seeing incredible advanc..." (197 chars)
+[Orchestrator] Segment SEG-03: track=aroll, dialogue="From breakthroughs in AI hardware to the latest ro..." (199 chars)
+[Orchestrator] Processing 5 shots (from 3 segments)...
+[Voice] Generating TTS: "Good evening, I'm Baby Zuck, a..."
+[Voice] Glitch Check Attempt 1/5...
+[Voice] Generating TTS: "In the world of AI, we're seei..."
+[Voice] Glitch Check Attempt 1/5...
+[Voice] Generating TTS: "From breakthroughs in AI hardw..."
+[Voice] Glitch Check Attempt 1/5...
+[Orchestrator] Generating Master A-Roll image from Shot S01...
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+Supabase fetch failed for a282d700-ab8e-4f95-8c4b-f406a7b4ceeb: JSON object requested, multiple (or no) rows returned
+[Voice] Job started: a800287a-2926-4e5c-a481-1c5283093743-u2
+[Voice] Job started: 06ebeb22-cba5-4dc0-b706-6ea6a92cfd49-u2
+[Image] Job started (T2I): 56484e7d-f0d2-4760-9541-7fd68410d8b1-u1
+[Voice] Job started: 152ebb91-dfa3-4189-9da4-bc083b7f0f11-u1
+[Orchestrator] Voice Gen Complete for S03: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/bc6a1f135c344ebc98914b125fb7cdec.wav, voiceDur=11.28
+[Orchestrator] Voice Gen Complete for S01: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/1310761da6af44d5a3707f1f6b6df9e9.wav, voiceDur=9.52
+[Orchestrator] Master A-Roll Generated: https://nyc3.digitaloceanspaces.com/image-generations/Catalog/scenes/unnamed/unnamed_56484e7d-f0d2-4760-9541-7fd68410d8b1-u1.png
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+[Image] Job started (T2I): 05fcf484-59e8-4200-ba7e-9923d9911e83-u1
+[Orchestrator] Voice Gen Complete for S02-1: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/2c0e3415c5114618825a5958356526ab.wav, voiceDur=17.52
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+[Image] Job started (T2I): 53f55f51-61fd-4972-a1f4-f89e182b0ee5-u2
+Job Failed Error: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 5.38 MiB is free. Including non-PyTorch memory, this process has 14.24 GiB memory in use. Of the allocated memory 13.66 GiB is allocated by PyTorch, and 182.51 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+    at generateKeyframe (/Users/cbree/dev/ai-wizard/backend/src/engine/assets/images.ts:136:19)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:171:36
+    at async Promise.all (index 0)
+    at async VideoOrchestrator.execute (/Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:154:13)
+    at async processVideoJob (/Users/cbree/dev/ai-wizard/backend/src/director.ts:165:21)
+    at async Worker.bullmq_1.Worker.connection.connection [as processFn] (/Users/cbree/dev/ai-wizard/backend/src/queue.ts:17:28)
+    at async /Users/cbree/dev/ai-wizard/backend/node_modules/bullmq/src/classes/worker.ts:990:26
+[JobStatus] failed (0%): Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 5.38 MiB is free. Including non-PyTorch memory, this process has 14.24 GiB memory in use. Of the allocated memory 13.66 GiB is allocated by PyTorch, and 182.51 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+Supabase fetch failed for a282d700-ab8e-4f95-8c4b-f406a7b4ceeb: JSON object requested, multiple (or no) rows returned
+Job 2 failed inside worker: Error: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 5.38 MiB is free. Including non-PyTorch memory, this process has 14.24 GiB memory in use. Of the allocated memory 13.66 GiB is allocated by PyTorch, and 182.51 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+    at generateKeyframe (/Users/cbree/dev/ai-wizard/backend/src/engine/assets/images.ts:136:19)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:171:36
+    at async Promise.all (index 0)
+    at async VideoOrchestrator.execute (/Users/cbree/dev/ai-wizard/backend/src/engine/orchestrator.ts:154:13)
+    at async processVideoJob (/Users/cbree/dev/ai-wizard/backend/src/director.ts:165:21)
+    at async Worker.bullmq_1.Worker.connection.connection [as processFn] (/Users/cbree/dev/ai-wizard/backend/src/queue.ts:17:28)
+    at async /Users/cbree/dev/ai-wizard/backend/node_modules/bullmq/src/classes/worker.ts:990:26
+Job 2 failed: Image Gen Failed: "Image generation failed: CUDA out of memory. Tried to allocate 130.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 5.38 MiB is free. Including non-PyTorch memory, this process has 14.24 GiB memory in use. Of the allocated memory 13.66 GiB is allocated by PyTorch, and 182.51 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"

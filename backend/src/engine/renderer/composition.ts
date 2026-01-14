@@ -66,10 +66,12 @@ export class CompositionEngine {
         return new Promise((resolve) => {
             ffmpeg.ffprobe(filePath, (err, metadata) => {
                 if (err) {
-                    console.warn(`[Composition] Probe failed for ${filePath}, assuming no audio.`);
+                    console.warn(`[Composition] Probe failed for ${filePath}, assuming no audio.`, err.message);
                     resolve(false);
                 } else {
-                    const hasAudio = metadata.streams.some(s => s.codec_type === 'audio');
+                    const audioStreams = metadata.streams.filter(s => s.codec_type === 'audio');
+                    const hasAudio = audioStreams.length > 0;
+                    console.log(`[Composition] Probe ${filePath}: hasAudio=${hasAudio}, audioStreams=${audioStreams.length}`);
                     resolve(hasAudio);
                 }
             });
@@ -271,6 +273,7 @@ export class CompositionEngine {
         return new Promise((resolve, reject) => {
             command
                 .on('start', (cmd: string) => console.log('FFmpeg Start:', cmd))
+                .on('stderr', (stderrLine: string) => console.log('[FFmpeg stderr]', stderrLine))
                 .on('end', async () => {
                     console.log(`[Composition] Render complete: ${outputPath}`);
                     try {
@@ -280,7 +283,11 @@ export class CompositionEngine {
                         reject(e);
                     }
                 })
-                .on('error', (err: any) => reject(err))
+                .on('error', (err: any, stdout: any, stderr: any) => {
+                    console.error('[FFmpeg Error Full]', err.message);
+                    if (stderr) console.error('[FFmpeg stderr dump]', stderr);
+                    reject(err);
+                })
                 .run();
         });
     }
