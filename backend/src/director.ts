@@ -189,7 +189,7 @@ export async function processVideoJob(job: Job<ProjectPayload>, onStatusUpdate?:
                         timelineStart: 0,
                         timelineEnd: musicOut.duration_sec,
                         // Adjust volume
-                        volume: 0.05, // Set to 5% (was 15% hardcoded, user found excessive)
+                        volume: 0.07, // Set to 7% (subtle but audible background)
                         type: 'audio'
                     }]
                 });
