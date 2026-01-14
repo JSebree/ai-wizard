@@ -112,37 +112,56 @@ export class VideoOrchestrator {
 
         // --- Master A-Roll Keyframe Strategy ---
         // Goal: Use ONE consistent image for all A-roll talking head shots.
+        // When both characterImage AND settingImage exist, combine them via I2I generation.
         let masterARollPromise: Promise<string | null>;
 
-        if (this.plan.settings.characterImage) {
-            // Priority 1: User-Provided Image
-            console.log(`[Orchestrator] Using user-provided Master A-Roll image.`);
-            masterARollPromise = Promise.resolve(this.plan.settings.characterImage);
+        const hasCharacter = !!this.plan.settings.characterImage;
+        const hasSetting = !!this.plan.settings.settingImage;
+        const firstARoll = allShots.find(s => s.type === 'aroll');
+
+        if (hasCharacter || hasSetting) {
+            // Combine both images for I2I generation (setting first, then character)
+            const referenceImages = [
+                this.plan.settings.settingImage,
+                this.plan.settings.characterImage
+            ].filter((url): url is string => !!url);
+
+            console.log(`[Orchestrator] Generating Master A-Roll with I2I. References: ${referenceImages.length} image(s)`);
+
+            // Use first A-Roll prompt if available, else build minimal prompt
+            const prompt = firstARoll?.prompt ||
+                `Style: ${mapStyle(this.plan.settings.style)}. Camera: ${mapCamera(this.plan.settings.cameraAngle)}. Character in setting.`;
+
+            masterARollPromise = generateKeyframe({
+                prompt,
+                width: this.plan.settings.width,
+                height: this.plan.settings.height,
+                image_urls: referenceImages,
+                strength: 0.7 // Balance between reference fidelity and prompt adherence
+            }).then(res => {
+                console.log(`[Orchestrator] Master A-Roll Generated (I2I): ${res.image_url}`);
+                return res.image_url;
+            }).catch(e => {
+                console.error("Master A-Roll Gen Failed", e);
+                // Fallback to characterImage if generation fails
+                return this.plan.settings.characterImage || null;
+            });
+        } else if (firstARoll) {
+            // No reference images - generate purely from prompt (T2I)
+            console.log(`[Orchestrator] Generating Master A-Roll image from Shot ${firstARoll.id} (T2I)...`);
+            masterARollPromise = generateKeyframe({
+                prompt: firstARoll.prompt,
+                width: this.plan.settings.width,
+                height: this.plan.settings.height
+            }).then(res => {
+                console.log(`[Orchestrator] Master A-Roll Generated (T2I): ${res.image_url}`);
+                return res.image_url;
+            }).catch(e => {
+                console.error("Master A-Roll Gen Failed", e);
+                return null;
+            });
         } else {
-            // Priority 2: Generate from First A-Roll Segment
-            const firstARoll = allShots.find(s => s.type === 'aroll');
-            if (firstARoll) {
-                console.log(`[Orchestrator] Generating Master A-Roll image from Shot ${firstARoll.id}...`);
-
-                // Determine reference images (Setting only, since no Char yet)
-                const referenceImages = [this.plan.settings.settingImage].filter((url): url is string => !!url);
-
-                masterARollPromise = generateKeyframe({
-                    prompt: firstARoll.prompt,
-                    width: this.plan.settings.width,
-                    height: this.plan.settings.height,
-                    image_urls: referenceImages.length > 0 ? referenceImages : undefined,
-                    strength: referenceImages.length > 0 ? 0.75 : undefined
-                }).then(res => {
-                    console.log(`[Orchestrator] Master A-Roll Generated: ${res.image_url}`);
-                    return res.image_url;
-                }).catch(e => {
-                    console.error("Master A-Roll Gen Failed", e);
-                    return null;
-                });
-            } else {
-                masterARollPromise = Promise.resolve(null); // No A-Roll in this video
-            }
+            masterARollPromise = Promise.resolve(null); // No A-Roll in this video
         }
 
 

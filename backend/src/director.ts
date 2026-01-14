@@ -171,8 +171,12 @@ export async function processVideoJob(job: Job<ProjectPayload>, onStatusUpdate?:
         if (payload.doMusic || payload.wantsMusic) {
             await updateStatus(job, { stage: 'assembling', progress: 85, message: 'Generating Music...' }, onStatusUpdate);
             try {
+                // Debug: Log what music style was received
+                const mappedStyle = mapMusicStyle(payload.musicCategoryLabel);
+                console.log(`[Music] Category received: "${payload.musicCategoryLabel}" -> Mapped prompt: "${mappedStyle?.substring(0, 60)}..."`);
+
                 const musicOut = await generateMusic({
-                    prompt: mapMusicStyle(payload.musicCategoryLabel) || payload.musicPrompt || "Cinematic background music",
+                    prompt: mappedStyle || payload.musicPrompt || "Cinematic background music",
                     duration: edl.durationSec || payload.durationSec || 30, // Use actual EDL total duration
                     tags: payload.musicTags
                 });
