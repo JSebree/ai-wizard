@@ -69,9 +69,16 @@ export default defineConfig(({ mode }) => {
       })
     ],
     server: {
+      port: 5174,
+      strictPort: true,
       proxy: {
         '/webhook': {
           target: 'https://n8n.simplifies.click',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/api': {
+          target: 'http://localhost:3001',
           changeOrigin: true,
           secure: false,
         },

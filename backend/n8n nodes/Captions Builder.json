@@ -1,0 +1,638 @@
+{
+  "name": "Captions Builder",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        -160
+      ],
+      "id": "24a004a9-8a25-4884-ab25-fb0b0cb68361",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "bucket",
+        "operation": "search",
+        "bucketName": "n8n-nca-bucket",
+        "additionalFields": {
+          "prefix": "=n8n-nca-bucket/{{ $json.job_id }}_captioned.mp4"
+        }
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        304,
+        -336
+      ],
+      "id": "a8396e50-fc8b-4965-b803-8041690a643b",
+      "name": "Search caption in bucket",
+      "alwaysOutputData": false,
+      "credentials": {
+        "s3": {
+          "id": "UwjAKScLP91wEOiS",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "547da7e2-04e3-4337-9947-82d87f15b44b",
+              "name": "job_id",
+              "value": "={{ $('Generate Captions').item.json.job_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        496,
+        -336
+      ],
+      "id": "2d8fb3a6-b771-42e4-93b1-7f85b1d15cf4",
+      "name": "Set Caption ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d4c9089a-f5ac-47cc-b800-abd96c2c2e33",
+              "leftValue": "={{ $('Search caption in bucket').item.json.Key }}",
+              "rightValue": "=n8n-nca-bucket/{{ $json.job_id }}_captioned.mp4",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        688,
+        -336
+      ],
+      "id": "c5b5b3a6-c9b2-4f04-b471-a2ca10f91cad",
+      "name": "Caption complete?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        -192
+      ],
+      "id": "0eb51a51-df39-46c8-a210-ea165c16651d",
+      "name": "Wait for caption",
+      "webhookId": "0810024f-dd22-4e58-87e4-1052494fe853"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7cf6d0c2-f237-4e9d-94d4-296fb9e05cc2",
+              "name": "captioned-url",
+              "value": "=https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/{{ $('Search caption in bucket').item.json.Key }}",
+              "type": "string"
+            },
+            {
+              "id": "02d7acbb-bf80-4aab-9607-55356358fdc9",
+              "name": "duration",
+              "value": "={{ $json.duration }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        -352
+      ],
+      "id": "0c07bca2-c811-4839-ac80-b894096b8df3",
+      "name": "Captioned Video URL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n-nca-toolkit-9mavn.ondigitalocean.app/v1/video/caption",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{  $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        112,
+        -336
+      ],
+      "id": "17cbacf0-6e1c-4aac-90e4-626e52e4d5be",
+      "name": "Generate Captions",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kYUz8gwWtyRXykmg",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Captions EDL — include music handoff settings\n// Mode: Run once for ALL items\n\n// 1) Pull parsed caption results\nconst parsed = $items('Parse Captions Result').map(i => i.json);\n\n// 2) Build caption clips (ignore null/empty urls)\nconst clips = parsed\n  .map(c => ({\n    clipId: c.clipId ?? null,\n    src:    c.caption_url || null,\n    in:     0,\n    out:    Number(c.duration_sec || 0) || 0,\n  }))\n  .filter(c => !!c.src);\n\n// 3) Duration: prefer the longest (safe for multi-clip), fallback 0\nconst length_sec = clips.reduce((sum, c) => sum + (Number(c.out) || 0), 0);\n\n// 4) Resolution/FPS from first available (fallback sensible defaults)\nconst first = parsed[0] || {};\n// carry through request identity if present\nconst requestId = first.requestId ?? first.settings?.requestId ?? first._meta?.requestId ?? null;\nconst fallbackRes = { width: 1024, height: 576 };\nconst resolution = first?.resolution || $json?.resolution || fallbackRes;\nconst fps        = Number(first?.fps || $json?.fps || 30) || 30;\n\n// NEW: carry through doHD flag from parsed result/settings\nconst doHD = Boolean(first.doHD ?? first.settings?.doHD ?? false);\n\n// 5) Music handoff — updated for new schema (top-level fields on parsed item)\n//    Prefer provided musicInputUrl, else caption_url, else original_video_url.\nconst pickMusicInput = (row) =>\n  row.musicInputUrl || row.caption_url || row.original_video_url || null;\n\nconst safeInt = (v) => (Number.isFinite(+v) ? Math.trunc(+v) : null);\n\n// Normalize a complete music block from parsed → settings.music (if present)\nconst srcMusic =\n  first.music ||\n  first.settings?.music ||\n  {}; // final fallback (empty)\n\nconst doMusic     = Boolean(first.doMusic ?? first.settings?.doMusic ?? srcMusic.enabled ?? false);\nconst musicPrompt = first.musicPrompt ?? srcMusic.prompt ?? null;\n\nconst includeVocals = (typeof first.includeVocals === 'boolean' ? first.includeVocals : null)\n  ?? (typeof srcMusic.vocals === 'boolean' ? srcMusic.vocals : null);\n\nconst musicVolume = Number.isFinite(first.musicVolume) ? first.musicVolume\n  : (Number.isFinite(srcMusic.volume) ? srcMusic.volume : null);\n\nconst musicHints  = first.musicHints || null; // { tempoVal, vocals, ducking } already normalized upstream\n\nconst musicOut = {\n  enabled: !!doMusic,\n  prompt: musicPrompt,\n  categoryLabel: srcMusic.categoryLabel ?? null,\n  seed: safeInt(srcMusic.seed),\n  genre: srcMusic.genre ?? null,\n  mood: srcMusic.mood ?? null,\n  bpm: srcMusic.bpm ?? null,\n  volume: musicVolume,\n  vocals: includeVocals\n};\n\nconst music = {\n  doMusic,\n  musicPack   : first.musicPack ?? null,\n  musicPrompt : musicPrompt,\n  musicHints  : musicHints,             // passthrough (tempo/vocals/ducking)\n  mixVolumes  : first.mixVolumes || null, // passthrough piggybank dials (voice/music/fx/duck)\n\n  fps         : Number(first.fps || fps) || fps,\n  resolution  : first.resolution || resolution,\n  durationSec : Number(first.duration_sec || length_sec) || length_sec,\n\n  // inputUrl is the captioned file if present; otherwise falls back accordingly\n  inputUrl    : pickMusicInput(first),\n};\n\n// 6) Emit exactly one EDL payload + music settings for the next step\nreturn [{\n  json: {\n    source: 'captions-edl-v1',\n    requestId,\n    doHD, // <-- expose doHD at top-level\n\n    edl: {\n      tracks: {\n        captions: [\n          {\n            name: 'cc',\n            clips: clips.map(({ clipId, src, in: In, out }) => ({\n              id: clipId ?? undefined,\n              src,\n              in: In,\n              out,\n            })),\n          }\n        ]\n      },\n      resolution,\n      fps,\n      length_sec,\n    },\n\n    // Hand off to the music workflow (read this in your Music Payload Builder)\n    // NEW: include full normalized music block both top-level and in settings.music\n    music: musicOut,\n    settings: {\n      doCaptions: true, // you’re in the captions branch\n      doMusic: music.doMusic,\n      doHD,             // <-- mirror doHD into settings as well\n      requestId,\n      musicPack: music.musicPack,\n      musicPrompt: music.musicPrompt,\n      musicHints: music.musicHints,  // passthrough\n      mixVolumes: music.mixVolumes,  // passthrough\n      fps: music.fps,\n      resolution: music.resolution,\n      durationSec: music.durationSec,\n      captionsInputUrl: clips[0]?.src ?? null, // for reference\n      musicInputUrl: music.inputUrl,           // <- feed this to music\n\n      // NEW: mirror normalized block into settings.music for downstream readers\n      music: musicOut\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        -512
+      ],
+      "id": "ab5121ba-5501-4607-bcea-212cdddcdd0a",
+      "name": "Build Captions EDL"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Captions Result — lean handoff incl. piggybank volume dials\n// Emits one item per request sent to the captions API.\n\nconst IN = $input.all().map(i => i.json);\nif (!IN.length) throw new Error('Parse Captions Result: no input');\n\nfunction pickNum(...vals) {\n  for (const v of vals) {\n    const n = Number(v);\n    if (Number.isFinite(n)) return n;\n  }\n  return undefined;\n}\nfunction clamp01(x, dflt) {\n  const n = Number(x);\n  if (!Number.isFinite(n)) return dflt;\n  return Math.max(0, Math.min(1, n));\n}\nconst toIntOrNull = (v) => (Number.isFinite(+v) ? Math.trunc(+v) : null);\n\nconst out = [];\n\nfor (const root of IN) {\n  // Requests we originally built for the API\n  const reqs = Array.isArray(root.requests) && root.requests.length\n    ? root.requests\n    : [{ id: 'clip-0', video_url: root.finalUrl || null }];\n\n  // Captioned result url (service may use hyphenated or underscored key)\n  const captionedUrl = root['captioned-url'] ?? root.captioned_url ?? null;\n\n  // Base/original input\n  const baseVideoUrl = root.finalUrl || reqs[0]?.video_url || null;\n\n  // Prefer captioned file for the music step\n  const musicInputUrl = captionedUrl || baseVideoUrl || null;\n\n  // Timing/format context\n  const pbRender = root.piggybank?.render || {};\n  const durationSec = Number(root.durationSec ?? root.duration ?? 0) || 0;\n  const fps = Number(root.fps ?? pbRender.fps ?? 30) || 30;\n  const resolution = {\n    width:  Number(root.resolution?.width  ?? pbRender.width  ?? 1024) || 1024,\n    height: Number(root.resolution?.height ?? pbRender.height ?? 1024) || 1024,\n  };\n\n  // Request identity (several possible homes upstream)\n  const requestId =\n    root.requestId ??\n    root.settings?.requestId ??\n    root.edl_meta?.requestId ??\n    root._meta?.requestId ??\n    null;\n\n  // Route + music selectors\n  const routeUsed = String(root.routeUsed ?? root.piggybank?.meta?.route ?? '').toLowerCase() || null;\n\n  // -------- Normalize MUSIC settings (new shape) --------\n  // Prefer explicit blocks, with safe fallbacks:\n  const musicSrc =\n      root.music\n   || root.settings?.music\n   || root.edl_meta?.settings?.music\n   || {};\n\n  const doMusic = Boolean(\n      root.doMusic\n   ?? root.settings?.doMusic\n   ?? musicSrc.enabled\n   ?? root.edl_meta?.settings?.music?.enabled\n   ?? false\n  );\n\n  // NEW: carry through doHD from upstream (or infer from video settings if needed)\n  const videoSettings = root.edl_meta?.settings?.video || {};\n  const resMode = (videoSettings.resolutionMode || '').toUpperCase();\n  const doHD = Boolean(\n      root.doHD\n   ?? root.settings?.doHD\n   ?? (resMode === 'HD')\n  );\n\n  // Volumes as separate fields (keep existing behavior)\n  const musicVolume = Number(\n      root.musicVolume\n   ?? root.settings?.music?.volume\n   ?? root.piggybank?.audio?.musicVolume\n  );\n  const voiceVolume = Number(\n      root.voiceVolume\n   ?? root.settings?.voice?.volume\n   ?? root.piggybank?.audio?.voiceVolume\n  );\n\n  // Prompt (keep legacy fields as fallbacks)\n  const musicPrompt =\n      root.musicPrompt\n   ?? root.settings?.musicPrompt\n   ?? root.settings?.music?.prompt\n   ?? root.music?.prompt\n   ?? root.edl_meta?.settings?.music?.prompt\n   ?? null;\n\n  // Include vocals flag normalized\n  const includeVocals =\n      (typeof root.includeVocals === 'boolean' ? root.includeVocals : null)\n   ?? (typeof root.vocals === 'boolean' ? root.vocals : null)\n   ?? (typeof root.settings?.music?.vocals === 'boolean' ? root.settings.music.vocals : null)\n   ?? (typeof root.music?.vocals === 'boolean' ? root.music.vocals : null)\n   ?? (typeof root.musicHints?.vocals === 'boolean' ? root.musicHints.vocals : null)\n   ?? (typeof musicSrc.vocals === 'boolean' ? musicSrc.vocals : null);\n\n  // Optional hints (kept)\n  const musicHints = {\n    tempoVal: root.musicHints?.tempoVal ?? root.piggybank?.music?.tempoVal ?? null,\n    vocals: includeVocals,\n    ducking: root.musicHints?.ducking ?? null,\n  };\n\n  // Build the normalized music block we’ll pass downstream\n  const musicOut = {\n    enabled: !!doMusic,\n    prompt: musicPrompt ?? null,\n    categoryLabel: musicSrc.categoryLabel ?? null,\n    seed: toIntOrNull(musicSrc.seed),         // integer or null\n    genre: musicSrc.genre ?? null,\n    mood: musicSrc.mood ?? null,\n    bpm: musicSrc.bpm ?? null,\n    volume: Number.isFinite(musicVolume) ? musicVolume : null,\n    vocals: includeVocals\n  };\n\n  // ------- Piggybank/plan volume dials -------\n  // try multiple homes these values might live in (plan.hints.extraPrefs, piggybank.meta.extraPrefs, direct)\n  const extraPrefs =\n      root.settings?.packHints?.extraPrefs\n   || root.settings?.packHints\n   || root.piggybank?.meta?.extraPrefs\n   || {};\n\n  const voVolRaw    = pickNum(root.voVol,    extraPrefs.voVol);\n  const musicVolRaw = pickNum(root.musicVol, extraPrefs.musicVol);\n  const fxVolRaw    = pickNum(root.fxVol,    extraPrefs.fxVol);\n  const baseDuckRaw = pickNum(root.base_duck, extraPrefs.baseDuck, root.piggybank?.music?.ducking);\n\n  // sensible defaults if absent\n  const mixVolumes = {\n    voice: clamp01(voVolRaw,    Number.isFinite(voiceVolume) ? voiceVolume : 1.0),  // prefer explicit voiceVolume\n    music: clamp01(musicVolRaw, Number.isFinite(musicVolume) ? musicVolume : 0.5),  // prefer explicit musicVolume\n    fx:    clamp01(fxVolRaw,    0.5),\n    // how much to reduce base (dialogue or program audio) under music/narr (sidechain ducking)\n    duckUnderVoice: clamp01(baseDuckRaw, 0.8)\n  };\n\n  // -------- Emit one output per request --------\n  for (const r of reqs) {\n    out.push({\n      json: {\n        source: 'captions-parse-v1',\n\n        // identity\n        clipId: r.id ?? null,\n        original_video_url: r.video_url ?? baseVideoUrl,\n\n        // captions result\n        caption_url: captionedUrl,     // may be null\n        duration_sec: durationSec,\n\n        // handoff to Music workflow\n        doMusic,                       // requested flag\n        doHD,                          // <-- pushed through here\n        musicInputUrl,\n        routeUsed,\n        fps,\n        resolution,\n\n        // music context (NEW: full normalized block + mirrors in settings.music)\n        music: musicOut,\n        settings: {\n          ...(root.settings || {}),\n          music: musicOut,\n          doHD                     // mirror into settings as well\n        },\n\n        musicPack: root.musicPack ?? root.settings?.musicPack ?? root.piggybank?.meta?.packs?.musicPack ?? null,\n        musicPrompt,                  // legacy convenience field\n        musicHints,                   // tempo/vocals/ducking\n        mixVolumes,                   // voice/music/fx/duckUnderVoice\n\n        // breadcrumb\n        finalUrl: root.finalUrl ?? null,\n\n        // tracing\n        requestId: requestId,\n      }\n    });\n  }\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        -512
+      ],
+      "id": "9feb779b-3810-4d1f-8a26-a700a5c0e0ec",
+      "name": "Parse Captions Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Captions Payload Builder — expand request(s) into per-clip API jobs\n// Mode: Run once for ALL items\n\nconst IN = $input.all().map(i => i.json);\nif (!IN.length) throw new Error('Payload Builder: no input');\n\nconst root = IN[0] || {};\n\n// ---------- webhook (required) ----------\nconst WEBHOOK =\n  root.captions_webhook_url ||\n  root.webhook_url ||\n  \"https://n8n.simplifies.click/webhook/CaptionFinished\"; // default per prior nodes\n\n// ---------- primary path: new schema (requests[]) ----------\nif (Array.isArray(root.requests) && root.requests.length) {\n  return root.requests.map((req, i) => {\n    const id  = req.id || `clip-${i}`;\n    const url = req.video_url || req.output_video_url;\n    if (!url) throw new Error(`Payload Builder: request[${i}] missing \"video_url\"`);\n\n    return {\n      json: {\n        id,\n        video_url: url,\n        replace: Array.isArray(req.replace) ? req.replace : [],\n        settings: req.settings || {},\n        webhook_url: WEBHOOK,\n      }\n    };\n  });\n}\n\n// ---------- fallback path: legacy shape (clips + captionOptions) ----------\nconst clips  = Array.isArray(root.clips) ? root.clips : [];\nif (!clips.length) throw new Error('Payload Builder: expected \"requests\" or a non-empty \"clips\" array');\n\nconst S = root.settings || {};\nconst O = root.captionOptions || {};\nconst width  = Number(S.resolution?.width  ?? 1024) || 1024;\nconst height = Number(S.resolution?.height ?? 1024) || 1024;\n\n// Derive font size from % of height (fallback 4%)\nconst fontSizePx = Math.max(12, Math.round((Number(O.fontSizePercent ?? 4) / 100) * height));\n\n// Map position to endpoint’s expected token\nconst position =\n  (String(O.position || 'bottom').toLowerCase() === 'top')\n    ? 'top_center'\n    : 'bottom_center';\n\n// Build default style compatible with the captions API\nconst baseStyle = {\n  line_color: \"#FFFFFF\",\n  word_color: \"#FFFF00\",\n  all_caps: false,\n  max_words_per_line: 3,\n  font_size: fontSizePx,\n  bold: false,\n  italic: false,\n  underline: false,\n  strikeout: false,\n  outline_width: O.outline ? 3 : 0,\n  shadow_offset: O.outline ? 4 : 0,\n  style: \"highlight\",\n  font_family: \"The Bold Font\",\n  position\n};\n\nreturn clips.map((clip, idx) => {\n  const id  = clip.id || `c${idx}`;\n  const src = clip.output_video_url || clip.video_url;\n  if (!src) throw new Error(`Payload Builder: clip \"${id}\" is missing output_video_url/video_url`);\n\n  return {\n    json: {\n      id,\n      video_url: src,\n      replace: Array.isArray(clip.replace) ? clip.replace : [],\n      settings: { ...baseStyle, ...(clip.settings || {}) },\n      webhook_url: WEBHOOK,\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        -432
+      ],
+      "id": "c55571af-c787-4ad4-8428-fcac83f11ef4",
+      "name": "Payload Builder"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -96,
+        -432
+      ],
+      "id": "4e76366c-056e-423d-b39e-f0ed59757c73",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Captions EDL Builder → build payload(s) for the Captions API from new schema\n// Mode: Run once for ALL items\n//\n// API shape expected (per sample):\n// { id, video_url, replace:[...], settings:{...} }\n\nconst IN = $input.all().map(i => i.json);\n\n// ---------- helpers ----------\nconst pickUrl = (j) =>\n  j.captionsInputUrl ||\n  j.finalUrl ||\n  j.finalVideoUrl ||\n  j.originalVideoUrl ||\n  j.musicInputUrl ||\n  null;\n\nfunction isVertical(aspect) {\n  if (!aspect) return false;\n  const a = String(aspect).trim();\n  return a === '9:16' || a.toLowerCase().includes('vertical');\n}\n\nfunction pxFromHeight(h, pct) {\n  // pct as 0..1 of video height\n  return Math.max(12, Math.round((Number(h) || 1080) * pct));\n}\n\nfunction outlineFromHeight(h, pct) {\n  return Math.max(1, Math.round((Number(h) || 1080) * pct));\n}\n\n// ---------- collect clips ----------\nconst clips = [];\nfor (let i = 0; i < IN.length; i++) {\n  const j = IN[i] || {};\n  const src = pickUrl(j);\n  if (!src) continue;\n\n  const id =\n    j.clipId ||\n    j.shotId ||\n    j.sceneId ||\n    `clip-${i}`;\n\n  clips.push({ id, video_url: src, j });\n}\n\nif (clips.length === 0) {\n  throw new Error('Captions EDL Builder: No captionable video URL found (looked for captionsInputUrl → finalUrl → musicInputUrl).');\n}\n\n// ---------- global settings (first item drives global dials) ----------\nconst j0 = IN[0] || {};\n\n// NEW: derive doHD from input + edl_meta.settings.video.resolutionMode\nconst videoSettings = j0.edl_meta?.settings?.video || {};\nconst resMode = (videoSettings.resolutionMode || '').toUpperCase();\nconst doHD = Boolean(\n  j0.doHD ??\n  j0.settings?.doHD ??\n  (resMode === 'HD')\n);\n\nconst doCaptions = Boolean(j0.doCaptions ?? j0.settings?.captions ?? true);\nif (!doCaptions) {\n  return [{\n    json: {\n      source: 'captions-edl-v1',\n      requests: [],\n      disabled: true,\n      reason: 'doCaptions=false',\n      doHD,                     // <-- pass through even when disabled\n      passthrough: { ...j0 }\n    }\n  }];\n}\n\nconst piggy = j0.piggybank || {};\nconst pbRender = piggy.render || {};\nconst hints = j0.captionsHints || {};\nconst aspect = hints.aspect || pbRender.aspect || null;\n\nconst res = j0.resolution || j0.settings?.resolution || { width: pbRender.width || 1024, height: pbRender.height || 1024 };\nconst width = Number(res.width || 1024);\nconst height = Number(res.height || 1024);\nconst vertical = isVertical(aspect);\n\n// Style heuristics (safe, legible defaults)\nconst FONT_FAMILY = 'The Bold Font';\nconst STYLE = 'highlight';\nconst POSITION = 'bottom_center';\nconst WORD_COLOR = '#FFFF00';\nconst LINE_COLOR = '#FFFFFF';\n\n// Scale some parameters to resolution:\nconst fontSizePx = pxFromHeight(height, vertical ? 0.065 : 0.05);\nconst outlineWidth = outlineFromHeight(height, 0.0035);\nconst shadowOffset = outlineFromHeight(height, 0.0045);\n\n// Line packing\nconst maxWordsPerLine = vertical ? 2 : 3;\n\n// Optional profanity/word replacements — leave empty by default\nconst defaultReplaceArray = [];\n\n// ---------- build API requests ----------\nconst requests = clips.map((c) => {\n  const apiSettings = {\n    line_color: LINE_COLOR,\n    word_color: WORD_COLOR,\n    all_caps: false,\n    max_words_per_line: maxWordsPerLine,\n    font_size: fontSizePx,\n    bold: false,\n    italic: false,\n    underline: false,\n    strikeout: false,\n    outline_width: outlineWidth,\n    shadow_offset: shadowOffset,\n    style: STYLE,\n    font_family: FONT_FAMILY,\n    position: POSITION\n  };\n\n  return {\n    id: c.id,\n    video_url: c.video_url,\n    replace: defaultReplaceArray,\n    settings: apiSettings\n  };\n});\n\n// ===== NEW: normalize + pass through MUSIC SETTINGS (categoryLabel + seed + others) =====\nconst safeNum = (v) => Number.isFinite(+v) ? Math.trunc(+v) : null;\n\n// prefer settings.music → top-level music → edl_meta.settings.music\nconst musicSrc =\n  j0.settings?.music ||\n  j0.music ||\n  j0.edl_meta?.settings?.music ||\n  {};\n\nconst doMusic =\n  Boolean(\n    j0.doMusic ??\n    j0.settings?.doMusic ??\n    musicSrc.enabled ??\n    j0.edl_meta?.settings?.music?.enabled ??\n    false\n  );\n\nconst musicVolume =\n  Number(\n    j0.musicVolume ??\n    j0.settings?.music?.volume ??\n    j0.piggybank?.audio?.musicVolume\n  );\n\nconst voiceVolume =\n  Number(\n    j0.voiceVolume ??\n    j0.settings?.voice?.volume ??\n    j0.piggybank?.audio?.voiceVolume\n  );\n\nconst musicPrompt =\n  j0.musicPrompt ??\n  j0.settings?.musicPrompt ??\n  j0.settings?.music?.prompt ??\n  j0.music?.prompt ??\n  j0.edl_meta?.settings?.music?.prompt ??\n  null;\n\nconst includeVocals =\n  (typeof j0.includeVocals === 'boolean' ? j0.includeVocals : null) ??\n  (typeof j0.vocals === 'boolean' ? j0.vocals : null) ??\n  (typeof j0.settings?.music?.vocals === 'boolean' ? j0.settings.music.vocals : null) ??\n  (typeof j0.music?.vocals === 'boolean' ? j0.music.vocals : null) ??\n  (typeof j0.musicHints?.vocals === 'boolean' ? j0.musicHints.vocals : null);\n\n// musicHints (unchanged)\nconst musicHints = {\n  tempoVal: j0.piggybank?.music?.tempoVal ?? j0.musicHints?.tempoVal ?? null,\n  vocals: includeVocals,\n  ducking: j0.musicHints?.ducking ?? null,\n};\n\n// Build the music block we’ll emit (new shape)\nconst musicOut = {\n  enabled: !!doMusic,\n  prompt: musicPrompt ?? null,\n  categoryLabel: musicSrc.categoryLabel ?? null,\n  seed: safeNum(musicSrc.seed),            // integer or null\n  genre: musicSrc.genre ?? null,\n  mood: musicSrc.mood ?? null,\n  bpm: musicSrc.bpm ?? null,\n  volume: Number.isFinite(musicVolume) ? musicVolume : null,\n  vocals: includeVocals\n};\n\n// ---- captions context (unchanged) ----\nconst captionsContext = {\n  aspect: aspect || null,\n  safeZones: piggy.layout?.safeZones ?? hints.safeZones ?? null,\n  respectKeyframes: piggy.render?.respectKeyframes ?? hints.respectKeyframes ?? null,\n  transitionAfter: j0.piggybank?.transitionAfter ?? hints.transitionAfter ?? null,\n};\n\n// --- requestId passthrough ---\nconst requestId =\n  j0.settings?.requestId ||\n  j0.edl_meta?.requestId ||\n  j0._meta?.requestId ||\n  null;\n\nreturn [{\n  json: {\n    source: 'captions-api-v1',\n    // one request per clip (your flow generally has 1)\n    requests,\n\n    // keep helpful context for logs / next steps\n    finalUrl: j0.finalUrl ?? j0.captionsInputUrl ?? clips[0]?.video_url ?? null,\n    durationSec: Number(j0.durationSec ?? j0.settings?.length_sec ?? 0) || 0,\n    fps: Number(j0.fps ?? j0.settings?.fps ?? 30) || 30,\n    resolution: { width, height },\n    routeUsed: j0.routeUsed ?? j0.settings?.routeUsed ?? piggy.meta?.route ?? null,\n\n    // music & captions context\n    music: musicOut,\n    musicPack: j0.musicPack ?? j0.settings?.musicPack ?? piggy.meta?.packs?.musicPack ?? null,\n    musicPrompt,\n    musicHints,\n\n    captions: j0.captions || j0.settings?.captions || {\n      enabled: Boolean(j0.settings?.captions?.enabled ?? j0.captions?.enabled ?? true),\n      style: j0.settings?.captions?.style ?? j0.captions?.style ?? null,\n      language: j0.settings?.captions?.language ?? j0.captions?.language ?? null,\n      format: j0.settings?.captions?.format ?? j0.captions?.format ?? null\n    },\n    captionsHints: captionsContext,\n\n    // ---- existing explicit pass-throughs (unchanged) ----\n    doMusic,\n    doHD,                        // <--- pushed through here\n    musicVolume: Number.isFinite(musicVolume) ? musicVolume : null,\n    voiceVolume: Number.isFinite(voiceVolume) ? voiceVolume : null,\n    includeVocals: typeof includeVocals === 'boolean' ? includeVocals : null,\n\n    piggybank: piggy,\n    piggybank_flat: j0.piggybank_flat ?? null,\n    voice: j0.voice ?? piggy.voice ?? null,\n    strictness: j0.strictness ?? piggy.render?.strictness ?? null,\n    requestId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        -528
+      ],
+      "id": "2c800c3f-313a-4452-983c-6f37211b84be",
+      "name": "Captions EDL Builder"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        112,
+        -512
+      ],
+      "id": "dbbaf041-d23c-4c6c-86a0-09bd0132f687",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "CaptionFinished",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        -752
+      ],
+      "id": "43de537d-beb4-41a8-a302-9e63ffda0df5",
+      "name": "Webhook",
+      "webhookId": "6845965e-d2b2-4df6-90ca-ffa748d109c0"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -576,
+        -528
+      ],
+      "id": "bac52804-4bf4-4a71-a115-d984558818e4",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "finalUrl": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/1b9e4027-a459-4140-9d77-f13d18a43bc8_output_0.mp4",
+          "doCaptions": true,
+          "doMusic": true,
+          "doHD": true,
+          "captionsInputUrl": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/1b9e4027-a459-4140-9d77-f13d18a43bc8_output_0.mp4",
+          "musicInputUrl": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/1b9e4027-a459-4140-9d77-f13d18a43bc8_output_0.mp4",
+          "durationSec": 31.233,
+          "fps": 30,
+          "resolution": {
+            "width": 1024,
+            "height": 576
+          },
+          "routeUsed": "",
+          "music": {
+            "enabled": true,
+            "prompt": null,
+            "categoryLabel": "Orchestral / Cinematic",
+            "seed": 390869799,
+            "genre": null,
+            "mood": null,
+            "bpm": null,
+            "volume": 0.1,
+            "voiceVolume": 1,
+            "vocals": false
+          },
+          "captions": {
+            "enabled": true,
+            "style": null,
+            "language": null,
+            "format": null
+          },
+          "musicPack": null,
+          "musicPrompt": null,
+          "musicHints": {
+            "tempoVal": null,
+            "vocals": null,
+            "ducking": null
+          },
+          "musicVolume": 0.1,
+          "voiceVolume": 0,
+          "includeVocals": false,
+          "vocals": false,
+          "captionsHints": {
+            "safeZones": null,
+            "aspect": null,
+            "respectKeyframes": null,
+            "transitionAfter": null
+          },
+          "piggybank": {},
+          "piggybank_flat": {
+            "render_width": null,
+            "render_height": null,
+            "render_fps": null,
+            "render_aspect": null,
+            "render_respectKeyframes": null,
+            "render_strictness": null,
+            "render_seedLock": null,
+            "features_captions": null,
+            "features_music": null,
+            "features_podcastStill": null,
+            "layout_safeZones": null,
+            "transitionAfter": null,
+            "voice_id": null,
+            "voice_displayName": null,
+            "music_tempoVal": null,
+            "music_vocals": null,
+            "meta_route": null,
+            "meta_style": null,
+            "meta_tone": null,
+            "meta_templates": null,
+            "meta_templateSelected": null,
+            "pack_musicPack": null,
+            "pack_lookPack": null,
+            "pack_stylePack": null,
+            "pack_motionPack": null,
+            "pack_propsPack": null,
+            "pack_mouthPack": null,
+            "pack_basePack": null,
+            "negPromptTail": null
+          },
+          "voice": null,
+          "strictness": null,
+          "settings": {
+            "doCaptions": true,
+            "doMusic": true,
+            "captions": {
+              "enabled": true,
+              "style": null,
+              "language": null,
+              "format": null
+            },
+            "music": {
+              "enabled": true,
+              "prompt": null,
+              "categoryLabel": "Orchestral / Cinematic",
+              "seed": 390869799,
+              "genre": null,
+              "mood": null,
+              "bpm": null,
+              "volume": 0.1,
+              "voiceVolume": 1,
+              "vocals": false
+            },
+            "voice": {
+              "volume": 0
+            },
+            "captionsInputUrl": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/1b9e4027-a459-4140-9d77-f13d18a43bc8_output_0.mp4",
+            "musicInputUrl": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/1b9e4027-a459-4140-9d77-f13d18a43bc8_output_0.mp4"
+          },
+          "edl_meta": {
+            "timeline_master": "video",
+            "durations": {
+              "video": 31.233333333333334,
+              "narration": 0
+            },
+            "sort_order": "shotKey → (seg, beat, shot) → order → segIndex",
+            "aligned_narration": true,
+            "broll_windows": [],
+            "ui_prefs": {
+              "wantsCutaways": false,
+              "wantsMusic": true,
+              "wantsCaptions": true
+            },
+            "settings": {
+              "music": {
+                "enabled": true,
+                "prompt": null,
+                "categoryLabel": "Orchestral / Cinematic",
+                "seed": 390869799,
+                "genre": null,
+                "mood": null,
+                "bpm": null,
+                "volume": 0.1,
+                "voiceVolume": 1,
+                "vocals": false
+              },
+              "captions": {
+                "enabled": true,
+                "style": null,
+                "language": null,
+                "format": null
+              },
+              "video": {
+                "resolutionMode": "HD",
+                "width": 1024,
+                "height": 576,
+                "fps": 30
+              }
+            }
+          },
+          "_meta": {}
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "Search caption in bucket": {
+      "main": [
+        [
+          {
+            "node": "Set Caption ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Caption ID": {
+      "main": [
+        [
+          {
+            "node": "Caption complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caption complete?": {
+      "main": [
+        [
+          {
+            "node": "Captioned Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for caption": {
+      "main": [
+        [
+          {
+            "node": "Search caption in bucket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Captions": {
+      "main": [
+        [
+          {
+            "node": "Search caption in bucket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Captioned Video URL": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Captions EDL": {
+      "main": [
+        []
+      ]
+    },
+    "Parse Captions Result": {
+      "main": [
+        [
+          {
+            "node": "Build Captions EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Builder": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Generate Captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Captions EDL Builder": {
+      "main": [
+        [
+          {
+            "node": "Payload Builder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Parse Captions Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Captions EDL Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "aa7a1121-e122-415b-a1c0-f1652ded2b1e",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "HukvW9A0Qev2aCnv",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:47:34.330Z",
+      "updatedAt": "2025-08-06T22:47:34.330Z",
+      "id": "5W4ptl8eNWuki2da",
+      "name": "Base_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:11.746Z",
+      "updatedAt": "2025-08-06T22:48:11.746Z",
+      "id": "K72jLWcSD75fEevX",
+      "name": "Captions"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:27.709Z",
+      "updatedAt": "2025-08-06T22:47:27.709Z",
+      "id": "RDt1fEwBS590LEn1",
+      "name": "Builder"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:15.867Z",
+      "updatedAt": "2025-08-06T22:48:15.867Z",
+      "id": "lRzQwQcNU2q4zzyp",
+      "name": "Video"
+    }
+  ]
+}

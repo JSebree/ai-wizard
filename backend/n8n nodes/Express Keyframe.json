@@ -1,0 +1,509 @@
+{
+  "name": "Express Keyframe",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "/* -------------------------------------------------------\n   1. PARSE INPUTS & PAYLOAD\n   ------------------------------------------------------- */\nlet webhookData = {};\ntry {\n  if ($('Generate keyframe preview')) {\n    webhookData = $('Generate keyframe preview').first().json.body || {};\n  }\n} catch (e) {}\n\nconst incoming = $json;\nconst rawBody = incoming.body || incoming;\nconst ui = rawBody.ui || webhookData.ui || rawBody || {};\n\n/* -------------------------------------------------------\n   2. PARSE LLM OUTPUT\n   ------------------------------------------------------- */\nlet llmOutput = null;\nif (incoming.text) {\n  try {\n    const cleanJson = incoming.text.replace(/```json\\n?|\\n?```/g, \"\");\n    llmOutput = JSON.parse(cleanJson);\n  } catch (e) {\n    console.log(\"Failed to parse LLM JSON\", e);\n  }\n}\n\n/* -------------------------------------------------------\n   3. HANDLE IMAGES (Setting First!)\n   ------------------------------------------------------- */\nconst characterUrl = ui.characterImage || ui.character_image_url;\nconst settingUrl = ui.settingImage || ui.setting_image_url;\nconst inputImage = ui.input_image || rawBody.input_image;\nconst propUrl = ui.prop_image_url || rawBody.prop_image_url;\n\nconst imageList = [];\nconst referenceList = [];\n\n// A. Modification Mode\nif (inputImage) {\n  imageList.push(inputImage);\n  referenceList.push(inputImage);\n} else {\n  // B. Creation Mode - Correct Order\n  if (settingUrl) {\n    imageList.push(settingUrl);\n    referenceList.push(settingUrl);\n  }\n  if (characterUrl) {\n    imageList.push(characterUrl);\n    referenceList.push(characterUrl);\n  }\n}\nif (propUrl) referenceList.push(propUrl);\n\n/* -------------------------------------------------------\n   4. CONSTRUCT PROMPT (GLOBAL LOGIC)\n   ------------------------------------------------------- */\nlet baseDescription = (ui.scene || \"\").trim();\nconst actionText = (ui.action || \"\").trim();\n\n// Clean Append Action\nif (actionText) {\n    if (baseDescription && !baseDescription.endsWith('.')) baseDescription += \".\";\n    baseDescription = baseDescription ? `${baseDescription} ${actionText}` : actionText;\n}\n\nif (!characterUrl && ui.character) baseDescription += ` Character details: ${ui.character}`;\nif (!settingUrl && ui.setting) baseDescription += ` Setting details: ${ui.setting}`;\n\n// --- MAPS ---\nconst styleMap = {\n  \"Photorealistic\": \"Ultra-realistic 8k photograph, highly detailed textures, sharp focus\",\n  \"Cinematic\": \"Cinematic film still, anamorphic lens, high production value, shallow depth of field\",\n  \"Documentary\": \"Raw documentary photography, 35mm film grain, authentic look\",\n  \"Anime\": \"Anime art style, cel-shaded, vibrant colors\",\n  \"Pixar-style\": \"3D animation style, Pixar-inspired, smooth rendering\",\n  \"Watercolor\": \"Watercolor painting, soft edges, artistic brushstrokes\",\n  \"Comic-book\": \"Comic book art style, bold black outlines, halftone patterns\",\n  \"Noir\": \"Film noir style, high contrast black and white, dramatic shadows\",\n  \"Stop Motion (Claymation)\": \"Stop motion claymation, clay texture, handmade feel\"\n};\n\nconst angleMap = {\n  \"Standard\": \"Eye-level shot\",\n  \"Heroic\": \"Low-angle shot from below, emphasizing stature\",\n  \"Vulnerable\": \"High-angle shot from above\",\n  \"Wide / Establishing\": \"Wide-angle environmental shot, full body visibility\",\n  \"Close & Intimate\": \"Extreme close-up shot, shallow depth of field\",\n  \"Chaos / Action\": \"Dutch angle, dynamic tilted\",\n  \"Over-the-Shoulder\": \"Over-the-shoulder shot\",\n  \"Side profile\": \"Side profile view\",\n  \"Top Down\": \"Directly from above\"\n};\n\n// --- DETERMINE SCENE BASE ---\nlet scenePrompt = baseDescription;\nlet isCreativeEdit = false;\nlet editStrength = 0.7;\n\n// PARSE STYLE & ANGLE (Fallback to UI)\nconst advanced = ui.advanced || {};\nconst selectedStyle = (advanced.style || ui.visual_style || ui.style || \"\").toString();\nconst isPhotorealistic = selectedStyle.includes(\"Photorealistic\") || selectedStyle.includes(\"Ultra-realistic\");\nlet selectedAngle = (ui.camera_angle || rawBody.camera_angle || \"\").toString().trim();\n\n// DETERMINE BRANCH (A or B)\nif (llmOutput && llmOutput.edit_instructions) {\n  // Branch A: LLM\n  const instructions = llmOutput.edit_instructions || [];\n  const params = llmOutput.parameters || {};\n  scenePrompt = instructions.join(\" \"); \n  isCreativeEdit = true;\n  editStrength = params.edit_strength || 0.6;\n  if (isPhotorealistic) isCreativeEdit = false;\n\n  // *** NEW: PARSE & STRIP CAMERA ANGLE INSTRUCTION ***\n  const angleRegex = /(?:Change|Set) camera angle to\\s+([^.]+)(?:\\.|$)/i;\n  const mm = scenePrompt.match(angleRegex);\n  if (mm) {\n      const extractedTerm = mm[1].trim();\n      const foundKey = Object.keys(angleMap).find(k => k.toLowerCase() === extractedTerm.toLowerCase());\n      if (foundKey) {\n          selectedAngle = foundKey;\n      } else {\n          selectedAngle = extractedTerm;\n      }\n      scenePrompt = scenePrompt.replace(mm[0], \"\").trim();\n  }\n\n} else {\n  // Branch B: Manual\n  scenePrompt = baseDescription;\n  isCreativeEdit = false;\n}\n\n// *** FIXED: Force Neutral Face (Apply to BOTH branches) ***\n// We add it here so it survives the LLM overwrite above.\nif (!scenePrompt.toLowerCase().includes(\"neutral unobtrusive face\")) {\n    scenePrompt = scenePrompt.trim();\n    if (scenePrompt && !scenePrompt.endsWith('.')) {\n      scenePrompt += \".\";\n    }\n    scenePrompt += \" Neutral unobtrusive face\";\n}\n\n// RESOLVE DESCRIPTIONS (CASE INSENSITIVE)\nconst matchStyleKey = Object.keys(styleMap).find(k => k.toLowerCase() === selectedStyle.toLowerCase());\nconst styleDescription = matchStyleKey ? styleMap[matchStyleKey] : selectedStyle;\n\n// Angle lookup (Prioritizes LLM-extracted angle > UI angle)\nconst matchAngleKey = Object.keys(angleMap).find(k => k.toLowerCase() === selectedAngle.toLowerCase());\nconst angleDescription = matchAngleKey ? angleMap[matchAngleKey] : selectedAngle;\n\n// --- APPLY PREFIXES ---\nlet prefixParts = [];\nif (angleDescription && !scenePrompt.toLowerCase().includes(angleDescription.toLowerCase())) {\n    prefixParts.push(angleDescription);\n}\nif (styleDescription && !scenePrompt.toLowerCase().includes(styleDescription.toLowerCase())) {\n    prefixParts.push(styleDescription);\n}\n\nif (prefixParts.length > 0) {\n    scenePrompt = `${prefixParts.join(\" \")} of ${scenePrompt}`;\n}\n\nconst colorGrade = (ui.color_grade || rawBody.color_grade || \"\").toString().trim();\nif (colorGrade) {\n  scenePrompt = `${scenePrompt}. Lighting and Tone: ${colorGrade}`;\n}\n\n// *** FINAL CLEANUP ***\n// Remove double periods and double spaces\nscenePrompt = scenePrompt.replace(/\\.\\./g, \".\").replace(/\\s\\s+/g, \" \").trim();\n\n// CHECK UI OVERRIDES\nif (ui.edit_strength !== undefined) editStrength = ui.edit_strength;\nlet identityEmphasis = 2.2;\nlet guidanceScale = 2.4;\nlet preserveIdentity = true;\nif (ui.identity_emphasis !== undefined) identityEmphasis = ui.identity_emphasis;\nif (ui.true_guidance_scale !== undefined) guidanceScale = ui.true_guidance_scale;\nif (ui.preserve_identity !== undefined) preserveIdentity = Boolean(ui.preserve_identity);\n\n\n/* -------------------------------------------------------\n   5. OUTPUT CONFIG & RETURN\n   ------------------------------------------------------- */\nconst timestamp = Date.now();\nconst userProvidedName = (ui.title || ui.keyframe_name || rawBody.name || \"\").trim();\nconst displayName = userProvidedName || `Scene ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;\nconst uniqueId = userProvidedName \n  ? `${userProvidedName.replace(/[^a-zA-Z0-9_-]/g, \"_\")}_${timestamp}` \n  : `scene_${timestamp}`;\n\nconst outputConfig = {\n  type: \"scenes\",\n  name: displayName,\n  filename: uniqueId\n};\n\n// FINAL RETURN\nreturn {\n  input: {\n    scene_prompt: scenePrompt,\n    image_urls: imageList,\n    reference_urls: referenceList,\n    creative_edit: isCreativeEdit,\n    edit_strength: editStrength,\n    identity_emphasis: isCreativeEdit ? 0.3 : 2.2, // Original Logic\n    true_guidance_scale: isCreativeEdit ? 5.0 : 2.4, // Original Logic\n    preserve_identity: preserveIdentity,\n    output: outputConfig\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "4040ecd6-f816-4e09-99c6-2a77b94d5b4c",
+      "name": "Normalize Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33344dd9-529c-4682-89d7-a74d1ed44020",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        0
+      ],
+      "id": "f2e1e8f3-200b-4a0a-a02b-5610de66651a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "808fffb3-e566-47f3-a082-db366d230f9c",
+              "name": "id",
+              "value": "={{$json[\"id\"]}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        608,
+        0
+      ],
+      "id": "eee6a3f8-f3d2-45a8-b39d-a9b4e0361d98",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        80
+      ],
+      "id": "cff2cf9d-9ef7-45fc-b23b-b2c3e71e6110",
+      "name": "Wait",
+      "webhookId": "671fd605-5379-4f34-be0f-81aabda673b3"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runpod.ai/v2/ftcydbizpxj4o3/status/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        784,
+        0
+      ],
+      "id": "b4131481-9c0c-4766-bd2d-d520fd6f26a8",
+      "name": "Get Base Image",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runpod.ai/v2/ftcydbizpxj4o3/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "a7a01deb-1b3d-4ba1-844b-7694709e38ed",
+      "name": "RunPod Qwen Image Edit",
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "hsoVjsRhsnwcYKNK",
+          "name": "Hedra Custom"
+        },
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SCENE DEFINITION:\n- Core Action: {{ $json.body.ui.action }}\n- Character: {{ $json.body.ui.characterImage ? $json.body.ui.characterName : $json.body.ui.character }}\n- Setting: {{ $json.body.ui.settingImage ? \"the scene\" : $json.body.ui.setting }}\n- Visual Style: {{ $json.body.ui.advanced.style }}\n- Camera Angle: {{ $json.body.ui.camera_angle }}\n\nGenerate the editing instructions.",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the Semantic Editor utilizing Qwen-VL. Your task is to convert a declarative SCENE DEFINTION into a JSON list of imperative editing instructions.\n\n# INPUT DATA STRUCTURE\nYou will receive a \"SCENE DEFINITON\" containing:\n- **Core Action:** The main event (e.g., \"Jack looking at camera\").\n- **Technical Specs:** Camera Angle, Visual Style, Color Grade.\n- **Assets:** Character Name, Setting Name.\n\n# GUIDELINES\n1.  **Translation:** Convert the declarative \"Core Action\" into an imperative \"Add/Place/Make\" command.\n    *   *Input:* \"Jack stands on the street.\" -> *Output:* \"Add Jack standing on the street.\"\n2.  **Style Integration:** Convert Technical Specs into global modification commands.\n    *   *Input:* \"Desert Chrome\" -> *Output:* \"Apply a desert chrome color grading with deep cyan shadows and vivid amber midtones.\"\n3.  **Order of Operations:** behavior:\n    *   Step 1: Style/Atmosphere/Grade (Global)\n    *   Step 2: Camera/Composition (Global)\n    *   Step 3: Character/Object Placement (Local)\n\n# JSON OUTPUT SCHEMA\n{\n  \"edit_instructions\": [\n    \"Apply [Visual Style/Color Grade]...\",\n    \"Change camera angle to [Camera Angle]...\",\n    \"Add [Character Name] [Core Action]...\"\n  ],\n  \"parameters\": {\n    \"edit_strength\": 0.7,\n    \"preserve_size\": true\n  }\n}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -96,
+        0
+      ],
+      "id": "28a6b442-e58b-4f34-b822-99df779dc849",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        16,
+        176
+      ],
+      "id": "d4480c9a-9bc4-4fc6-b7ac-f88e5886de5f",
+      "name": "OpenRouter Chat Model4",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "754e4b0e-9c4a-4189-8b4e-e06500962c17",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        -144
+      ],
+      "id": "48b71cf9-d0c8-4457-802f-b47cec32e426",
+      "name": "Generate keyframe preview"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a934d5a7-1853-4f38-a26e-66f978e9f771",
+              "name": "user_character_url",
+              "value": "={{ $json.output.url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1216,
+        -16
+      ],
+      "id": "22a2749a-8f50-4d35-bb02-87b723b73553",
+      "name": "Set character url"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1440,
+        -128
+      ],
+      "id": "8cc45731-bf23-4fde-81e5-377feb93a759",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "17b58e3f-23e7-4e35-b693-815af21e9899",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1648,
+        -128
+      ],
+      "id": "6abf42bf-2aba-43ab-a27c-15db1d12c671",
+      "name": "Set all fields"
+    }
+  ],
+  "pinData": {
+    "Generate keyframe preview": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.simplifies.click",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "content-length": "1619",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "http://localhost:5174",
+            "priority": "u=1, i",
+            "referer": "http://localhost:5174/",
+            "sec-ch-ua": "\"Google Chrome\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "via": "2.0 Caddy",
+            "x-forwarded-for": "23.113.216.173",
+            "x-forwarded-host": "n8n.simplifies.click",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "ui": {
+              "scene": "A spoken work poetry reading on stage with Demarco.",
+              "driver": "character",
+              "wantsCutaways": false,
+              "character": "African American male in his mid twenties. Athletic with expressive tattoos and hair. ",
+              "setting": "Stage of a concert venue",
+              "action": "Demarco recites poetry on stage live ",
+              "wantsMusic": true,
+              "musicCategoryLabel": "Ambient / Soundscape",
+              "wantsCaptions": true,
+              "durationSec": 45,
+              "referenceText": "Get inspiration from the best public spoken word poems online",
+              "research": true,
+              "voiceId": "recording",
+              "voiceUrl": "https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4",
+              "voice_ref_url": "https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4",
+              "title": "Demarco recites 3",
+              "characterName": "Demarco",
+              "userEmail": "jerick.sebree@gmail.com",
+              "userFirstName": "Jerick",
+              "userLastName": "Sebree",
+              "characterImage": "https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_fullbody_centered?.png",
+              "settingImage": "https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg",
+              "character_image_url": "https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_fullbody_centered?.png",
+              "setting_image_url": "https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg",
+              "camera_angle": "Standard",
+              "advanced": {
+                "enabled": true,
+                "style": "Photorealistic",
+                "resolution": "SD",
+                "musicVolume": 0.1,
+                "voiceVolume": 1,
+                "includeVocals": false,
+                "seed": 446625324
+              }
+            },
+            "user_id": "3ad0105d-7dfd-4790-b1c5-9bade4fb2406"
+          },
+          "webhookUrl": "https://n8n.simplifies.click/webhook/sceneme",
+          "executionMode": "production",
+          "requestId": "188885"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Normalize Payload": {
+      "main": [
+        [
+          {
+            "node": "RunPod Qwen Image Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Set character url",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get Base Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Base Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Base Image": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RunPod Qwen Image Edit": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Normalize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate keyframe preview": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set character url": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Set all fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "15cda407-13a7-411a-a1fc-a6d229d392d0",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "lIccBZ2vcyZBODNM",
+  "tags": []
+}

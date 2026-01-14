@@ -1,0 +1,941 @@
+{
+  "name": "A-Roll Script Builder",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b49ced77-636c-46ab-a879-3da6c06d1a30",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        -528
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n\"testCases\": [\n    {\n      \"scene\": \"Lifestyle vlog: a 27-year-old travel vlogger shares their morning in Lisbon with the audience.\",\n      \"driver\": \"character\",\n      \"wantsCutaways\": false,\n      \"character\": \"27 y/o travel vlogger, casual, friendly, youthful energy\",\n      \"setting\": \"bright apartment interior with large windows and neutral décor, subtle morning light\",\n      \"action\": \"direct-to-camera speaking, light hand gestures below chin, relaxed posture\",\n      \"directorsNotes\": \"conversational, upbeat but natural, keep flow like a vlog entry\",\n      \"wantsMusic\": false,\n      \"musicDesc\": \"\",\n      \"wantsCaptions\": true,\n      \"durationSec\": 60,\n      \"referenceText\": \"This morning in Lisbon, I started my day with coffee on the balcony, the sound of trams outside, and a simple breakfast of fresh fruit and bread.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "9e7875ab-bdd1-44e1-8714-183262daa0d0",
+      "name": "Set → Test Cases",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        1600,
+        -528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Prompt Test Harness (A-Roll Only)\n// Mode: Run once for all items — returns ONE array of { json: ... }\n\n// ---------- helpers ----------\nconst S = v => (v == null ? '' : String(v));\nconst collapse = s => S(s).replace(/[\\r\\n]+/g, ' ').replace(/\\s+/g, ' ').trim();\nconst base36 = (len=6) =>\n  Array.from({ length: len }, () => Math.floor(Math.random()*36).toString(36)).join('');\nconst num = v => (v === '' || v == null ? undefined : Number(v));\n\nconst DEFAULT_RAILS = [\n  'keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair',\n  'no on-screen text, no logos, no watermarks, no lettering of any kind',\n  'natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)',\n  'preserve title-safe margins; avoid edge cropping of face',\n];\n\n// Accept combo if present on planner/videoType or root\nconst isComboRoot = root => {\n  const vt =\n    String(root?.planner?.videoType || root?.videoType || root?.meta?.videoType || '').toLowerCase();\n  return vt === 'combo';\n};\n\nfunction synthesizeArollSegment(root, tc) {\n  const duration =\n    num(tc?.durationSec) ??\n    num(root?.planner?.durationSec) ??\n    num(root?.meta?.durationSec) ??\n    15;\n  return {\n    segId: `SEG-${base36(4).toUpperCase()}`,\n    track: 'aroll',\n    startSec: 0,\n    endSec: duration,\n    durationSec: duration,\n    packageId: `AR-${base36(6).toUpperCase()}`,\n    orchestratorId: root?.orchestratorId || `CO-${base36(6).toUpperCase()}`,\n  };\n}\n\nfunction chooseRails(segRails, rootRails) {\n  const r = Array.isArray(segRails) && segRails.length ? segRails\n        : (Array.isArray(rootRails) && rootRails.length ? rootRails : DEFAULT_RAILS);\n  return r.map(collapse);\n}\n\nfunction makePrompts(tc, segContext, root) {\n  const driver         = 'character'; // A-roll always uses character\n  const wantsCutaways  = (tc?.wantsCutaways !== undefined)\n                          ? Boolean(tc.wantsCutaways)\n                          : Boolean(root?.meta?.wantsCutaways);\n  const wantsMusic     = Boolean(tc?.wantsMusic);\n  const wantsCaptions  = Boolean(tc?.wantsCaptions);\n\n  const scene          = collapse(tc.scene);\n  const character      = collapse(tc.character || '');\n  const setting        = collapse(tc.setting || '');\n  const action         = collapse(tc.action || '');\n  const directorsNotes = collapse(tc.directorsNotes || '');\n  const musicDesc      = collapse(tc.musicDesc || '');\n  const durationSec    = num(tc.durationSec) ?? num(segContext?.durationSec) ?? 30;\n  const referenceText  = collapse(tc.referenceText || '');\n  const rails          = chooseRails(segContext?.rails, root?.guardrails);\n\n  // ✅ new fields — safe fallback from root\n  const characterName =\n    root.characterName ??\n    root.planner?.characterName ??\n    root.envelope?.source?.characterName ??\n    root.envelope?.source?.ui?.characterName ??\n    'Host';\n\n  const characterGender =\n    root.characterGender ??\n    root.planner?.characterGender ??\n    root.envelope?.source?.characterGender ??\n    root.envelope?.source?.ui?.characterGender ??\n    'unspecified';\n\n  // 🔑 Preserve provided script (from segment → root → testCase)\n  const providedScript =\n    S(segContext?.script) ||\n    S(root?.script) ||\n    S(tc?.providedScript);\n  const scriptSource =\n    segContext?.scriptSource ||\n    root?.scriptSource ||\n    (tc?.providedScript ? 'testcase' : (providedScript ? 'composer' : ''));\n\n  const scriptPrompt = [\n    `TASK: Write a concise ${durationSec}s character-driven A-roll only video script.`,\n    scene ? `SCENE: ${scene}` : '',\n    setting ? `SETTING: ${setting}` : '',\n    character ? `ON-CAMERA CHARACTER: ${character}` : '',\n    `CHARACTER NAME: ${characterName}`,\n    `CHARACTER GENDER: ${characterGender}`,\n    action ? `ACTION: ${action}` : '',\n    referenceText ? `REFERENCE TEXT (content substance): ${referenceText}` : '',\n    `STYLE NOTES: ${directorsNotes || 'steady A-roll delivery, conversational tone'}`,\n    'EDIT PLAN: A-roll only; no cut-aways referenced.',\n    wantsCaptions ? 'CAPTIONS: Keep lines short and punctuated for easy captioning.' : '',\n    wantsMusic ? `MUSIC: ${musicDesc || 'light underscore acceptable.'}` : 'MUSIC: none required.',\n    `GUARDRAILS: ${rails.join('; ')}.`,\n    'OUTPUT: Script with clearly separated lines for spoken dialog. No stage directions that violate guardrails.',\n  ].filter(Boolean).join('\\n');\n\n  const characterPrompt = [\n    'ROLE: Generate a still/keyframe description for the on-camera character.',\n    character ? `CHARACTER: ${character}` : 'CHARACTER: a natural on-camera presenter',\n    `CHARACTER NAME: ${characterName}`,\n    `CHARACTER GENDER: ${characterGender}`,\n    'FRAMING: eye-level, camera-facing, medium to tight close-up',\n    'EXPRESSION: calm eyes; neutral mouth expression; natural blinks',\n    'LIGHTING: cinematic but clean; flattering key + soft fill',\n    `GUARDRAILS: ${rails.join('; ')}.`,\n    'OUTPUT: Visual-only description. No camera jargon, no text.',\n  ].join('\\n');\n\n  const settingPrompt = [\n    'ROLE: Describe the scene setting/background succinctly for a generative background or establishing shot.',\n    setting ? `SETTING: ${setting}` : 'SETTING: neutral studio backdrop',\n    'LOOK: cohesive, realistic, avoids busy signage or any readable text',\n    `GUARDRAILS: ${rails.join('; ')}.`,\n    'OUTPUT: Purely visual description.',\n  ].join('\\n');\n\n  const directionPrompt = [\n    'ROLE: Direction for movement and framing.',\n    'A-ROLL: maintain eye-level MCU framing; natural head and eye movement; subtle idle motion; steady shot; no fast pushes or whip pans.',\n    'NO CUT-AWAYS: keep continuous A-roll.',\n    wantsCaptions ? 'CAPTION-SAFE: keep chin, mouth, and eyes clear; leave margin at bottom third.' : '',\n    `HARD RULES: ${rails.join('; ')}.`,\n    'OUTPUT: 2–3 sentences, plain English.',\n  ].filter(Boolean).join('\\n');\n\n  const negativePrompt = [\n    'text, logo, watermark, subtitles, overlays, lower thirds, captions rendered in-frame',\n    'hands or objects covering mouth/jaw/face, occluded lips',\n    'exaggerated mouth poses, screaming mouth, wide-open grin',\n    'blurry, low-res, double face, extra limbs, distorted anatomy',\n  ].join(', ');\n\n  const meta = { driver, wantsCutaways, wantsMusic, wantsCaptions, durationSec, characterName, characterGender };\n\n  // echo + ensure segment under source.segment\n  const sourceOut = { ...(tc || {}) };\n  if (!sourceOut.segment && segContext) {\n    const { segId, track, startSec, endSec, durationSec: d, packageId, orchestratorId } = segContext;\n    sourceOut.segment = { segId, track, startSec, endSec, durationSec: d, packageId, orchestratorId };\n  }\n\n  return {\n    scriptPrompt,\n    characterPrompt,\n    settingPrompt,\n    directionPrompt,\n    negativePrompt,\n    rails,\n    meta,\n    characterName,     // ✅ carried through\n    characterGender,   // ✅ carried through\n    segId: segContext?.segId,\n    track: segContext?.track,\n    startSec: segContext?.startSec,\n    endSec: segContext?.endSec,\n    durationSec,\n    packageId: segContext?.packageId,\n    orchestratorId: segContext?.orchestratorId,\n    echoMeta: (segContext?.meta || {}),\n    script: providedScript,\n    scriptSource: scriptSource || undefined,\n    source: sourceOut,\n  };\n}\n\n// ---------- main (All Items) ----------\nconst items = $input.all();\nconst out = [];\n\nfor (const { json: root } of items) {\n  let cases;\n  if (Array.isArray(root.testCases) && root.testCases.length) cases = root.testCases;\n  else if (root.testCase && typeof root.testCase === 'object') cases = [root.testCase];\n  else if (root.planner && typeof root.planner === 'object') cases = [root.planner];\n  else if (root.scene || root.driver || root.referenceText) cases = [root];\n  else cases = [];\n\n  if (!cases.length) {\n    out.push({ json: { error: 'No test case(s) found on input.', _debug: root } });\n    continue;\n  }\n\n  let segContext = {\n    segId: root.segId,\n    track: root.track,\n    startSec: num(root.startSec),\n    endSec: num(root.endSec),\n    durationSec: num(root.durationSec),\n    packageId: root.packageId,\n    orchestratorId: root.orchestratorId,\n    rails: root.guardrails || root.rails,\n    meta: root.meta,\n    script: S(root.script),\n    scriptSource: root.scriptSource,\n  };\n  if (!isComboRoot(root) && !segContext?.segId) {\n    segContext = synthesizeArollSegment(root, cases[0]);\n    segContext.rails = root.guardrails || root.rails;\n  }\n\n  for (const tc of cases) out.push({ json: makePrompts(tc, segContext, root) });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        -368
+      ],
+      "id": "f3efa038-c264-46a0-adec-7d4c799aa430",
+      "name": "Code → Prompt Test Harness"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Init Envelope (A-Roll Only)\n// Run once for all items — MANY in → MANY out\n\nconst S = v => (v == null ? '' : String(v));\nconst collapse = s => S(s).replace(/[\\r\\n]+/g, ' ').replace(/\\s+/g, ' ').trim();\nconst num = v => (v === '' || v == null ? undefined : Number(v));\n\nconst DEFAULT_RAILS = [\n  'keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair',\n  'no on-screen text, no logos, no watermarks, no lettering of any kind',\n  'natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)',\n  'preserve title-safe margins; avoid edge cropping of face',\n];\n\nconst items = $input.all();\nconst out = [];\n\nfor (const { json: inItem } of items) {\n  // ✅ pick up provided script (if any)\n  const providedScript   = S(inItem.script || '').trim();\n  const providedSrc      = S(inItem.scriptSource || '');\n\n  // ---- segment passthrough (prefer top-level; fallback to source.segment)\n  const segTop = {\n    segId:         S(inItem.segId || ''),\n    track:         S(inItem.track || ''),\n    orchestratorId:S(inItem.orchestratorId || ''),\n    packageId:     S(inItem.packageId || ''),\n    testCaseId:    S(inItem.testCaseId || inItem.source?.id || ''),\n    comboId:       S(inItem.source?.comboId || ''),\n    startSec:      num(inItem.startSec ?? undefined),\n    endSec:        num(inItem.endSec ?? undefined),\n    durationSec:   num(inItem.durationSec ?? undefined),\n  };\n\n  const segSrc = inItem.source?.segment || {};\n  const segment = {\n    segId:         segTop.segId || S(segSrc.segId || ''),\n    track:         segTop.track || S(segSrc.track || ''),\n    orchestratorId:segTop.orchestratorId || S(segSrc.orchestratorId || ''),\n    packageId:     segTop.packageId || S(segSrc.packageId || ''),\n    testCaseId:    segTop.testCaseId || S(inItem.source?.id || ''),\n    comboId:       segTop.comboId || S(inItem.source?.comboId || ''),\n    startSec:      num(segTop.startSec ?? segSrc.startSec ?? 0),\n    endSec:        num(segTop.endSec   ?? segSrc.endSec   ?? 0),\n    durationSec:   num(\n      (segTop.durationSec ?? segSrc.durationSec) ??\n      ((segTop.endSec ?? segSrc.endSec ?? 0) - (segTop.startSec ?? segSrc.startSec ?? 0))\n    ),\n  };\n\n  // ---- prompts from harness\n  const prompts = {\n    script:    S(inItem.scriptPrompt || ''),\n    character: S(inItem.characterPrompt || ''),\n    setting:   S(inItem.settingPrompt || ''),\n    direction: S(inItem.directionPrompt || ''),\n    negative:  S(inItem.negativePrompt || ''),\n  };\n\n  // ---- rails\n  const rails = Array.isArray(inItem.rails) && inItem.rails.length\n    ? inItem.rails.map(collapse)\n    : DEFAULT_RAILS;\n\n  // ---- pull character meta with safe fallbacks\n  const characterName =\n    S(\n      inItem.characterName ??\n      inItem.meta?.characterName ??\n      inItem.source?.characterName ??\n      inItem.source?.ui?.characterName ??\n      'Host'\n    ).trim();\n\n  const characterGender =\n    S(\n      inItem.characterGender ??\n      inItem.meta?.characterGender ??\n      inItem.source?.characterGender ??\n      inItem.source?.ui?.characterGender ??\n      'unspecified'\n    ).trim();\n\n  // ---- meta\n  const metaIn = inItem.meta || {};\n  const vtIn = S(inItem.videoType || metaIn.videoType || '');\n  const videoType = vtIn || 'aroll_only';\n\n  const meta = {\n    driver:        'character',\n    wantsCutaways: Boolean(metaIn.wantsCutaways),\n    wantsMusic:    Boolean(metaIn.wantsMusic),\n    wantsCaptions: Boolean(metaIn.wantsCaptions),\n    durationSec:   num(segment.durationSec || metaIn.durationSec || 30),\n    videoType,\n    characterName,          // ✅ carried through in meta\n    characterGender         // ✅ carried through in meta\n  };\n\n  const source = inItem.source || {};\n  const scene  = collapse(source.scene || inItem.scene || '');\n\n  // ---- outputs placeholders (seed script if provided) ✅\n  const outputs = {\n    script: providedScript || null,              // ✅ carry composer lines\n    scriptSource: providedScript ? (providedSrc || 'composer') : undefined, // ✅\n    character: null,\n    setting: null,\n    direction: null,\n  };\n\n  const envelope = {\n    segment,\n    scene,\n    meta,\n    rails,\n    prompts,\n    outputs,\n    source,\n    // convenience passthroughs (top-level too)\n    characterName,          // ✅ top-level passthrough\n    characterGender         // ✅ top-level passthrough\n  };\n\n  out.push({ json: envelope });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        -368
+      ],
+      "id": "6611049f-77f7-494e-94c5-dbef80f58fe4",
+      "name": "Init Envelope"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code → Build Script LLM Payload (A-Roll)\n// Mode: Run once for all items\n\nconst S = v => (v == null ? '' : String(v));\nconst collapse = s => S(s).replace(/[\\r\\n]+/g, ' ').replace(/\\s+/g, ' ').trim();\n\nconst items = $input.all();\nconst out = [];\n\nfor (const { json: inItem } of items) {\n  let env;\n\n  // ---------- normalize per item ----------\n  if (inItem && (inItem.meta || inItem.prompts)) {\n    // Already an envelope (Init Envelope shape)\n    env = {\n      scene: inItem.scene || '',\n      meta: inItem.meta || {},\n      rails: Array.isArray(inItem.rails) ? inItem.rails : [],\n      prompts: inItem.prompts || {},\n      outputs: inItem.outputs || {},\n      // Keep segment available at top-level of envelope too\n      segment: inItem.segment || inItem.source?.segment || undefined,\n      // Preserve *everything* under source for traceability\n      source: {\n        ...inItem.source,\n        // ensure segment is mirrored under source\n        segment: (inItem.segment || inItem.source?.segment) || undefined,\n      },\n    };\n\n  } else if (Array.isArray(inItem?.testCases) && inItem.testCases.length) {\n    // Legacy Set → testCases fallback (use first case per input item)\n    const t = inItem.testCases[0] || {};\n    const wantsCaptions = Boolean(t.wantsCaptions);\n\n    env = {\n      scene: collapse(t.scene || ''),\n      meta: {\n        // A-roll writer target, but DO NOT force wantsCutaways=false\n        driver: 'character',\n        wantsCutaways: (t.wantsCutaways !== undefined) ? Boolean(t.wantsCutaways) : Boolean(inItem?.meta?.wantsCutaways),\n        wantsMusic: Boolean(t.wantsMusic),\n        wantsCaptions,\n        durationSec: Number(t.durationSec || inItem?.meta?.durationSec || 30),\n        // keep incoming type if provided; otherwise default to aroll_only\n        videoType: String(t.videoType || inItem?.meta?.videoType || 'aroll_only'),\n      },\n      rails: Array.isArray(inItem.rails) && inItem.rails.length\n        ? inItem.rails.map(collapse)\n        : [\n            'keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair',\n            'no on-screen text, no logos, no watermarks, no lettering of any kind',\n            'natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)',\n            ...(wantsCaptions ? ['preserve title-safe margins; avoid edge cropping of face'] : []),\n          ],\n      prompts: {\n        script:    S(t.scriptPrompt || ''),\n        character: S(t.characterPrompt || ''),\n        setting:   S(t.settingPrompt || ''),\n        direction: S(t.directionPrompt || ''),\n        negative:  S(t.negativePrompt || ''),\n      },\n      outputs: { script: null, character: null, setting: null, direction: null },\n      // No segment context in legacy: leave undefined; downstream can synthesize or ignore\n      segment: undefined,\n      source: { ...t },\n    };\n\n  } else {\n    out.push({ json: { error: 'Invalid input: expected Init Envelope or testCases[].', input: inItem } });\n    continue;\n  }\n\n  // ---- prompts extraction ----\n  const scriptPrompt = (env.prompts && env.prompts.script) ? String(env.prompts.script) : '';\n  if (!scriptPrompt.trim()) {\n    out.push({ json: { error: 'Missing prompts.script on input envelope.', envelope: env } });\n    continue;\n  }\n\n  const videoType = String(env.meta.videoType || 'aroll_only').toLowerCase();\n  const duration = Number(env.meta.durationSec || 0) || undefined;\n\n  // De-dup rails in case they came through noisy\n  const rails = Array.from(new Set(\n    (env.rails || []).map(r => String(r).trim()).filter(Boolean)\n  ));\n  const negative = String(env.prompts.negative || '').trim();\n\n  // ---- system lines ----\n  const sysLines = [\n    'You are an A-roll short-form video scriptwriter.',\n    'Write only the spoken lines (no stage directions, camera moves, or labels).',\n    'VIDEO TYPE: A-ROLL ONLY — continuous speech; do not imply cutaways/inserts.',\n    duration ? `TARGET DURATION: ~${duration}s (concise cadence).` : '',\n    'FORMATTING: one sentence or short phrase per line for easy captioning.',\n    'DO NOT: reference on-screen text/logos/watermarks; add “caption” cues; or ask for B-roll.',\n    rails.length ? `PRODUCTION GUARDRAILS (for awareness—do not add actions): ${rails.join(' | ')}` : '',\n    negative ? `NEGATIVE VISUALS TO AVOID (downstream models): ${negative}` : '',\n  ].filter(Boolean).join('\\n');\n\n  const user = scriptPrompt;\n\n  // ---- Emit one payload per input item ----\n  out.push({\n    json: {\n      messages: [\n        { role: 'system', content: sysLines },\n        { role: 'user',   content: user }\n      ],\n      videoTypeHint: videoType,\n      envelope: env,   // includes `segment` (top-level) and `source.segment`\n    }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        -368
+      ],
+      "id": "6d114014-c747-4d8b-9261-a2ece57fe41f",
+      "name": "Build Script LLM Payload"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=TASK: Write a concise {{ $json.envelope.meta.durationSec }}s A-roll-only spoken script.\n\nSCENE: {{ $('Init Envelope').item.json.source.scene }}\nSETTING: {{ $('Init Envelope').item.json.source.setting }}\nON-CAMERA CHARACTER: {{ $('Init Envelope').item.json.source.character }}\nCHARACTER NAME: {{ $json.envelope.meta.characterName }}\nCHARACTER GENDER: {{ $json.envelope.meta.characterName }}\nACTION CONTEXT: {{ $('Init Envelope').item.json.source.action }}\nREFERENCE CONTENT (key ideas to include): {{ $('Init Envelope').item.json.source.referenceText }}\nSTYLE NOTES: {{ $('Init Envelope').item.json.source.directorsNotes }}\n\nEDIT PLAN: A-roll only; no cutaways or inserts.\nCAPTIONS: Use short, punctuated lines for easy captioning.\n\nRESTRICTIONS:\n- Spoken words only — do not include any stage directions, cues, or actions.  \n- Do NOT include text like *pause*, *laughs*, (beat), [smiles], or sound effects.  \n- Do NOT include emojis, emoticons, or formatting symbols (e.g., asterisks or brackets).  \n- Do NOT reference visuals, captions, or camera moves.  \n- All text must be something a real person could speak naturally aloud.  \n\nOUTPUT:\nReturn ONLY the spoken lines, one per line.  \nNo labels, no markup, no commentary — just natural, clean speech.",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are an A-roll short-form video scriptwriter.\n\nWrite only the spoken lines — no stage directions, no camera moves, and no speaker labels.\n\nVIDEO TYPE:\nA-ROLL ONLY — continuous, direct-to-camera speech.  \nDo not imply B-roll, inserts, or scene changes.\n\nDURATION:\nMatch pacing to the duration target provided in the input (e.g., 30s, 45s, 60s).  \nAim for roughly 150 words per minute (~75 words for 30s, ~110 for 45s, ~150 for 60s).\n\nFORMATTING:\n• Write 1 short sentence or phrase per line (5–12 words each).  \n• Break lines naturally for speech rhythm and readability.  \n• Return only the spoken lines — no intro text, metadata, or explanations.\n\nTONE FLEX:\nAdapt the natural voice and rhythm to the genre.\n- **Vlog / Lifestyle:** Conversational, relatable, unscripted feel. Occasional humor or reflection.  \n- **Podcast / Explainer:** Smooth, professional, balanced cadence with warmth and clarity.  \n- **Motivational / Fitness / Coaching:** Energetic, confident, forward-driving tempo; inspiring yet grounded.  \n- **Educational / Science / History:** Calm, engaging, trustworthy tone — clear progression of ideas.  \n- **Storytelling / Narrative:** Expressive, cinematic pacing; mix curiosity, tension, and release.  \n- **Art / Music / Culture:** Creative, emotive, lyrical phrasing; occasional rhythm or flow.  \n- **Tech / AI / Future:** Thoughtful, intelligent, conversational yet futuristic.  \n- **Wellness / Mindfulness:** Gentle, slow tempo, with comforting tone.  \nEnsure natural emotional modulation — avoid monotone delivery.  \nShift tone smoothly between genres when input blends categories (e.g., “motivational + educational”).  \n\nDO NOT:\n- Reference on-screen text, captions, or visuals.  \n- Add body movements, expressions, or camera cues.  \n- Mention logos, brands, or overlays.  \n- Include *any* non-verbal cues or stage actions (e.g., *laughs*, (pause), [beat], or sound effects).  \n- Include emojis or emoticons.\n\nNEGATIVE VISUALS TO AVOID (downstream models): \ntext, logos, watermarks, subtitles, overlays, lower thirds, captions rendered in-frame, hands or objects covering mouth/jaw/face, occluded lips, exaggerated mouth poses, screaming mouth, wide-open grin, blurry or low-res output, double faces, extra limbs, distorted anatomy.\n\nOUTPUT:\n• Spoken script only — words a person would actually say aloud.  \n• Maintain human-sounding phrasing with natural tone variation.  \n• Use punctuation (not cues) to imply pacing or emotion.  \n• Each line should flow into the next as a cohesive monologue.\n\n(Do not mention duration targets or tokens in output.)"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1600,
+        -192
+      ],
+      "id": "7bff4f69-e28a-4430-89e7-36b8e4779e78",
+      "name": "Script Writer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code → Stash Script\n// Mode: Run once for all items\n// Input: either Script Writer results OR pass-through envelopes (skip branch)\n// Also pulls envelopes from \"Build Script LLM Payload\" for context\n// Output: one updated envelope per item\n\n// ---------- helpers ----------\nconst S = v => (v == null ? \"\" : String(v));\n\nfunction getScriptFromLLM(obj) {\n  // Common shapes: {text}, {data:{text}}, OpenAI-like {choices[0].message.content}\n  if (!obj) return \"\";\n  if (obj.text) return S(obj.text);\n  if (obj.data && obj.data.text) return S(obj.data.text);\n  const ch0 = obj.choices?.[0];\n  if (ch0?.message?.content) return S(ch0.message.content);\n  if (Array.isArray(obj.messages)) {\n    // occasionally models echo a final assistant message here\n    const last = [...obj.messages].reverse().find(m => m.role === \"assistant\" && m.content);\n    if (last) return S(last.content);\n  }\n  return \"\";\n}\n\nfunction endsClean(s) {\n  return /[.!?…]$/.test(s.trim());\n}\n\nfunction cleanScript(raw) {\n  let s = S(raw);\n\n  // Remove <think> blocks and leftovers\n  s = s.replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n  s = s.replace(/<think>[\\s\\S]*$/i, \"\");\n\n  // Strip markdown/code/preambles/labels\n  s = s.replace(/```[\\s\\S]*?```/g, \"\");         // fenced code\n  s = s.replace(/^[>#*-]\\s*/gm, \"\");            // bullets/headers\n  s = s.replace(/^\\s*[A-Z][\\w ]{0,20}:\\s*/gm, \"\");         // Speaker labels\n  s = s.replace(/^\\s*(assistant|system|user):\\s*/gim, \"\"); // chat preambles\n  s = s.replace(/\\([^()\\n]{0,80}\\)/g, \"\");                 // parenthetical asides\n\n  // Normalize whitespace\n  s = s.replace(/\\r\\n/g, \"\\n\");\n  s = s.replace(/[ \\t]+$/gm, \"\");\n  s = s.replace(/\\n{3,}/g, \"\\n\\n\");\n  return s.trim();\n}\n\nconst countWords = s => S(s).trim().split(/\\s+/).filter(Boolean).length;\nconst countNonEmptyLines = s => S(s).split(/\\n/).filter(l => l.trim()).length;\n\n// ---------- main ----------\nconst inItems = $input.all(); // could be LLM results or envelopes (skip branch)\n\n// Pull ALL envelopes from Build Script LLM Payload (latest run)\nlet payloadItems = [];\ntry {\n  payloadItems = $items(\"Build Script LLM Payload\");\n} catch (e) {\n  return [{\n    json: {\n      error: \"Could not read items from node 'Build Script LLM Payload'. Check the node name and execution order.\",\n      debug: { message: String(e) }\n    }\n  }];\n}\n\nif (!Array.isArray(payloadItems) || !payloadItems.length) {\n  return [{\n    json: {\n      error: \"No envelopes found on 'Build Script LLM Payload'.\",\n      debug: { payloadItemsType: typeof payloadItems, count: payloadItems?.length || 0 }\n    }\n  }];\n}\n\n// Build segId → envelope map, with index fallback\nconst envBySeg = new Map();\nconst envelopesByIndex = payloadItems.map(it => it?.json?.envelope || it?.json);\nfor (const it of payloadItems) {\n  const env = it?.json?.envelope || it?.json;\n  const segId = env?.segment?.segId || env?.source?.segment?.segId;\n  if (env && segId) envBySeg.set(segId, env);\n}\n\nconst OUT = [];\n\ninItems.forEach((item, i) => {\n  const raw = item.json || {};\n\n  // Match envelope by segId, else by index\n  const segFromInput = raw?.segment?.segId || raw?.source?.segment?.segId;\n  const env =\n    (segFromInput && envBySeg.get(segFromInput)) ||\n    envelopesByIndex[i];\n\n  if (!env) {\n    OUT.push({\n      json: {\n        error: \"No matching envelope found for this item.\",\n        index: i,\n        debug: { inputKeys: Object.keys(raw) }\n      }\n    });\n    return;\n  }\n\n  // --- choose script source: LLM first, else provided/upstream ---\n  let scriptCandidate = getScriptFromLLM(raw);\n  let scriptSource = \"llm\";\n\n  if (!scriptCandidate || !scriptCandidate.trim()) {\n    scriptCandidate =\n      S(env?.outputs?.script) ||\n      S(env?.source?.outputs?.script) || // just in case it was nested\n      \"\";\n    scriptSource = scriptCandidate ? \"provided\" : \"none\";\n  }\n\n  if (!scriptCandidate.trim()) {\n    OUT.push({\n      json: {\n        error: \"No script found from LLM or provided envelope.\",\n        index: i,\n        envelopeSegId: env?.segment?.segId || null\n      }\n    });\n    return;\n  }\n\n  // --- clean & format ---\n  let cleaned = cleanScript(scriptCandidate);\n\n  // Duration: prefer meta.durationSec, fall back to segment.durationSec\n  const durationSec =\n    Number(env?.meta?.durationSec ?? env?.segment?.durationSec ?? 0) || undefined;\n\n  // Words-per-second (overrideable in meta); default 2.7 wps\n  const wps = Number(env?.meta?.wordsPerSecond) || 2.7;\n\n  // Word cap if we know duration\n  const wordCap = durationSec ? Math.max(8, Math.round(durationSec * wps)) : undefined;\n\n  // Caption line max (overrideable); default 55 chars\n  const lineMax = Number(env?.meta?.captionLineMax) || 55;\n\n  if (wordCap) {\n    const words = cleaned.split(/\\s+/).filter(Boolean);\n    if (words.length > wordCap) {\n      const sentences = cleaned\n        .split(/(?<=\\.|\\?|\\!|…)\\s+/)\n        .map(x => x.trim())\n        .filter(Boolean);\n\n      let kept = [];\n      let tally = 0;\n      for (const sent of sentences) {\n        const wc = sent.split(/\\s+/).filter(Boolean).length;\n        if (tally + wc <= wordCap) {\n          kept.push(sent);\n          tally += wc;\n        } else {\n          if (kept.length === 0) {\n            const toks = sent.split(/\\s+/).filter(Boolean);\n            let trimmed = toks.slice(0, wordCap).join(\" \");\n            if (!endsClean(trimmed)) trimmed = trimmed.replace(/[,:;–—-]+$/,\"\").trim() + \"…\";\n            kept = [trimmed];\n          }\n          break;\n        }\n      }\n      cleaned = kept.join(\"\\n\");\n      if (!endsClean(cleaned)) cleaned = cleaned.replace(/[,:;–—-]+$/,\"\").trim() + \".\";\n    }\n  }\n\n  // Reflow to caption-friendly lines\n  const outLines = [];\n  cleaned.split(/\\n+/).forEach(line => {\n    const ws = line.split(/\\s+/).filter(Boolean);\n    let buf = \"\";\n    ws.forEach(w => {\n      if ((buf + \" \" + w).trim().length > lineMax) {\n        if (buf) outLines.push(buf.trim());\n        buf = w;\n      } else {\n        buf = (buf ? buf + \" \" : \"\") + w;\n      }\n    });\n    if (buf) outLines.push(buf.trim());\n  });\n\n  let finalScript = outLines.join(\"\\n\").trim();\n  if (!endsClean(finalScript)) finalScript = finalScript.replace(/[,:;–—-]+$/,\"\").trim() + \".\";\n\n  // --- stash + metrics ---\n  const outputs = Object.assign({}, env.outputs || {}, {\n    scriptRaw: scriptSource === \"llm\" ? scriptCandidate : (env.outputs?.scriptRaw || scriptCandidate),\n    script: finalScript,\n    scriptSource, // \"llm\" or \"provided\"\n  });\n\n  const metrics = Object.assign({}, env.metrics || {}, {\n    scriptWordCount: countWords(finalScript),\n    scriptLineCount: countNonEmptyLines(finalScript),\n    _timing: {\n      durationSec: durationSec ?? null,\n      wordsPerSecond: wps,\n      computedWordCap: wordCap ?? null,\n      captionLineMax: lineMax,\n    }\n  });\n\n  OUT.push({ json: Object.assign({}, env, { outputs, metrics }) });\n});\n\nreturn OUT;\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        -112
+      ],
+      "id": "79533721-701f-4243-97f8-4f68ffcdc797",
+      "name": "Stash Script"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Character LLM Payload (All Items)\n// Input: one or more envelopes (each with prompts.character and outputs.script)\n// Output: one { messages, envelope } per input item\n\nconst S = (v) => (v ?? \"\").toString();\nconst T = (v) => S(v).trim();\n\nfunction replaceFraming(input) {\n  const FRAMING_RE = /(^|\\n)\\s*FRAMING:[^\\n]*/i;\n  const safeFraming = \"$1FRAMING: straight-on view; upper chest to top of head visible; centered composition.\";\n  return input.replace(FRAMING_RE, safeFraming);\n}\n\nfunction scrubJargon(input) {\n  return input\n    .replace(/\\b(?:close[-\\s]?up|medium\\s+close[-\\s]?up|tight\\s+close[-\\s]?up|eye[-\\s]?level|shot|angle|bokeh|depth of field|DOF|focal length|lens)\\b/gi, \"\")\n    .replace(/\\s{2,}/g, \" \")\n    .trim();\n}\n\nfunction buildOne(env) {\n  const scene  = T(env.scene);\n  const rails  = Array.isArray(env.rails) ? env.rails : [];\n  const neg    = T(env.prompts?.negative);\n  const dur    = Number(env.meta?.durationSec || 0);\n  const wps    = Number(env.meta?.wordsPerSecond || 0) || 2.7;   // soft default\n  const script = T(env.outputs?.script);\n  const charPr = T(env.prompts?.character);\n\n  if (!charPr) {\n    return { json: { error: \"Missing prompts.character\", envelope: env } };\n  }\n\n  // Clean the character task\n  const charTaskClean = scrubJargon(replaceFraming(charPr));\n\n  // Small script snippet for tone context\n  const scriptSnippet = script ? script.slice(0, 300) : \"\";\n\n  // Soft, dynamic target length (no hard cap): ~ (dur * wps * 1.2) words, clamped gently\n  const softTarget = dur ? Math.round(dur * wps * 1.2) : 55;\n  const targetWords = Math.max(35, Math.min(90, softTarget)); // gentle bounds, not enforced\n\n  const system = [\n    \"You are the Character Specialist.\",\n    \"Return a succinct, visual-only description of the on-camera person.\",\n    \"If the on-camera personality is based on a celebrity, reference their name in the character description to better match likeness.\",\n    \"Write in plain language only. Do NOT use camera or lens terms.\",\n    \"Forbidden terms include: frame, shot, angle, eye-level, close-up, depth of field, DOF, bokeh, focal length, lens.\",\n    \"Emphasize the person’s look, attire, hair, skin tone, posture, demeanor; keep face unobstructed.\",\n    \"Avoid referencing hands near the face.\",\n    rails.length ? `HARD RULES: ${rails.join(\" | \")}` : \"\",\n    neg ? `NEGATIVE: ${neg}` : \"\",\n    `OUTPUT: One tight paragraph (~${targetWords} words). Visual description only.`\n  ].filter(Boolean).join(\"\\n\");\n\n  const user = [\n    scene ? `SCENE: ${scene}` : \"\",\n    dur ? `DURATION TARGET: ~${dur}s` : \"\",\n    \"CONTEXT (script tone sample):\",\n    scriptSnippet || \"(no script sample available)\",\n    \"\",\n    \"--- CHARACTER TASK ---\",\n    charTaskClean,\n  ].filter(Boolean).join(\"\\n\");\n\n  return {\n    json: {\n      messages: [\n        { role: \"system\", content: system },\n        { role: \"user\",   content: user }\n      ],\n      envelope: env\n    }\n  };\n}\n\n// ---- main: process all incoming items ----\nconst items = $input.all();\nreturn items.map(it => buildOne(it.json || it));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        64
+      ],
+      "id": "54da010a-c8c6-4cf2-813a-1d135214caf4",
+      "name": "Build Character LLM Payload"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[1].content }}",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.messages[0].content }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1600,
+        64
+      ],
+      "id": "14038f66-0619-42de-af30-b328cb456c54",
+      "name": "Character Specialist"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stash Character (all items)\n// Inputs:\n//  - Current node input: one item per LLM completion (usually { text })\n//  - Historical node data from \"Build Character LLM Payload\": { messages, envelope }\n// Output: one updated envelope per item\n\n// ---------- helpers ----------\nconst S = (v) => (v == null ? \"\" : String(v));\n\nfunction getCharText(obj = {}) {\n  // Common shapes: {text}, {data.text}, {choices[0].message.content}, {output}, {completion}\n  if (obj.text) return S(obj.text);\n  if (obj.data && obj.data.text) return S(obj.data.text);\n  try {\n    const ch0 = obj.choices?.[0]?.message?.content;\n    if (ch0) return S(ch0);\n  } catch {}\n  if (obj.output) return S(obj.output);\n  if (obj.completion) return S(obj.completion);\n  return \"\";\n}\n\nfunction cleanThinkAndMarkdown(s) {\n  let t = S(s);\n\n  // strip hidden <think> blocks (tolerant if closing tag missing)\n  t = t.replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n  t = t.replace(/<think>[\\s\\S]*$/i, \"\");\n\n  // strip fenced blocks if any\n  t = t.replace(/```[\\s\\S]*?```/g, \"\");\n\n  // collapse whitespace\n  t = t.replace(/\\r\\n/g, \"\\n\").trim();\n\n  return t;\n}\n\n// ---------- load inputs ----------\nconst llmItems = $input.all(); // items from Character Specialist LLM node\n\nlet builderItems = [];\ntry {\n  builderItems = $items(\"Build Character LLM Payload\"); // all items from the builder node\n} catch (e) {\n  return [{\n    json: {\n      error: \"Stash Character: could not read items from node 'Build Character LLM Payload'.\",\n      debug: { message: String(e) }\n    }\n  }];\n}\n\nif (!Array.isArray(builderItems) || builderItems.length === 0) {\n  return [{\n    json: {\n      error: \"Stash Character: no items found on 'Build Character LLM Payload'.\",\n      debug: { count: builderItems?.length || 0 }\n    }\n  }];\n}\n\n// Build segId -> envelope map, and an index-ordered list as fallback\nconst envBySeg = new Map();\nconst envsByIndex = builderItems.map(it => it?.json?.envelope || it?.json);\n\nfor (const it of builderItems) {\n  const env = it?.json?.envelope || it?.json;\n  const segId = env?.segment?.segId || env?.source?.segment?.segId;\n  if (env && segId) envBySeg.set(segId, env);\n}\n\nconst OUT = [];\n\nllmItems.forEach((item, i) => {\n  const raw = item?.json || {};\n\n  // Try to find matching envelope by segId if the LLM item happened to carry it forward,\n  // otherwise fall back to positional index.\n  const segFromInput = raw?.envelope?.segment?.segId\n                    || raw?.segment?.segId\n                    || raw?.source?.segment?.segId;\n\n  let env = (segFromInput && envBySeg.get(segFromInput)) || envsByIndex[i];\n\n  if (!env) {\n    OUT.push({\n      json: {\n        error: \"Stash Character: no matching envelope found for this item.\",\n        index: i,\n        debug: {\n          inputKeys: Object.keys(raw || {}),\n          knownSegId: segFromInput || null\n        }\n      }\n    });\n    return;\n  }\n\n  // Extract & clean character text\n  const rawText = getCharText(raw);\n  const cleaned = cleanThinkAndMarkdown(rawText);\n\n  if (!cleaned) {\n    OUT.push({\n      json: {\n        error: \"Stash Character: no character description text found on LLM output.\",\n        index: i,\n        envelope: env\n      }\n    });\n    return;\n  }\n\n  // Merge into envelope\n  const outputs = Object.assign({}, env.outputs || {}, {\n    character: cleaned,\n    characterRaw: rawText\n  });\n\n  // Optionally add a tiny metric (no hard caps)\n  const metrics = Object.assign({}, env.metrics || {}, {\n    characterWordCount: cleaned.split(/\\s+/).filter(Boolean).length\n  });\n\n  OUT.push({\n    json: Object.assign({}, env, { outputs, metrics })\n  });\n});\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        64
+      ],
+      "id": "47e8e64c-d7b2-49e0-8f56-b1b51f2502c9",
+      "name": "Stash Character"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Setting LLM Payload (All Items)\n// Input: one envelope per item (at root OR under { envelope }) with prompts.setting\n// Output: [{ messages:[...], envelope }, ...]\n\n// ---------- helpers ----------\nconst S = v => (v ?? \"\").toString();\nconst T = v => S(v).trim();\n\nfunction getEnv(item) {\n  return item?.json?.envelope || item?.json || {};\n}\n\nfunction compact(v) { return T(v); }\n\n// Forbidden terms that should not leak into prompts (kept simple on purpose)\nconst forbidden = [\n  \"frame\",\"shot\",\"angle\",\"eye-level\",\"close-up\",\"wide\",\n  \"depth of field\",\"DOF\",\"bokeh\",\"focal length\",\"lens\",\n  \"pan\",\"tilt\",\"zoom\",\"rack focus\",\"cinematic camera\"\n];\n\n// Light scrub: strip forbidden terms (case-insensitive) while preserving newlines\nfunction stripForbidden(text) {\n  let safe = text || \"\";\n\n  // So we don't end up with \"establishing .\" after removing \"shot\"\n  safe = safe.replace(/\\bestablishing\\s+shot\\b/ig, \"establishing view\");\n\n  // remove each forbidden term\n  forbidden.forEach(term => {\n    const re = new RegExp(`\\\\b${term}\\\\b`, \"ig\");\n    safe = safe.replace(re, \"\");\n  });\n\n  // collapse extra spaces/tabs but KEEP newlines\n  safe = safe.replace(/[^\\S\\r\\n]{2,}/g, \" \");\n\n  // remove spaces left dangling before punctuation, e.g., \"establishing .\"\n  safe = safe.replace(/\\s+([,.;:!?])/g, \"$1\");\n\n  // trim each line, then trim overall; also squeeze 3+ newlines to 2\n  safe = safe\n    .split(/\\r?\\n/)\n    .map(line => line.trim())\n    .join(\"\\n\")\n    .replace(/\\n{3,}/g, \"\\n\\n\")\n    .trim();\n\n  return safe;\n}\n\n// ---------- main ----------\nconst items = $input.all();\nconst OUT = [];\n\nfor (const it of items) {\n  const env = getEnv(it);\n\n  const scene = compact(env.scene);\n  const rails = Array.isArray(env.rails) ? env.rails : [];\n  const setPr = compact(env.prompts?.setting);\n  const neg   = compact(env.prompts?.negative);\n\n  if (!setPr) {\n    OUT.push({ json: { error: \"Missing prompts.setting\", envelope: env } });\n    continue;\n  }\n\n  // System prompt (tight rules)\n  const system = [\n    \"You are the Setting Specialist.\",\n    \"Return a succinct description of the scene’s background environment only.\",\n    \"Write in plain language. Do NOT use camera or lens terms.\",\n    `Forbidden terms include: ${forbidden.join(\", \")}`,\n    \"Describe: room, surfaces, palette, mood, and general lighting feel.\",\n    \"Do not include characters, people, or props that obstruct the face.\",\n    \"No text, logos, brands, or signage of any kind.\",\n    rails.length ? `HARD RULES: ${rails.join(\" | \")}` : \"\",\n    neg ? `NEGATIVE: ${neg}` : \"\",\n    \"OUTPUT: One paragraph, 40–70 words.\"\n  ].filter(Boolean).join(\"\\n\");\n\n  // User prompt = scene + original setting task (light-scrubbed)\n  const user = [\n    scene ? `SCENE: ${scene}` : \"\",\n    \"\",\n    \"--- SETTING TASK ---\",\n    setPr\n  ].filter(Boolean).join(\"\\n\");\n\n  OUT.push({\n    json: {\n      messages: [\n        { role: \"system\", content: system },\n        { role: \"user\",   content: stripForbidden(user) }\n      ],\n      envelope: env\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        64
+      ],
+      "id": "85c6b9ef-1bdd-4cde-860d-f084aacfb154",
+      "name": "Build Setting LLM Payload"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[1].content }}",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.messages[0].content }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1392,
+        288
+      ],
+      "id": "b1a7b18e-cbe5-4f32-babd-50ac17081fe3",
+      "name": "Setting Specialist"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code → Stash Setting (All Items)\n// Mode: Run once for all items\n// Input items: LLM responses with { text } (no passthrough)\n// Dependency: envelopes from \"Build Setting LLM Payload\"\n// Output: one item per input with the full envelope (outputs.setting populated)\n\n// ---------- helpers ----------\nfunction asStr(v){ return (v ?? '').toString(); }\nfunction trim(v){ return asStr(v).trim(); }\nfunction isObj(v){ return v && typeof v === 'object'; }\n\nfunction cleanSetting(s) {\n  let out = asStr(s);\n\n  // Remove <think> blocks (if leaked)\n  out = out.replace(/<think>[\\s\\S]*?<\\/think>/gi, ' ').replace(/\\s+/g, ' ').trim();\n\n  // Soft-strip forbidden camera/film terms\n  const forbidden = [\n    'frame','shot','angle','eye-level','close-up','wide',\n    'depth of field','dof','bokeh','focal length','lens',\n    'pan','tilt','zoom','rack focus','cinematic camera','camera'\n  ];\n  const forbRe = new RegExp('\\\\b(' + forbidden.map(t => t.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')).join('|') + ')\\\\b','gi');\n  out = out.replace(forbRe, '').replace(/\\s{2,}/g,' ').trim();\n\n  // Drop sentences that mention people/face/hands (setting must be environment-only)\n  out = out.replace(/[^.?!]*\\b(face|mouth|jaw|eyes|person|people|host|speaker|she|he|they|hand|hands)\\b[^.?!]*[.?!]/gi,' ')\n           .replace(/\\s{2,}/g,' ').trim();\n\n  // Drop sentences that mention text/logos/branding/signage\n  out = out.replace(/[^.?!]*\\b(text|logo(?:s)?|watermark(?:s)?|signage|brand(?:s)?|caption(?:s)?)\\b[^.?!]*[.?!]/gi,' ')\n           .replace(/\\s{2,}/g,' ').trim();\n\n  // Collapse to single paragraph, ensure terminal punctuation\n  out = out.replace(/\\n+/g,' ').replace(/\\s{2,}/g,' ').trim();\n  if (out && !/[.?!]$/.test(out)) out += '.';\n\n  return out;\n}\n\nfunction failItem(msg, extra = {}) {\n  return { json: { error: msg, ...extra } };\n}\n\n// ---------- preload envelopes from Build node ----------\nlet buildItems = [];\ntry {\n  // $items(nodeName, runIndex, outputIndex) -> array of items\n  const arr = $items('Build Setting LLM Payload', 0, 0);\n  buildItems = Array.isArray(arr) ? arr : (arr ? [arr] : []);\n} catch (e) {\n  // If this throws, we'll still emit item-level errors where needed\n  buildItems = [];\n}\n\n// Helper to fetch envelope for a given current item index\nfunction getEnvelopeFor(i, currItem) {\n  // 1) Prefer current item .json.envelope\n  const envFromCurrent = currItem?.json?.envelope;\n  if (isObj(envFromCurrent)) return envFromCurrent;\n\n  // 2) Try to align with Build node by pairedItem index (if present)\n  const pairIdx = (currItem?.pairedItem && Number.isInteger(currItem.pairedItem.item))\n    ? currItem.pairedItem.item\n    : i;\n\n  const buildMatch = buildItems[pairIdx]?.json;\n  if (isObj(buildMatch?.envelope)) return buildMatch.envelope;\n  if (isObj(buildMatch)) return buildMatch;\n\n  // 3) Fallback to first build item\n  const firstBuild = buildItems[0]?.json;\n  if (isObj(firstBuild?.envelope)) return firstBuild.envelope;\n  if (isObj(firstBuild)) return firstBuild;\n\n  return null;\n}\n\n// ---------- main ----------\nconst inputs = $input.all();\nconst OUT = [];\n\nfor (let i = 0; i < inputs.length; i++) {\n  const it = inputs[i];\n\n  // Pull envelope for this item\n  const env = getEnvelopeFor(i, it);\n  if (!isObj(env)) {\n    OUT.push(failItem(\n      \"Missing envelope from 'Build Setting LLM Payload'. Ensure that node outputs { envelope } and items align.\",\n      {\n        itemIndex: i,\n        receivedKeys: Object.keys(it?.json || {}),\n        buildItemCount: buildItems.length\n      }\n    ));\n    continue;\n  }\n\n  // Fetch raw setting text from LLM output\n  const rawText = trim(it?.json?.text);\n  if (!rawText) {\n    OUT.push(failItem(\"Missing `text` from Setting Specialist LLM response.\", { itemIndex: i, envelope: env }));\n    continue;\n  }\n\n  // Sanitize\n  const cleaned = cleanSetting(rawText);\n\n  // Write back into envelope\n  env.outputs = env.outputs || {};\n  env.outputs.setting = cleaned;\n\n  // Optional metric\n  env.metrics = env.metrics || {};\n  env.metrics.settingWordCount = cleaned ? cleaned.split(/\\s+/).filter(Boolean).length : 0;\n\n  OUT.push({ json: env });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        288
+      ],
+      "id": "3396d26f-8de9-4ce8-ac43-c1f6c59ecb01",
+      "name": "Stash Setting"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Direction LLM Payload (All Items) + chatInput for Chain LLM\n// Input: one envelope per item (at root OR under { envelope }) with outputs.character + outputs.setting\n// Output per item: { messages, chatInput, envelope, ok, error? }\n\n//// helpers ///////////////////////////////////////////////////////////////\nconst S = v => (v ?? \"\").toString();\nconst T = v => S(v).trim();\nconst compact = v => T(v);\n\nfunction getEnv(item) {\n  // Accept either { json: { envelope }} or { json: <envelope> } shapes\n  return item?.json?.envelope || item?.json || {};\n}\n\n// Forbidden terms that should not leak into prompts (kept simple on purpose)\nconst forbidden = [\n  \"frame\",\"shot\",\"angle\",\"eye-level\",\"close-up\",\"wide\",\n  \"depth of field\",\"DOF\",\"bokeh\",\"focal length\",\"lens\",\n  \"pan\",\"tilt\",\"zoom\",\"rack focus\",\"cinematic camera\"\n];\n\n// Light scrub: strip forbidden terms (case-insensitive), collapse whitespace\nfunction stripForbidden(text) {\n  let safe = text || \"\";\n  forbidden.forEach(term => {\n    const re = new RegExp(`\\\\b${term}\\\\b`, \"ig\");\n    safe = safe.replace(re, \"\");\n  });\n  return safe.replace(/\\s+/g, \" \").trim();\n}\n\n//// main //////////////////////////////////////////////////////////////////\nconst IN  = $input.all();\nconst OUT = [];\n\nfor (const it of IN) {\n  const env = getEnv(it);\n\n  const scene  = compact(env.scene);\n  const rails  = Array.isArray(env.rails) ? env.rails : [];\n  const neg    = compact(env.prompts?.negative);\n  const dur    = Number(env.meta?.durationSec || 0);\n\n  const characterDesc = compact(env.outputs?.character);\n  const settingDesc   = compact(env.outputs?.setting);\n\n  // Sanity checks (produce passthrough with error + ok=false)\n  if (!characterDesc || !settingDesc) {\n    OUT.push({\n      json: {\n        ok: false,\n        error: !characterDesc && !settingDesc\n          ? \"Missing outputs.character and outputs.setting for Direction payload.\"\n          : (!characterDesc ? \"Missing outputs.character for Direction payload.\"\n                            : \"Missing outputs.setting for Direction payload.\"),\n        envelope: env\n      }\n    });\n    continue;\n  }\n\n  // System prompt (motion-aware, no camera jargon)\n  const system = [\n    \"You are the Direction Specialist.\",\n    \"Return a concise plain-English description of how the scene should look and feel on-screen.\",\n    \"Stitch the character and setting into one unified description suited for both a keyframe (still) and natural I2V motion.\",\n    \"Write in plain language. Do NOT use camera or lens terms.\",\n    `Forbidden terms: ${forbidden.join(\", \")}.`,\n    \"\",\n    \"Movement brief (natural only):\",\n    \"- Allow relaxed full-body micro-motion: breathing, small posture shifts, gentle torso sway.\",\n    \"- Hands may gesture naturally but stay below the cheek line; never cross or cover the mouth/jaw.\",\n    \"- Maintain steady viewer contact with occasional natural blinks and subtle eye shifts.\",\n    \"- Avoid fast, whip-like, or distracting movements; keep motion smooth and unhurried.\",\n    \"- Do not lean or drift so far that the face leaves safe margins.\",\n    \"\",\n    rails.length ? `HARD RULES: ${rails.join(\" | \")}` : \"\",\n    neg ? `NEGATIVE: ${neg}` : \"\",\n    \"OUTPUT: 2–3 sentences, plain English, and must include how the subject subtly moves over time.\"\n  ].filter(Boolean).join(\"\\n\");\n\n  // User prompt: provide scene + stitched inputs (light-scrubbed)\n  const userRaw = [\n    scene ? `SCENE: ${scene}` : \"\",\n    dur ? `DURATION TARGET: ~${dur}s` : \"\",\n    \"\",\n    \"--- CHARACTER ---\",\n    characterDesc,\n    \"\",\n    \"--- SETTING ---\",\n    settingDesc,\n    \"\",\n    \"--- DIRECTION TASK ---\",\n    \"Role: Stitch character + setting; describe on-screen look/feel for both a keyframe and natural continuous motion.\",\n    \"Notes: Keep face fully visible at all times; allow natural movement but no gestures or objects near the mouth/jaw; maintain safe margins; no camera jargon.\",\n    \"Output: 2–3 sentences, plain English.\"\n  ].filter(Boolean).join(\"\\n\");\n\n  const user = stripForbidden(userRaw);\n\n  // Build messages (optional) and REQUIRED flat chatInput for Chain LLM node\n  const messages = [\n    { role: \"system\", content: system },\n    { role: \"user\",   content: user }\n  ];\n  const chatInput = `${system}\\n\\n${user}`.trim();\n\n  OUT.push({\n    json: {\n      ok: true,\n      messages,\n      chatInput,     // <-- point the Director node's Prompt to {{$json.chatInput}}\n      envelope: env\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        288
+      ],
+      "id": "59e2b690-dbc4-4f18-9df4-5f8203fe1bcf",
+      "name": "Build Direction LLM Payload"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[1].content }}",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.messages[0].content }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1392,
+        528
+      ],
+      "id": "028f9d24-d86b-494a-b739-d9a64de0f3c5",
+      "name": "Director"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stash Direction (All Items)\n// Input A: LLM output from \"Director\" → { text, [segment] }\n// Input B: \"Build Direction LLM Payload\" → { envelope }\n//\n// Output: updated envelopes with outputs.direction (+raw) and metrics\n\n// ---------- helpers ----------\nconst compact = s => (s ?? \"\").toString().trim();\n\nconst stripThink = s => s.replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\").trim();\n\n// keep scrub narrow: only camera/lens jargon\nfunction scrubForbiddenTerms(s) {\n  const terms = [\n    \"\\\\bframe(?:\\\\s*rate)?\\\\b\", \"\\\\bshot\\\\b\", \"\\\\bangle\\\\b\",\n    \"eye-level\", \"close-up\", \"\\\\bwide\\\\b\",\n    \"depth of field\", \"\\\\bDOF\\\\b\", \"bokeh\",\n    \"focal length\", \"\\\\blens\\\\b\",\n    \"\\\\bpan\\\\b\", \"\\\\btilt\\\\b\", \"\\\\bzoom\\\\b\",\n    \"rack focus\", \"cinematic camera\"\n  ];\n  const re = new RegExp(terms.join(\"|\"), \"gi\");\n  return s.replace(re, \"\");\n}\n\n// lighten odd characters and tidy whitespace/punctuation\nfunction normalize(s) {\n  return s\n    .replace(/[^\\x00-\\x7F]+/g, \" \")     // strip stray non-ASCII (e.g., accidental CJK chars)\n    .replace(/\\s{2,}/g, \" \")            // collapse spaces\n    .replace(/\\s+([,.;:!?])/g, \"$1\")    // trim space before punctuation\n    .trim();\n}\n\n// ---------- main ----------\nconst llmItems     = $input.all();                         // Director outputs\nconst payloadItems = $items(\"Build Direction LLM Payload\", 0, 0) || [];\nconst OUT = [];\n\n// segId → envelope map\nconst envBySeg = new Map();\nfor (const it of payloadItems) {\n  const env = it?.json?.envelope || it?.json;\n  const segId = env?.segment?.segId || env?.source?.segment?.segId;\n  if (env && segId) envBySeg.set(segId, env);\n}\n\nllmItems.forEach((it, i) => {\n  const rawText = compact(it?.json?.text);\n  if (!rawText) {\n    OUT.push({ json: { error: \"No direction text from LLM.\", index: i } });\n    return;\n  }\n\n  // match by segId first, fallback to positional\n  const segId = it?.json?.segment?.segId || it?.json?.source?.segment?.segId;\n  const env =\n    (segId && envBySeg.get(segId)) ||\n    payloadItems[i]?.json?.envelope ||\n    payloadItems[i]?.json;\n\n  if (!env) {\n    OUT.push({ json: { error: \"Missing envelope for this item.\", index: i } });\n    return;\n  }\n\n  // clean\n  const cleaned = normalize(scrubForbiddenTerms(stripThink(rawText)));\n\n  // stash\n  env.outputs = env.outputs || {};\n  env.outputs.direction    = cleaned;\n  env.outputs.directionRaw = rawText;\n\n  // metrics\n  env.metrics = env.metrics || {};\n  env.metrics.directionWordCount     = cleaned.split(/\\s+/).filter(Boolean).length;\n  env.metrics.directionSentenceCount = (cleaned.match(/[.!?]+/g) || []).length || 1;\n\n  OUT.push({ json: env });\n});\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        528
+      ],
+      "id": "46f6f61d-74fb-43c0-8516-bccb7272cb41",
+      "name": "Stash Direction (final bundle)"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        -80
+      ],
+      "id": "20bac647-62a9-4700-88b4-9aef9c4983ba",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        160
+      ],
+      "id": "0159ea42-7f52-4680-b856-64c3cd7d1075",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1616,
+        -368
+      ],
+      "id": "07994f14-cb31-49d5-bd1d-6bab80ba7f7d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Sanitizer (Batch) → Normalize, Scrub, Enforce Segment IDs/Timing + shot/beat parity\n// Input: array of items\n// Output: array of sanitized items\n\nconst IN = $input.all();\nconst OUT = [];\n\n// ---------- helpers ----------\nconst compact = (s) => (s ?? \"\").toString().trim();\nconst to3 = (v) => Math.round(Number(v) * 1000) / 1000;\n\n// Removes <think> ... </think> blocks\nfunction stripThink(s) {\n  return compact(s).replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n}\n\n// Scrub camera-jargon and viewer-facing phrases; clean punctuation/whitespace.\n// Safe to use on direction/script/character/setting text.\nfunction scrubForbiddenTerms(s) {\n  let t = compact(s);\n\n  // Normalize stray characters that sometimes sneak in\n  t = t.replace(/[^\\S\\r\\n]+/g, \" \"); // collapse spaces (preserve newlines)\n  t = t.replace(/\\u200b|\\u200c|\\u200d|\\ufeff/g, \"\"); // zero-widths\n\n  const patterns = [\n    // camera jargon & composition terms\n    /\\bframe\\b/gi, /\\bshot\\b/gi, /\\bangle\\b/gi, /\\beye-level\\b/gi, /\\bclose-?up\\b/gi,\n    /\\bwide\\b/gi, /\\bdepth of field\\b/gi, /\\bDOF\\b/gi, /\\bbokeh\\b/gi,\n    /\\bfocal length\\b/gi, /\\blens\\b/gi, /\\brack focus\\b/gi, /\\bcinematic camera\\b/gi,\n    /\\bon-?screen\\b/gi, /\\bin (the )?frame\\b/gi,\n\n    // camera moves\n    /\\bpan(ned|s|ning)?\\b/gi, /\\btilt(ed|s|ing)?\\b/gi, /\\bzoom(ed|s|ing)?\\b/gi,\n\n    // leftover artifacts we've seen\n    /-safe zones?/gi\n  ];\n\n  for (const re of patterns) t = t.replace(re, \"\");\n\n  // Targeted cleanups to preserve meaning after removals\n  t = t\n    .replace(/\\bwithout\\s+lip definition\\b/gi, \"with lip definition visible\")\n    .replace(/[ \\t]{2,}/g, \" \")\n    .replace(/\\s+([,.;:!?])/g, \"$1\")\n    .replace(/([,.;:!?]){2,}/g, \"$1\")\n    .split(\"\\n\").map(l => l.trim()).join(\"\\n\")\n    .trim();\n\n  return t;\n}\n\n// Optionally recompute simple metrics for a text block\nfunction countWords(s) {\n  return compact(s).split(/\\s+/).filter(Boolean).length;\n}\nfunction countSentences(s) {\n  const m = compact(s).match(/[.!?]+/g);\n  return m ? m.length : (s.trim() ? 1 : 0);\n}\n\n// ---------- main ----------\nfor (const it of IN) {\n  const item = it.json ?? it;\n\n  // 1) Strip debug/raw LLM fields\n  if (item.outputs) {\n    delete item.outputs.scriptRaw;\n    delete item.outputs.characterRaw;\n    delete item.outputs.directionRaw;\n  }\n\n  // 2) Ensure source + segment exist\n  item.source = item.source || {};\n  const vt = String(item.meta?.videoType || \"\").toLowerCase();\n  const track = vt.includes(\"broll\") ? \"broll\" : \"aroll\";\n\n  if (!item.source.segment) {\n    const makeId = (pfx) => pfx + Math.random().toString(36).slice(2, 8);\n    const coId = item.source.comboId || item.comboId || item.orchestratorId || makeId(\"CO-\");\n\n    item.source.segment = {\n      segId: \"SEG-01\",\n      track,\n      orchestratorId: coId,\n      packageId: (track === \"broll\" ? makeId(\"BR-\") : makeId(\"AR-\")),\n      testCaseId: item.source.id || makeId(\"tc-\"),\n      comboId: coId,\n      startSec: 0,\n      endSec: Number(item.meta?.durationSec || 0),\n      durationSec: Number(item.meta?.durationSec || 0),\n    };\n  }\n\n  // 3) Normalize timing (snap to 3 decimals; duration = end - start)\n  const s = item.source.segment;\n  if (s.startSec == null) s.startSec = 0;\n  if (s.endSec == null) s.endSec = Number(item.meta?.durationSec || 0);\n  s.startSec = to3(s.startSec);\n  s.endSec = to3(s.endSec);\n  s.durationSec = to3(s.endSec - s.startSec);\n\n  // 4) Mirror IDs at top-level for convenience\n  item.orchestratorId = s.orchestratorId;\n  item.comboId        = s.comboId;\n  item.segId          = s.segId;\n  item.track          = s.track;\n  item.packageId      = s.packageId;\n  item.testCaseId     = s.testCaseId;\n\n  // 4b) Ensure shot/beat keys exist for schema parity with B-roll\n  // Preserve if already present; otherwise synthesize predictable defaults.\n  const hasShotId  = typeof item.shotId === \"string\"  && item.shotId.trim();\n  const hasBeatId  = typeof item.beatId === \"string\"  && item.beatId.trim();\n  const hasShotKey = typeof item.shotKey === \"string\" && item.shotKey.trim();\n\n  const shotId = hasShotId ? item.shotId.trim() : \"S01\";\n  const beatId = hasBeatId ? item.beatId.trim() : \"B1\";\n  const shotKey = hasShotKey ? item.shotKey.trim() : `${s.segId}-${beatId}-${shotId}`;\n\n  item.shotId  = shotId;\n  item.beatId  = beatId;\n  item.shotKey = shotKey;\n\n  // Optional mirrors to match some B-roll schemas\n  if (!item.origShotId) item.origShotId = item.shotId;\n  if (!item.origBeatId) item.origBeatId = item.beatId;\n\n  // 5) Align wantsCutaways with track semantics\n  item.meta = { ...(item.meta || {}) };\n  if (track === \"aroll\") item.meta.wantsCutaways = false;\n  if (track === \"broll\") item.meta.wantsCutaways = true;\n\n  // 6) Systematic text sanitization\n  item.outputs = item.outputs || {};\n  // Always sanitize direction\n  if (item.outputs.direction) {\n    const dir = scrubForbiddenTerms(stripThink(item.outputs.direction));\n    item.outputs.direction = dir;\n    item.metrics = item.metrics || {};\n    item.metrics.directionWordCount = countWords(dir);\n    item.metrics.directionSentenceCount = countSentences(dir);\n  }\n\n  // Optional: sanitize other blocks too — enable if you want universal scrubbing\n  const SANITIZE_ALL_BLOCKS = false; // set true to apply to script/character/setting as well\n  if (SANITIZE_ALL_BLOCKS) {\n    for (const key of [\"script\", \"character\", \"setting\"]) {\n      if (item.outputs[key]) {\n        item.outputs[key] = scrubForbiddenTerms(stripThink(item.outputs[key]));\n      }\n    }\n    // You could recompute their metrics similarly if needed.\n  }\n\n  OUT.push({ json: item });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        528
+      ],
+      "id": "3ede5bb6-f97f-43d6-9a0f-aa263c542034",
+      "name": "Final sanitizer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "767a1719-20c1-4f0a-8236-39eac7556b37",
+              "leftValue": "={{ $json.envelope.outputs.script && $json.envelope.outputs.script.trim().length > 0 }}",
+              "rightValue": "=",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        -128
+      ],
+      "id": "a05b7c8a-f5d1-49c1-b715-72c920aa15d3",
+      "name": "Provided Script?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const content =\n  $json.choices?.[0]?.message?.content ??\n  $json.message?.content ??\n  $json.text ?? \"\";\n\nreturn [{\n  json: {\n    ...$json,\n    script: String(content || \"\"),\n    __scriptFromLLM: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        -192
+      ],
+      "id": "17d8c7a8-c62d-4376-944f-6be057dec2c8",
+      "name": "Normalize Model Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Segments → TrackEDL (A-roll only)\n * - Accepts: array of segment items OR a single item OR a TrackEDL (pass-through)\n * - Emits:  { kind:'TrackEDL', track:'aroll', videoType:'aroll', segments:[...], totalDurationSec,\n *            flags:{captions,music}, speech:{voiceId,wps,wpm}, title, routeUsed:'aroll', requestId }\n *\n * Guarantees (A-roll only):\n *  - Each emitted segment has top-level: segId, beatId, shotId, shotKey\n *  - Also mirrored in segment.{segId} and meta.{beatId,shotId,shotKey}\n *  - segId increments: SEG-01, SEG-02, ...\n *  - beatId defaults B01, shotId defaults S01\n */\n\nconst ROUND = (x) => Math.round(Number(x || 0) * 1000) / 1000;\nconst pickFirst = (...xs) => xs.find(v => v !== undefined && v !== null && v !== '') ?? null;\nconst majorityBool = (vals, fallback=false) => {\n  const t = vals.filter(Boolean).length;\n  const f = vals.length - t;\n  if (t === f) return fallback;\n  return t > f;\n};\n\n// --- 0) Gather ALL inbound items (n8n passes multiple items) ---\nconst inbound = $input.all();\n\n// 0a) If exactly one inbound item and it's already a TrackEDL → passthrough\n// (Keep passthrough behavior as documented. If you want to force ID stamping even on passthrough,\n// remove this block and let it flow through the normalizer below.)\nif (inbound.length === 1 && inbound[0]?.json?.kind === 'TrackEDL') {\n  return [{ json: inbound[0].json }];\n}\n\n// --- 1) Normalize input into a flat array of segment-like objects ---\nlet IN = [];\nfor (const it of inbound) {\n  const v = it?.json;\n  if (!v) continue;\n\n  if (Array.isArray(v)) {\n    IN.push(...v);\n  } else if (v.kind === 'TrackEDL' && Array.isArray(v.segments)) {\n    IN.push(...v.segments);\n  } else {\n    IN.push(v);\n  }\n}\n\nif (!IN.length) {\n  return [{\n    json: {\n      kind: 'TrackEDL',\n      track: 'aroll',\n      videoType: 'aroll',\n      segments: [],\n      totalDurationSec: 0,\n      flags: { captions: true, music: false },\n      speech: { voiceId: null, wps: null, wpm: null },\n      title: null,\n      routeUsed: 'aroll',\n      requestId: null,\n      _meta: { builtAt: new Date().toISOString(), segCount: 0, warnings: ['empty input'] }\n    }\n  }];\n}\n\n// --- 2) Force A-roll context (this node is for A-roll only) ---\nconst track = 'aroll';\nconst warnings = [];\nlet videoType = 'aroll';\n\n// --- 3) Normalize each segment (times, ordering) ---\nconst segs = IN.map(it => {\n  const s = { ...it };\n  const seg = s.segment || {};\n  const start = Number(seg.startSec ?? 0);\n  // endSec priority: explicit endSec > start + durationSec > start + metrics._timing.durationSec\n  const durFromField   = Number(seg.durationSec);\n  const durFromMetrics = Number(s.metrics?._timing?.durationSec);\n  let end = seg.endSec;\n  if (end === undefined || end === null || isNaN(Number(end))) {\n    if (!isNaN(durFromField)) end = start + durFromField;\n    else if (!isNaN(durFromMetrics)) end = start + durFromMetrics;\n    else end = start + 5; // conservative fallback\n    warnings.push(`computed endSec for ${seg.segId || s.segId || 'unknown'} using fallback`);\n  }\n\n  s.segment = {\n    ...seg,\n    track: 'aroll',\n    startSec: ROUND(start),\n    endSec: ROUND(end),\n    durationSec: ROUND((end - start))\n  };\n  return s;\n});\n\n// --- 4) Sort by start time and compute totalDurationSec ---\nsegs.sort((a,b) => (a.segment.startSec - b.segment.startSec));\nconst totalDurationSec = ROUND(Math.max(...segs.map(s => s.segment.endSec)));\n\n// --- 4.1) Stamp deterministic IDs for each segment (A-roll rules) ---\nconst segIdOf = (idx) => `SEG-${String(idx + 1).padStart(2, '0')}`;\nconst DEFAULT_BEAT = 'B01';\nconst DEFAULT_SHOT = 'S01';\n\nfor (let i = 0; i < segs.length; i++) {\n  const s = segs[i] || {};\n  const segId = segIdOf(i);\n  const beatId = DEFAULT_BEAT;\n  const shotId = DEFAULT_SHOT;\n  const shotKey = `${segId}-${beatId}-${shotId}`;\n\n  // top-level\n  s.segId = segId;\n  s.beatId = beatId;\n  s.shotId = shotId;\n  s.shotKey = shotKey;\n\n  // segment block\n  s.segment = {\n    ...(s.segment || {}),\n    segId,\n    track: 'aroll'\n  };\n\n  // meta echo for downstreams that still read here\n  s.meta = {\n    ...(s.meta || {}),\n    videoType: 'aroll',\n    beatId,\n    shotId,\n    shotKey\n  };\n}\n\n// --- 4.5) Lift friendly top-level flags/speech + identifiers ---\nconst captionsList = segs.map(s => !!(s.meta?.wantsCaptions));\nconst musicList    = segs.map(s => !!(s.meta?.wantsMusic));\nconst wpsList      = segs.map(s => Number(s.speech?.wps)).filter(x => !Number.isNaN(x));\nconst wpmList      = segs.map(s => Number(s.speech?.wpm)).filter(x => !Number.isNaN(x));\nconst voiceList    = segs.map(s => s.speech?.voiceId || s.source?.voiceId).filter(Boolean);\n\nconst requestId = pickFirst(...segs.map(s => s.requestId || s.source?.requestId));\nconst title     = pickFirst(...segs.map(s => s.title || s.source?.title));\nconst routeUsed = 'aroll';\n\n// --- 5) Emit TrackEDL ---\nconst out = {\n  kind: 'TrackEDL',\n  track,              // 'aroll'\n  videoType,          // 'aroll'\n  segments: segs,\n  totalDurationSec,\n  flags: {\n    captions: majorityBool(captionsList, true),\n    music:    majorityBool(musicList,    false)\n  },\n  speech: {\n    voiceId: voiceList[0] || null,\n    wps:     wpsList[0]   || null,\n    wpm:     wpmList[0]   || null\n  },\n  title,\n  routeUsed,          // 'aroll'\n  requestId,\n  _meta: {\n    builtAt: new Date().toISOString(),\n    segCount: segs.length,\n    warnings\n  }\n};\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        528
+      ],
+      "id": "f487cd39-57a4-49f4-9c5f-7caf364f9139",
+      "name": "Segments → EDL"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        -80
+      ],
+      "id": "35c4c8d9-ce91-480c-9f44-ec04eda455ab",
+      "name": "OpenRouter Chat Model4",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        160
+      ],
+      "id": "2a14009d-fb8b-43d2-ab98-349c56499c46",
+      "name": "OpenRouter Chat Model5",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        416
+      ],
+      "id": "c4532214-e146-483b-9278-699abbb12c48",
+      "name": "OpenRouter Chat Model8",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        416
+      ],
+      "id": "e0838f73-9471-4518-a4e6-b1c31f0c4306",
+      "name": "OpenRouter Chat Model9",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        672
+      ],
+      "id": "5e7488ed-7111-47c2-aa9f-c2fb3f98b397",
+      "name": "OpenRouter Chat Model10",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1488,
+        672
+      ],
+      "id": "f548f3e9-3e35-45ba-995d-5c99d22df761",
+      "name": "OpenRouter Chat Model11",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "ok": true,
+          "orchestratorId": "CO-1a2b3c",
+          "videoType": "combo",
+          "segId": "SEG-01",
+          "track": "aroll",
+          "startSec": 0,
+          "endSec": 16.875,
+          "durationSec": 16.875,
+          "notes": "aroll segment",
+          "packageId": "AR-4d5e6f",
+          "meta": {
+            "driver": "character",
+            "wantsCutaways": true,
+            "wantsMusic": true,
+            "wantsCaptions": true,
+            "durationSec": 45,
+            "videoType": "combo",
+            "characterName": "Demarco",
+            "characterGender": "unspecified"
+          },
+          "rails": [
+            "keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair",
+            "no on-screen text, no logos, no watermarks, no lettering of any kind",
+            "natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)",
+            "preserve title-safe margins; avoid edge cropping of face"
+          ],
+          "wpm": 150,
+          "voice": "first-person anchor",
+          "wordsBudget": 42,
+          "script": "I couldn't parse the input.",
+          "scriptSource": "composer",
+          "testCase": {
+            "scene": "A spoken word poetry reading from Demarco, live on stage",
+            "driver": "character",
+            "wantsCutaways": false,
+            "character": "African American male in his mid twenties. Athletic with expressive tattoos and hair. ",
+            "setting": "Stage of a concert venue",
+            "action": "Demarco recites poetry on stage live",
+            "directorsNotes": "",
+            "wantsMusic": true,
+            "musicDesc": "",
+            "wantsCaptions": true,
+            "durationSec": 16.875,
+            "referenceText": "",
+            "id": "t1j2k3",
+            "comboId": "CO-1a2b3c",
+            "scriptMode": "generate",
+            "segId": "SEG-01",
+            "characterName": "Demarco",
+            "characterGender": "unspecified"
+          },
+          "characterName": "Demarco",
+          "characterGender": "unspecified"
+        }
+      },
+      {
+        "json": {
+          "ok": true,
+          "orchestratorId": "CO-1a2b3c",
+          "videoType": "combo",
+          "segId": "SEG-03",
+          "track": "aroll",
+          "startSec": 28.125,
+          "endSec": 45,
+          "durationSec": 16.875,
+          "notes": "aroll segment",
+          "packageId": "AR-4d5e6f",
+          "meta": {
+            "driver": "character",
+            "wantsCutaways": true,
+            "wantsMusic": true,
+            "wantsCaptions": true,
+            "durationSec": 45,
+            "videoType": "combo",
+            "characterName": "Demarco",
+            "characterGender": "unspecified"
+          },
+          "rails": [
+            "keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair",
+            "no on-screen text, no logos, no watermarks, no lettering of any kind",
+            "natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)",
+            "preserve title-safe margins; avoid edge cropping of face"
+          ],
+          "wpm": 150,
+          "voice": "first-person anchor",
+          "wordsBudget": 42,
+          "script": "",
+          "scriptSource": "empty",
+          "testCase": {
+            "scene": "A spoken word poetry reading from Demarco, live on stage",
+            "driver": "character",
+            "wantsCutaways": false,
+            "character": "African American male in his mid twenties. Athletic with expressive tattoos and hair. ",
+            "setting": "Stage of a concert venue",
+            "action": "Demarco recites poetry on stage live",
+            "directorsNotes": "",
+            "wantsMusic": true,
+            "musicDesc": "",
+            "wantsCaptions": true,
+            "durationSec": 16.875,
+            "referenceText": "",
+            "id": "t4l5m6",
+            "comboId": "CO-1a2b3c",
+            "scriptMode": "generate",
+            "segId": "SEG-03",
+            "characterName": "Demarco",
+            "characterGender": "unspecified"
+          },
+          "characterName": "Demarco",
+          "characterGender": "unspecified"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set → Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set → Test Cases": {
+      "main": [
+        []
+      ]
+    },
+    "Code → Prompt Test Harness": {
+      "main": [
+        [
+          {
+            "node": "Init Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Envelope": {
+      "main": [
+        [
+          {
+            "node": "Build Script LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Script LLM Payload": {
+      "main": [
+        [
+          {
+            "node": "Provided Script?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Script Writer": {
+      "main": [
+        [
+          {
+            "node": "Normalize Model Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Script": {
+      "main": [
+        [
+          {
+            "node": "Build Character LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Character LLM Payload": {
+      "main": [
+        [
+          {
+            "node": "Character Specialist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Character Specialist": {
+      "main": [
+        [
+          {
+            "node": "Stash Character",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Character": {
+      "main": [
+        [
+          {
+            "node": "Build Setting LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Setting LLM Payload": {
+      "main": [
+        [
+          {
+            "node": "Setting Specialist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setting Specialist": {
+      "main": [
+        [
+          {
+            "node": "Stash Setting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Setting": {
+      "main": [
+        [
+          {
+            "node": "Build Direction LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Direction LLM Payload": {
+      "main": [
+        [
+          {
+            "node": "Director",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Director": {
+      "main": [
+        [
+          {
+            "node": "Stash Direction (final bundle)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Script Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Character Specialist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Direction (final bundle)": {
+      "main": [
+        [
+          {
+            "node": "Final sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code → Prompt Test Harness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provided Script?": {
+      "main": [
+        [
+          {
+            "node": "Script Writer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stash Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Model Output": {
+      "main": [
+        [
+          {
+            "node": "Stash Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Segments → EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Script Writer",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Character Specialist",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model8": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Setting Specialist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model9": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Setting Specialist",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model10": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Director",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model11": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Director",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "c56aa99e-a08e-451d-aa15-7fe60813005f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "Tj6oWZCmBAvla6hl",
+  "tags": []
+}

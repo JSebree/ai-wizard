@@ -1,0 +1,609 @@
+{
+  "name": "B-Roll Builder",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        2096,
+        816
+      ],
+      "id": "aeb655fc-8ce5-4207-a139-f28240379adf",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mock Prompts + Images – one item per shot\nconst shots = [\n  {\n    sceneId: 'S1',\n    promptText: 'A Fire-breathing dragon flies off',\n    durationSec: 6,\n    image_url: 'https://image-generations.nyc3.digitaloceanspaces.com/sdxl_outputs/3837d77e-e0f0-46a0-87ba-4593cd91f90d-u2.jpg',\n  },\n  {\n    sceneId: 'S2',\n    promptText: 'A family rides their bikes along a canal',\n    durationSec: 6,\n    image_url: 'https://image-generations.nyc3.digitaloceanspaces.com/sdxl_outputs/cf5dd459-8b37-4892-a665-079a63bb2d4b-u2.jpg',\n  },\n  {\n    sceneId: 'S3',\n    promptText: 'Wide shot of a San Francisco skyline',\n    durationSec: 6,\n    image_url: 'https://image-generations.nyc3.digitaloceanspaces.com/sdxl_outputs/a6432851-a564-4c5b-8771-197da34409e5-u2.jpg',\n  },\n];\n\nreturn shots.map(shot => ({ json: shot }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        816
+      ],
+      "id": "055f7c41-5c8f-43d3-a330-ecb84f547268",
+      "name": "Mock Prompts"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2096,
+        400
+      ],
+      "id": "560543fc-21e7-4b4f-849e-b9a76de11e31",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33344dd9-529c-4682-89d7-a74d1ed44020",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3360,
+        576
+      ],
+      "id": "8b1fe508-7c9c-4ef2-8b94-2c2228fd77d8",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3536,
+        592
+      ],
+      "id": "063a5765-6028-445d-be19-82c44ea3a4fc",
+      "name": "Wait",
+      "webhookId": "9978ef35-d5bf-4bf6-9e39-1717bf1b1a60"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1c4b42c7-e96b-4d87-ae9f-445d22e52034",
+              "name": "jobId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "deb3b058-2a65-4ed9-ae62-10c9cd6828a7",
+              "name": "shotID",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json._expect.id}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2864,
+        576
+      ],
+      "id": "e3dc510d-2f42-4a82-b761-9a24ed8e6c35",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "63cbf27c-74d3-4c6d-aadb-33c7f1a37d6c",
+              "name": "shotID",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json._expect.id}}",
+              "type": "string"
+            },
+            {
+              "id": "9febf57a-5e85-482e-a121-b5d9d8c3d777",
+              "name": "jobId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3200,
+        576
+      ],
+      "id": "56682366-35d5-4f5e-808e-7dd8d379f522",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2672,
+        416
+      ],
+      "id": "32faf40c-09d4-46a4-b4f2-6fc7842ce643",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build B-Roll Jobs (i2v) — consolidates Compose + Prep into LTX V2 payload shape\n// LTX V2 optimized: FPS=24, Resolution divisible by 64 (handled downstream but good to know)\n\nconst itemsIn = $items().map(i => i.json || {});\n\n// ---------- helpers ----------\nconst S = v => (v == null ? \"\" : String(v));\nconst clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));\n\nfunction clean(s) {\n  return S(s)\n    .replace(/[\\u2018\\u2019\\u201B]/g, \"'\")\n    .replace(/[\\u201C\\u201D\\u201F]/g, '\"')\n    .replace(/\\u2026/g, \"…\")\n    .replace(/\\s+/g, \" \")\n    .replace(/\\s*,\\s*,/g, \", \")\n    .trim();\n}\nfunction applyFramingPolicy(prompt) {\n  let p = clean(prompt);\n  return p\n    .replace(/extreme\\s+close-?up/ig, \"medium close-up\")\n    .replace(/tight\\s+close-?up/ig, \"medium close-up\")\n    .replace(/\\bclose-?up\\b/ig, \"medium close-up\")\n    .trim();\n}\nfunction ensureShotKey({ shotKey, segId, beatId, shotId, id }) {\n  const sk = S(shotKey);\n  if (sk) return sk;\n  const seg = S(segId), beat = S(beatId), shot = S(shotId);\n  if (seg && beat && shot) return `${seg}-${beat}-${shot}`;\n  const m = S(id).match(/^(SEG-\\d+)-([^-]+)-(S\\d+)$/i);\n  if (m) return `${m[1]}-${m[2]}-${m[3]}`;\n  if (seg && shot) return `${seg}-${shot}`;\n  return shot || \"\";\n}\nfunction sanitizeId(s) {\n  return S(s).replace(/[^A-Za-z0-9._-]+/g, \"_\").replace(/^_+|_+$/g, \"\");\n}\n\n// ---------- main ----------\nconst out = itemsIn.map(s => {\n  // ids\n  const segId   = S(s.segId);\n  const beatId  = S(s.beatId);\n  const shotId  = S(s.shotId || s.id || \"\");\n  const shotKey = ensureShotKey({ shotKey: s.shotKey, segId, beatId, shotId, id: s.id });\n  const sceneId = S(s.sceneId || s.requestId);\n  const requestId = S(s.requestId || s.sceneId);\n\n  // piggybank\n  const pb = s.piggybank || {};\n\n  // fixed knobs for LTX V2\n  const fps = 24; // LTX prefers 24\n  \n  // Note: Handler ignores steps/guidance for distilled/turbo models, \n  // but we pass them if you want to support non-distilled later.\n  const steps = 25; \n  const guidance = 3.0; // Lower guidance usually better for LTX\n\n  // prompt\n  const positive = S(s.promptText || s.positive || s.prompt || \"\");\n  const instruction = clean(s.instruction || s.motionHint || \"\");\n  const prompt = applyFramingPolicy(positive + (instruction ? `, ${instruction}` : \"\"));\n\n  // image\n  let image_url =\n    s.image_url || s.seedUrl || s.requestImagePath || s.input_image || s.src || \"\";\n\n  // [FIX] Rewrite DigitalOcean Spaces Path-Style to Virtual-Host Style\n  // This prevents 403/404 errors in strict python http clients\n  if (image_url.includes(\"nyc3.digitaloceanspaces.com/image-generations\")) {\n      image_url = image_url.replace(\n          \"https://nyc3.digitaloceanspaces.com/image-generations\",\n          \"https://image-generations.nyc3.digitaloceanspaces.com\"\n      );\n  }\n\n  // orientation + resolution\n  // LTX works best with standard ratios. \n  // 960x544 is close to 16:9 but 544 isn't divisible by 64 (544/64=8.5).\n  // The handler will snap 544 -> 512.\n  let width = 960, height = 544;\n  if (s.resolution?.width && s.resolution?.height) {\n    width = s.resolution.width;\n    height = s.resolution.height;\n  }\n  \n  // duration / frames\n  const durationSec = Number.isFinite(+s.durationSec) ? +s.durationSec\n                    : (Number.isFinite(+s.lengthFrames) ? (+s.lengthFrames / fps)\n                    : (Number.isFinite(+s.length) ? (+s.length / fps) : 6));\n  const seconds = Number(clamp(durationSec || 6, 0.5, 120).toFixed(3));\n  \n  // LTX V2 Logic: (8 * k) + 1\n  // We calculate rough frames, handler adjusts perfectly.\n  const num_frames = Math.max(1, Math.round(seconds * fps));\n\n  // job id + filename\n  const baseId = sanitizeId((requestId || sceneId || \"REQ\") + \"__\" + (shotKey || shotId || \"SHOT\"));\n  const jobId = baseId || \"job\";\n  const filename = `${jobId}.mp4`;\n\n  // final payload customized for LTX V2 Handler\n  const input = {\n    image: image_url,\n    prompt: prompt,\n    \n    // Flattened resolution fields (required by LTX handler)\n    width: width,\n    height: height,\n    \n    num_frames: num_frames,\n    fps: fps,\n    \n    // LTX Specifics\n    enhance_prompt: true, // Use built-in prompt enhancement\n    \n    // Upload config\n    filename: filename,\n    s3_prefix: `ltx2/jobs/${sanitizeId(requestId)}`,\n    return_base64: false\n  };\n\n  // Keep useful passthrough + debug\n  const _expect = {\n    id: shotId,\n    jobId,\n    shotKey,\n    segId,\n    beatId,\n    route: \"ltx_video\",\n    title: S(s.title || \"\"),\n    seconds,\n    fps,\n    width,\n    height\n  };\n\n  return {\n    json: {\n      jobId,\n      input,\n      _expect,\n      // passthrough\n      shotKey, segId, beatId, shotId, sceneId, requestId,\n      durationSec: seconds,\n      fps,\n      // Metadata\n      piggybank: pb,\n      meta: s.meta || {},\n      engine: \"ltx_v2\", // Updated engine tag\n      image_url\n    }\n  };\n});\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        400
+      ],
+      "id": "a4079e92-7c35-402c-9d40-a3d65584a30d",
+      "name": "Build B-Roll Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "// -------------------------------------------------------\n// Parse B-Roll Results (Run Once for All Items)\n// -------------------------------------------------------\n\nfunction num(n, d = 0) {\n  const x = Number(n);\n  return Number.isFinite(x) ? x : d;\n}\nfunction S(v) { return v == null || v === '' ? null : String(v); }\nfunction get(obj, path, dflt = undefined) {\n  try { return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj) ?? dflt; }\n  catch { return dflt; }\n}\n\n// Pull a usable video URL out of a bunch of possible shapes\nfunction pickVideoUrl(r, filename) {\n  const url =\n    S(r.s3_url) ||\n    S(get(r, 'output.s3_url')) ||\n    S(get(r, 'output.result.s3_url')) ||\n    S(r.video_url) ||\n    S(get(r, 'output.video_url')) ||\n    S(get(r, 'output.video')) ||\n    S(get(r, 'output.result.video_url')) ||\n    S(get(r, 'output.result.video')) ||\n    (Array.isArray(get(r, 'output.files')) && S(get(r, 'output.files[0]'))) ||\n    (Array.isArray(get(r, 'files')) && S(get(r, 'files[0]'))) ||\n    null;\n\n  // Last-resort heuristic\n  if (!url && filename) {\n    return `https://video-generations.nyc3.digitaloceanspaces.com/framepack/jobs/${filename}`;\n  }\n  return url;\n}\n\n// Parse IDs from filename or shotKey\nfunction idsFromFilename(fn) {\n  const m = S(fn || '')?.match(/^(.*?)__([^.]+)\\.mp4$/i);\n  const requestId = m ? m[1] : null;\n  const shotKey   = m ? m[2] : null;\n  return { requestId, shotKey };\n}\nfunction idsFromShotKey(shotKey) {\n  const m = S(shotKey || '')?.match(/^(SEG-\\d+)-([^-]+)-(S\\d+)$/i);\n  if (!m) return { segId: null, beatId: null, shotId: null };\n  return { segId: m[1], beatId: m[2], shotId: m[3] };\n}\n\n// Prefer _expect (from your builder), else parse from filename/shotKey\nfunction extractIds(r) {\n  const ex = r._expect || {};\n  let shotKey = S(r.shotKey || ex.shotKey);\n  const filename = S(get(r, 'input.filename')) || S(r.filename) || null;\n  const fromFn = filename ? idsFromFilename(filename) : { requestId: null, shotKey: null };\n  if (!shotKey) shotKey = fromFn.shotKey || null;\n\n  const parts = idsFromShotKey(shotKey);\n  const segId  = S(r.segId || ex.segId)   || parts.segId;\n  const beatId = S(r.beatId || ex.beatId) || parts.beatId;\n  const shotId = S(r.shotId || r.shotID || ex.shotId) || parts.shotId;\n\n  const requestId = S(r.requestId || ex.requestId) || fromFn.requestId || null;\n  const sceneId   = S(r.sceneId || ex.sceneId) || null;\n\n  return { requestId, sceneId, shotKey, segId, beatId, shotId, filename };\n}\n\nconst raw = items.map(i => i.json);\n\n// Normalize each response into a b-roll clip record\nconst clips = raw.map((r) => {\n  const ids = extractIds(r);\n\n  // fps / frames\n  const fps =\n    num(get(r, 'input.fps')) ||\n    num(get(r, 'output.fps')) ||\n    num(r.fps) ||\n    num(get(r, '_expect.fps')) ||\n    30;\n\n  const num_frames =\n    num(get(r, 'input.num_frames')) ||\n    num(get(r, 'output.num_frames')) ||\n    num(r.num_frames) ||\n    null;\n\n  // ---- duration (SAFE) ----\n  const byFrames = (num_frames && fps) ? (num_frames / fps) : null;\n\n  // NEVER use output.elapsed_sec as media duration (that is wall-clock runtime)\n  const reported =\n    num(get(r, 'output.duration_sec')) ||   // if backend supplies true duration\n    num(r.duration_sec) ||\n    num(get(r, '_expect.seconds')) ||\n    null;\n\n  let durationSec = null;\n  if (byFrames != null) {\n    // trust frame math; if reported wildly disagrees, ignore it\n    if (reported != null) {\n      const diff = Math.abs(byFrames - reported);\n      durationSec = (diff > 2) ? byFrames : Math.min(byFrames, reported); // small tolerance\n    } else {\n      durationSec = byFrames;\n    }\n  } else {\n    durationSec = reported != null ? reported : null;\n  }\n\n  // final guardrail: drop absurd values\n  if (durationSec != null && durationSec > 120 && byFrames && byFrames < 120) {\n    durationSec = byFrames;\n  }\n\n  // resolution\n  const width  =\n    num(get(r, 'input.resolution.width')) ||\n    num(get(r, 'resolution.width')) ||\n    num(get(r, '_expect.width')) ||\n    960;\n\n  const height =\n    num(get(r, 'input.resolution.height')) ||\n    num(get(r, 'resolution.height')) ||\n    num(get(r, '_expect.height')) ||\n    544;\n\n  const orientation = S(get(r, 'input.orientation')) || null;\n  const video_url = pickVideoUrl(r, ids.filename);\n\n  return {\n    id: ids.shotKey || ids.segId || ids.shotId || ids.requestId || null,\n    // IDs:\n    requestId: ids.requestId,\n    sceneId:   ids.sceneId,\n    shotKey:   ids.shotKey,\n    segId:     ids.segId,\n    beatId:    ids.beatId,\n    shotId:    ids.shotId,\n    // media:\n    type:      'broll',\n    video_url,\n    durationSec: durationSec != null ? Number(durationSec.toFixed(3)) : null,\n    fps,\n    resolution: { width, height },\n    filename:   ids.filename || null,\n    orientation,\n  };\n});\n\n// Build a simple EDL: one video track with one clip per result\nconst videoTrack = clips.map(c => ({\n  id:  c.shotKey || c.segId || c.id || undefined,\n  src: c.video_url,\n  in:  0,\n  out: c.durationSec || 0\n}));\n\n// If all results share the same IDs, lift them to the top (handy for downstream)\nfunction commonOf(field) {\n  const vals = Array.from(new Set(clips.map(v => v[field]).filter(v => v != null)));\n  return vals.length === 1 ? vals[0] : null;\n}\n\nreturn [{\n  json: {\n    // common IDs if uniform, else null\n    shotKey:   commonOf('shotKey'),\n    segId:     commonOf('segId'),\n    beatId:    commonOf('beatId'),\n    shotId:    commonOf('shotId'),\n    requestId: commonOf('requestId'),\n    sceneId:   commonOf('sceneId'),\n\n    // per-clip normalized results\n    clips,\n\n    // minimal EDL for b-roll\n    edl: {\n      tracks: {\n        video: [\n          { name: 'v_broll', clips: videoTrack }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        416
+      ],
+      "id": "7bc29e1d-050e-44b5-9bb1-18e31136e20a",
+      "name": "Parse B-Roll Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "// -------------------------------------------------------\n// Build BRoll EDL (robust: accepts array-of-clips or one item with {clips})\n// -------------------------------------------------------\n\nfunction firstDefined() {\n  for (let i = 0; i < arguments.length; i++) {\n    const v = arguments[i];\n    if (v !== undefined && v !== null) return v;\n  }\n  return undefined;\n}\n\n// Normalize any URL to our DO path, but DO NOT break valid framepack/ltx2 URLs\nfunction toDO(url) {\n  const u = String(url || '').trim();\n  if (!u) return u;\n\n  // Already a correct framepack OR ltx2 URL? keep it.\n  if (/video-generations\\./i.test(u) && (/\\/framepack\\/jobs\\//i.test(u) || /\\/ltx2\\/jobs\\//i.test(u))) {\n      return u;\n  }\n\n  // If it's on our bucket but missing /framepack/jobs/, and ends with a filename, fix it.\n  if (/video-generations\\./i.test(u)) {\n    try {\n      const parsed = new URL(u);\n      const name = parsed.pathname.split('/').pop() || '';\n      // Only force rewrite if it DOESN'T look like a known path (framepack/ltx2)\n      if (/\\.mp4$/i.test(name) && !/\\/framepack\\/jobs\\//i.test(parsed.pathname) && !/\\/ltx2\\/jobs\\//i.test(parsed.pathname)) {\n        parsed.pathname = '/framepack/jobs/' + name;\n        return parsed.toString();\n      }\n      return u; // some other valid path or already correct\n    } catch {\n      // fall through to generic\n    }\n  }\n\n  // Generic fallback: pull filename and build the proper framepack/jobs URL.\n  // (Note: Defaulting to framepack here is likely safer for legacy inputs)\n  const m = u.match(/([^\\/?#]+\\.mp4)(?:\\?.*)?$/i);\n  return m ? `https://video-generations.nyc3.digitaloceanspaces.com/framepack/jobs/${m[1]}` : u;\n}\n\n// synthesize shotKey if missing and we have seg/beat/shot\nfunction synthShotKey(o) {\n  const sk = String(firstDefined(o.shotKey, ''));\n  if (sk) return sk;\n  const seg  = String(firstDefined(o.segId,  '')).trim();\n  const beat = String(firstDefined(o.beatId, '')).trim();\n  const shot = String(firstDefined(o.shotId, '')).trim();\n  return (seg && beat && shot) ? `${seg}-${beat}-${shot}` : '';\n}\n\n// Parse \"SEG-02-B01-S07\" -> {seg:2, beat:1, shot:7}, else null\nfunction parseShotKey(sk) {\n  const m = String(sk || '').match(/^SEG-(\\d+)-B(\\d+)-S(\\d+)$/i);\n  return m ? { seg: +m[1], beat: +m[2], shot: +m[3] } : null;\n}\n\n// Robust comparator: numeric when possible, otherwise lexical\nfunction compareShotKey(a, b) {\n  const pa = parseShotKey(a.shotKey);\n  const pb = parseShotKey(b.shotKey);\n  if (pa && pb) {\n    if (pa.seg  !== pb.seg)  return pa.seg  - pb.seg;\n    if (pa.beat !== pb.beat) return pa.beat - pb.beat;\n    if (pa.shot !== pb.shot) return pa.shot - pb.shot;\n    return 0;\n  }\n  const fa = (a.segId && a.beatId && a.shotId) ? `${a.segId}-${a.beatId}-${a.shotId}` : (a.shotKey || '');\n  const fb = (b.segId && b.beatId && b.shotId) ? `${b.segId}-${b.beatId}-${b.shotId}` : (b.shotKey || '');\n  return String(fa).localeCompare(String(fb));\n}\n\n// -------- gather input clips (supports two shapes) --------\nconst raw = items.map(i => i.json || {});\n\n// Case A: we already have per-clip items with src/video_url\nlet inputClips = raw.filter(c => c && (c.src || c.video_url));\n\n// Case B: parser returned one item with {clips:[...]}\nif (inputClips.length === 0 && Array.isArray(raw[0]?.clips)) {\n  inputClips = raw[0].clips;\n}\n\n// Normalize to a uniform clip shape this EDL builder expects\nconst clips = inputClips\n  .map(c => {\n    const m       = c._meta || {};\n    const typeRaw = String(firstDefined(c.type, c.route, m.type, 'broll')).toLowerCase();\n\n    // IDs (top-level first, then _meta fallbacks)\n    const segId   = String(firstDefined(c.segId,   m.segId,   ''));\n    const beatId  = String(firstDefined(c.beatId,  m.beatId,  ''));\n    const shotId  = String(firstDefined(c.shotId,  m.shotId,  c.id, c.clipId, '')).trim();\n    const sceneId = String(firstDefined(c.sceneId, m.sceneId, ''));\n    const requestId = String(firstDefined(c.requestId, m.requestId, ''));\n\n    const shotKey = synthShotKey({ shotKey: firstDefined(c.shotKey, m.shotKey), segId, beatId, shotId });\n\n    // src: accept either src (already normalized) or video_url\n    const src = firstDefined(c.src, c.video_url, m.src, '');\n\n    // timing: prefer explicit in/out when both present\n    const tIn  = Number.isFinite(+c.in) ? +c.in : 0;\n    const tOut = Number.isFinite(+c.out) ? +c.out : undefined;\n    const durInOut = (tOut !== undefined && tOut >= tIn) ? (tOut - tIn) : undefined;\n\n    // support fields from our parser (durationSec) or generic duration/duration_sec\n    const durationSec = Number.isFinite(durInOut)\n      ? durInOut\n      : (Number(firstDefined(c.durationSec, c.duration_sec, m.durationSec, 0)) || 0);\n\n    return {\n      // required IDs\n      shotKey, segId, beatId, shotId,\n\n      // context\n      sceneId, requestId,\n\n      // normalized type + media/timing\n      type: typeRaw,\n      src: toDO(src),\n      poster: firstDefined(c.poster, m.poster, ''),\n      durationSec,\n      in: tIn,\n      out: (tOut !== undefined ? tOut : durationSec),\n\n      // passthrough identity\n      clipId: firstDefined(c.clipId, c.baseShotId, shotId, ''),\n      baseShotId: firstDefined(c.baseShotId, shotId, ''),\n      label: String(c.label || '').toUpperCase(),\n\n      // other passthroughs\n      route: firstDefined(c.route, c.videoType, ''),\n      firstShotId: String(firstDefined(c.firstShotId, '')),\n      jobId: (c.jobId !== undefined ? c.jobId : null),\n      characterId: (c.characterId !== undefined ? c.characterId : null),\n      characterName: (c.characterName !== undefined ? c.characterName : null),\n      voiceId: (c.voiceId !== undefined ? c.voiceId : null),\n    };\n  })\n  .filter(c => c && c.src) // keep only valid media\n  .sort(compareShotKey);\n\nconst totalDurationSec = clips.reduce((sum, c) => sum + (Number(c.durationSec) || 0), 0);\n\n// Build a minimal video track for downstream convenience\nconst videoTrack = [{\n  name: 'v_broll',\n  clips: clips.map(c => ({\n    id:  c.shotKey || c.clipId || c.shotId || '',\n    src: c.src,\n    in:  0,\n    out: Number(c.durationSec) || 0\n  }))\n}];\n\nreturn [{\n  json: {\n    kind: 'BRollEDL1',\n    version: 1,\n    generatedAt: new Date().toISOString(),\n    totalDurationSec,\n    count: clips.length,\n    clips,\n    tracks: { video: videoTrack },\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3536,
+        416
+      ],
+      "id": "21e16389-2c11-4c27-bc95-1634ff77683d",
+      "name": "Build B-Roll EDL"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2448,
+        464
+      ],
+      "id": "fcb473a7-1b33-4e22-ae1b-ef3657da5a3a",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runpod.ai/v2/qc9eozskjhwylz/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{ $json.input }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2672,
+        576
+      ],
+      "id": "94518527-4239-4710-8e38-a0bf5f4ef209",
+      "name": "Request B-Roll Video",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runpod.ai/v2/qc9eozskjhwylz/status/{{ $json.jobId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        576
+      ],
+      "id": "83fdc220-b100-4047-a4b1-2f18d0862924",
+      "name": "Get B-Roll Video",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {
+          "sceneId": "s1",
+          "shotId": "s1a1",
+          "promptText": "Talking head, playful lower-third: 'Breaking AI Buzz'",
+          "durationSec": 10,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/0b1dbd32-d74b-4a59-a8a7-d135828c94e6-u1.jpg",
+          "type": "aroll"
+        }
+      },
+      {
+        "json": {
+          "sceneId": "s2",
+          "shotId": "s2b1",
+          "promptText": "Montage of laptops, waveform, images being analyzed, code overlays",
+          "durationSec": 12,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/52484c9d-49e2-4559-863f-88eacf1b32fc-u1.jpg",
+          "type": "broll"
+        }
+      },
+      {
+        "json": {
+          "sceneId": "s2",
+          "shotId": "s2a1",
+          "promptText": "Host smirks, quick punch-in",
+          "durationSec": 6,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/f94d2040-cc94-4dce-b198-40985872b252-u1.jpg",
+          "type": "aroll"
+        }
+      },
+      {
+        "json": {
+          "sceneId": "s3",
+          "shotId": "s3b1",
+          "promptText": "Server racks, charts trending down, dollar signs shrinking",
+          "durationSec": 10,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/3a2d850f-2058-4f6e-83dd-6fb1404cad6b-u2.jpg",
+          "type": "broll"
+        }
+      },
+      {
+        "json": {
+          "sceneId": "s3",
+          "shotId": "s3a1",
+          "promptText": "Host leans in, eyebrow raise",
+          "durationSec": 6,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/cd3b2082-40ed-46d1-953c-c50c0d63639e-u2.jpg",
+          "type": "aroll"
+        }
+      },
+      {
+        "json": {
+          "sceneId": "s4",
+          "shotId": "s4b1",
+          "promptText": "Lock icon over model UI, rapid typing, social feed reactions",
+          "durationSec": 10,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/3007a113-58e7-4eb8-80aa-3e15edaaedb0-u2.jpg",
+          "type": "broll"
+        }
+      },
+      {
+        "json": {
+          "sceneId": "s5",
+          "shotId": "s5a1",
+          "promptText": "Host center frame, upbeat, end card appears",
+          "durationSec": 6,
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/a250e3a1-97a1-4dbb-8480-c7058dd265a1-u2.jpg",
+          "type": "aroll"
+        }
+      }
+    ],
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "id": "SEG-02-B01-S01",
+          "shotKey": "SEG-02-B01-S01",
+          "segId": "SEG-02",
+          "beatId": "B01",
+          "shotId": "S01",
+          "sceneId": "82225",
+          "requestId": "82225",
+          "type": "broll",
+          "lane": "broll",
+          "engine": "hunyuan",
+          "input": {
+            "prompt": "Suddenly, a breeze lifts the ashes, and silhouette of a skeletal figure emerges from the darkness, its hollow eyes fixed on us, promising a night of endless terror. cinematic, photoreal, natural golden-hour light, cohesive color palette, clean composition, gentle motivated motion, selective focus when appropriate",
+            "negative_prompt": "text, logo, watermark, subtitles, lower thirds, UI, borders, readable signage, license plates, talking head, direct address to camera, whip pan, rapid zoom, shaky cam, heavy motion blur, strobing, banding, compression artifacts, double subjects, distorted anatomy, low-resolution",
+            "width": 960,
+            "height": 544,
+            "num_inference_steps": 25,
+            "guidance_scale": 7.5,
+            "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/Catalog/scenes/Zombs/Zombs_d8909ed5-99b6-46d7-b1f4-7986ecb99db6-u2.png",
+            "shot_key": "SEG-02-B01-S01",
+            "shot_id": "S01",
+            "seg_id": "SEG-02",
+            "beat_id": "B01",
+            "scene_id": "82225",
+            "clip_id": "SEG-02-B01-S01",
+            "type": "broll",
+            "duration_sec": 16.133
+          },
+          "input_image": "https://nyc3.digitaloceanspaces.com/image-generations/Catalog/scenes/Zombs/Zombs_d8909ed5-99b6-46d7-b1f4-7986ecb99db6-u2.png",
+          "image_url": "https://nyc3.digitaloceanspaces.com/image-generations/Catalog/scenes/Zombs/Zombs_d8909ed5-99b6-46d7-b1f4-7986ecb99db6-u2.png",
+          "positive": "Suddenly, a breeze lifts the ashes, and silhouette of a skeletal figure emerges from the darkness, its hollow eyes fixed on us, promising a night of endless terror. cinematic, photoreal, natural golden-hour light, cohesive color palette, clean composition, gentle motivated motion, selective focus when appropriate",
+          "negative": "text, logo, watermark, subtitles, lower thirds, UI, borders, readable signage, license plates, talking head, direct address to camera, whip pan, rapid zoom, shaky cam, heavy motion blur, strobing, banding, compression artifacts, double subjects, distorted anatomy, low-resolution",
+          "motionHint": "slow push-in with subtle parallax; no fast pans",
+          "fps": 30,
+          "width": 960,
+          "height": 544,
+          "aspect": "16:9",
+          "durationSec": 16.133,
+          "lengthFrames": 484,
+          "length": 484,
+          "order": 1,
+          "meta": {
+            "tags": [],
+            "order": 1,
+            "routeUsed": "combo",
+            "keyframeId": "SEG-02-B01-S01",
+            "timing": {
+              "source": "voice_edl",
+              "targetSegDur": 16.12,
+              "scaledFrom": [
+                0
+              ]
+            }
+          },
+          "params": {
+            "steps": 25,
+            "guidance": 7.5,
+            "sampler_name": "dpmpp_2m",
+            "scheduler": "karras"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Mock Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Prompts": {
+      "main": [
+        []
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build B-Roll Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get B-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get B-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Parse B-Roll Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build B-Roll Jobs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse B-Roll Result": {
+      "main": [
+        [
+          {
+            "node": "Build B-Roll EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Request B-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request B-Roll Video": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get B-Roll Video": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "8773ad6f-5b2a-4eaa-bd03-22da0dc3637c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "iqLKfeGUPCsxrIAa",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:47:34.330Z",
+      "updatedAt": "2025-08-06T22:47:34.330Z",
+      "id": "5W4ptl8eNWuki2da",
+      "name": "Base_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:27.709Z",
+      "updatedAt": "2025-08-06T22:47:27.709Z",
+      "id": "RDt1fEwBS590LEn1",
+      "name": "Builder"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:15.867Z",
+      "updatedAt": "2025-08-06T22:48:15.867Z",
+      "id": "lRzQwQcNU2q4zzyp",
+      "name": "Video"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:19.190Z",
+      "updatedAt": "2025-08-06T22:51:19.190Z",
+      "id": "sMtJ7F5avoY8zMs5",
+      "name": "B_Roll"
+    }
+  ]
+}

@@ -195,6 +195,7 @@ export default function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/interview" element={<InterviewPage />} />
+          <Route path="/express" element={<InterviewPage />} />
           <Route path="/studios" element={<StudiosPage />} />
           <Route path="/clip-studio-demo" element={<StudiosPage />} />
           <Route path="/login" element={<LoginPage />} />

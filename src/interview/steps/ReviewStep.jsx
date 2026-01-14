@@ -43,19 +43,43 @@ function startAutoPoll({ statusUrl, onUpdate, onDone, onError }) {
         return;
       }
 
-      // Read status/URL defensively (support a few alternative keys)
-      const statusValue = String(
-        (obj?.status ?? obj?.Status ?? obj?.state ?? obj?.stage ?? '')
-      ).toUpperCase();
+      // Map BullMQ / Backend shape to UI Status
+      // Backyard shape: { id, state: 'active'|'completed'|'failed', progress: number, data: { status: { stage: '...', message: '...' } }, returnvalue: { videoUrl: ... } }
 
-      const finalUrl =
-        obj?.finalVideoUrl ??
-        obj?.finalVideoURL ??
-        obj?.final_url ??
-        obj?.finalUrl ??
-        obj?.videoUrl ??
-        obj?.url ??
-        null;
+      let statusValue = '';
+      let finalUrl = null;
+      let uiMessage = ''; // NEW: capturing progress message if exists
+
+      if (obj.state) {
+        // It's a BullMQ Job Wrapper
+        if (obj.state === 'completed') {
+          statusValue = 'DONE';
+          finalUrl = obj.returnvalue?.videoUrl || obj.returnvalue?.url || obj.data?.output?.videoUrl;
+        } else if (obj.state === 'failed') {
+          statusValue = 'ERROR';
+        } else {
+          // active, waiting, delayed
+          statusValue = 'PROCESSING';
+          // Try to get stage/message from data
+          if (obj.data?.status?.stage) {
+            statusValue = obj.data.status.stage.toUpperCase();
+          }
+        }
+      } else {
+        // Legacy n8n / direct object shape
+        statusValue = String(
+          (obj?.status ?? obj?.Status ?? obj?.state ?? obj?.stage ?? '')
+        ).toUpperCase();
+
+        finalUrl =
+          obj?.finalVideoUrl ??
+          obj?.finalVideoURL ??
+          obj?.final_url ??
+          obj?.finalUrl ??
+          obj?.videoUrl ??
+          obj?.url ??
+          null;
+      }
 
       // Reflect the normalized item upward for UI
       onUpdate?.({ ...obj, status: statusValue, finalVideoUrl: finalUrl });
@@ -84,9 +108,10 @@ function startAutoPoll({ statusUrl, onUpdate, onDone, onError }) {
 }
 
 // Defaults match current prod test endpoints; can be overridden at runtime via window.N8N_WEBHOOK_URL
-const N8N_BASE = 'https://n8n.simplifies.click';
-const WEBHOOK_INTAKE_DEFAULT = `${N8N_BASE}/webhook/sceneme`;
-const STATUS_GET = `${N8N_BASE}/webhook/status`;
+// Defaults match current prod test endpoints; can be overridden at runtime via window.N8N_WEBHOOK_URL
+// const N8N_BASE = 'https://n8n.simplifies.click'; // Legacy
+const WEBHOOK_INTAKE_DEFAULT = `/api/generate`; // New Backend
+const STATUS_GET = `/api/status`; // New Backend
 const LS_KEY_STEP = 'interview_step_v1';
 
 /**
@@ -101,7 +126,7 @@ const LS_KEY_STEP = 'interview_step_v1';
  *   onEditStep: (stepKeyOrIndex) => void
  *   onJobComplete: (jobData: { jobId: string, finalVideoUrl: string }) => void
  */
-export default function ReviewStep({ ui, onSubmit, onEditStep, onJobComplete, hideSubmit = true, extraActions = null, stepIndexMap = {} }) {
+export default function ReviewStep({ ui, onSubmit, onEditStep, onJobComplete, hideSubmit = true, extraActions = null, stepIndexMap = {}, jobStatus = null, currentJobId = null }) {
   const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "—");
   const safe = (v) => (v === undefined || v === null || v === "" ? "—" : String(v));
   const includeVocals = ui?.advanced?.includeVocals ?? ui?.musicIncludeVocals;
@@ -495,20 +520,8 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, onJobComplete, hi
     check();
   }
 
-  // Listen for a generic footer submit signal as a fallback (covers the case when InterviewPage.jsx dispatches interview:submit or interview:submitted)
-  React.useEffect(() => {
-    function onSubmitSignal() {
-      // show banner immediately and start a short watch for jobId written by the footer handler
-      setShowBanner(true);
-      startJobIdWatchOnce();
-    }
-    window.addEventListener('interview:submit', onSubmitSignal);
-    window.addEventListener('interview:submitted', onSubmitSignal);
-    return () => {
-      window.removeEventListener('interview:submit', onSubmitSignal);
-      window.removeEventListener('interview:submitted', onSubmitSignal);
-    };
-  }, []);
+  // Listen for a generic footer submit signal replaced by concurrent flow
+  // We no longer block the UI here.
 
   return (
     <div>
@@ -519,6 +532,39 @@ export default function ReviewStep({ ui, onSubmit, onEditStep, onJobComplete, hi
 
 
       <div style={{ display: "grid", gap: 12 }}>
+
+        {/* Status Banner */}
+        {(status || busy || jobStatus || currentJobId) && (
+          <div style={{
+            padding: 16,
+            marginBottom: 16,
+            borderRadius: 8,
+            backgroundColor: (status === 'DONE' || jobStatus === 'completed') ? '#ECFDF5' : (status === 'ERROR' || jobStatus === 'failed') ? '#FEF2F2' : '#EFF6FF',
+            border: `1px solid ${(status === 'DONE' || jobStatus === 'completed') ? '#10B981' : (status === 'ERROR' || jobStatus === 'failed') ? '#EF4444' : '#3B82F6'}`,
+            color: (status === 'DONE' || jobStatus === 'completed') ? '#065F46' : (status === 'ERROR' || jobStatus === 'failed') ? '#991B1B' : '#1E40AF'
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <strong style={{ fontSize: 14 }}>
+                {(status === 'DONE' || jobStatus === 'completed') ? 'SUCCESS' : (status === 'ERROR' || jobStatus === 'failed') ? 'FAILED' : 'PRODUCTION IN PROGRESS...'}
+              </strong>
+              {(status !== 'DONE' && status !== 'ERROR' && jobStatus !== 'completed' && jobStatus !== 'failed') && (
+                <div className="spinner" style={{ width: 16, height: 16, border: '2px solid currentColor', borderRightColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              )}
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.9 }}>
+              {(status === 'DONE' || jobStatus === 'completed') ? 'Your video is ready!' : (status || jobStatus || 'Initializing...').toUpperCase()}
+            </div>
+            {(finalUrl) && (
+              <div style={{ marginTop: 12 }}>
+                <p><strong>Video URL:</strong> <a href={finalUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>Open Video</a></p>
+                <video src={finalUrl} controls style={{ width: '100%', marginTop: 8, borderRadius: 4 }} />
+              </div>
+            )}
+          </div>
+        )}
+
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+
 
 
         <Section title="Scene" action={<EditLink to="scene" />}>

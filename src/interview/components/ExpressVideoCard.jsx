@@ -14,7 +14,9 @@ export default function ExpressVideoCard({ vod, onClose, onDelete, onUseTemplate
     const driver = settings.ui?.driver || settings.driver || "None";
     const character = settings.ui?.characterName || settings.characterName || "Unknown";
     // Duration
-    const duration = settings.ui?.durationSec || 0;
+    // Duration: prefer actual backend duration, fallback to UI target
+    const durationVal = settings.actualDuration || settings.ui?.durationSec || 0;
+    const duration = Number(durationVal).toFixed(1).replace(/\.0$/, '');
 
     // Scene description: check ui.scene, then ui.setting (as seen in screenshot), then fallbacks
     const topic = settings.ui?.scene || settings.scene || settings.ui?.setting || settings.setting || settings.ui?.topic || settings.topic || settings.ui?.prompt || settings.prompt || "No description provided.";
@@ -144,6 +146,31 @@ export default function ExpressVideoCard({ vod, onClose, onDelete, onUseTemplate
                                     className="flex-1 bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 text-sm"
                                 >
                                     <span>📄</span> Use Template
+                                </button>
+                            )}
+
+                            {/* Download EDL */}
+                            {settings.edl && (
+                                <button
+                                    onClick={() => {
+                                        try {
+                                            const jsonStr = JSON.stringify(settings.edl, null, 2);
+                                            const blob = new Blob([jsonStr], { type: "application/json" });
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement("a");
+                                            a.href = url;
+                                            a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_edl.json`;
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                        } catch (e) {
+                                            alert("Failed to download EDL");
+                                        }
+                                    }}
+                                    className="flex-1 bg-white border border-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <span>⚙️</span> EDL
                                 </button>
                             )}
 

@@ -1,0 +1,18 @@
+
+> backend@1.0.0 dev
+> ts-node src/index.ts
+
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (8) from ../.env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (7) from ../.env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Loading .env.local & .env from: /Users/cbree/dev/ai-wizard
+Supabase Keys found: [ 'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY' ]
+Connected to Supabase at https://ldgujihabgikdkoxztnk.supabase.co
+Worker started for queue: video-generation
+{"level":30,"time":1768279141467,"pid":59425,"hostname":"Jericks-MacBook-Air.local","msg":"Server listening at http://127.0.0.1:3001"}
+Server listening on port 3001
+{"level":30,"time":1768279141467,"pid":59425,"hostname":"Jericks-MacBook-Air.local","msg":"Server listening at http://192.168.1.164:3001"}
+{"level":30,"time":1768279141467,"pid":59425,"hostname":"Jericks-MacBook-Air.local","msg":"Server listening at http://192.168.64.1:3001"}
+{"level":30,"time":1768279803498,"pid":59425,"hostname":"Jericks-MacBook-Air.local","reqId":"req-1","req":{"method":"POST","url":"/api/generate-keyframe","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":51222},"msg":"incoming request"}
+{"level":30,"time":1768279803501,"pid":59425,"hostname":"Jericks-MacBook-Air.local","reqId":"req-1","msg":"Route POST:/api/generate-keyframe not found"}
+{"level":30,"time":1768279803504,"pid":59425,"hostname":"Jericks-MacBook-Air.local","reqId":"req-1","res":{"statusCode":404},"responseTime":5.136125087738037,"msg":"request completed"}

@@ -1,0 +1,1090 @@
+{
+  "name": "B-Roll Script Builder",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f3f88ed0-82df-44f6-9040-c53faf17b1d9",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        -912
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"testCases\": [\n    {\n      \"scene\": \"VO animation narrative: abstract storytelling about the future of space travel.\",\n      \"driver\": \"narrator\",\n      \"wantsCutaways\": true,\n      \"character\": \"n/a\",\n      \"setting\": \"stylized animated galaxies, spacecraft silhouettes, futuristic habitats\",\n      \"action\": \"depict rockets launching, stations orbiting, and colonists arriving\",\n      \"directorsNotes\": \"cinematic B-roll, animated narrative flow with imaginative but cohesive visuals\",\n      \"wantsMusic\": true,\n      \"musicDesc\": \"sweeping cinematic score with ambient synth layers\",\n      \"wantsCaptions\": false,\n      \"durationSec\": 60,\n      \"referenceText\": \"Humanity pushes into the cosmos, launching rockets beyond Earth, building orbital stations, and imagining new homes on distant worlds.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "ef3873c6-8622-4e15-bcc0-5a2dd1a07dd0",
+      "name": "Set → Test Cases",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        1328,
+        -912
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Prompt Test Harness (B-Roll)\n// MODE: Run once for all items (MANY in → MANY out)\n\nconst S = v => (v == null ? \"\" : String(v));\nconst collapse = s => S(s).replace(/[\\r\\n]+/g, \" \").replace(/\\s+/g, \" \").trim();\nconst uniq = arr => Array.from(new Set(arr));\n\n// --- base36 for seg ids ---\nfunction base36(len = 4) {\n  let str = \"\";\n  while (str.length < len) str += Math.random().toString(36).slice(2);\n  return str.slice(0, len).toUpperCase();\n}\n\nconst DEFAULT_BROLL_RAILS = [\n  \"no on-screen text, subtitles, logos, watermarks, or readable signage\",\n  \"one setting per shot; do not mix distinct locations within a single shot\",\n  \"natural environmental motion only; avoid whip-pans or rapid, distracting movement\",\n  \"keep composition clean; avoid clutter and visual noise\"\n];\n\nconst MERGE_RAILS = (segRails = [], defs = []) =>\n  uniq([...(segRails || []), ...(defs || [])].map(collapse).filter(Boolean));\n\n// ---------- prompt factory (fallback for B-roll) ----------\nfunction buildBrollScriptPrompt(planner, rails) {\n  const dur = Number(planner.durationSec || 30) || 30;\n  return [\n    `TASK: Write a concise ${dur}s B-ROLL ONLY visual plan (no dialog, no on-camera host).`,\n    `SCENE: ${planner.scene || \"\"}`.trim(),\n    `SETTING: ${planner.setting || \"\"}`.trim(),\n    `ACTION FOCUS: ${planner.action || \"ambient city actions that support mood/context\"}`,\n    planner.referenceText ? `REFERENCE MOOD: ${planner.referenceText}` : \"\",\n    `STYLE NOTES: ${planner.directorsNotes || \"immersive, cinematic pacing\"}`,\n    \"OUTPUT FORMAT:\",\n    `- Provide a numbered shot list whose durations sum to ~${dur}s.`,\n    \"- For each shot: {duration ~2–5s} • subject/action • camera move • framing/lens • light • transition cue.\",\n    \"- Balance wide/medium/close with 1–2 establishing shots.\",\n    `MUSIC: ${planner.wantsMusic ? (planner.musicDesc || \"light, upbeat underscore; note cut points on downbeats\") : \"assume natural ambience; do not reference music-driven edits.\"}`,\n    `CAPTIONS: ${planner.wantsCaptions ? \"Leave lower-third margin clean for external captions; do not burn in text.\" : \"Do not include any on-screen text.\"}`,\n    `HARD RULES: ${MERGE_RAILS(planner.rails, DEFAULT_BROLL_RAILS).join(\"; \")}`\n  ].filter(Boolean).join(\"\\n\");\n}\n\n// ---------- MAIN ----------\nconst OUT = [];\n\nfor (const it of $input.all()) {\n  const j = it.json || {};\n\n  // Accept either planner or testCase (combo builder sends testCase)\n  const planner = j.planner || j.testCase || {};\n  const prompts = j.prompts || {};\n\n  // Pass-through identifiers & timing\n  const seg = {\n    segId: j.segId || j.segment?.segId || `SEG-${base36(4)}`,\n    track: j.track ?? j.segment?.track,                      // ← no hardcoded \"broll\"\n    startSec: j.startSec ?? j.segment?.startSec,\n    endSec: j.endSec ?? j.segment?.endSec,\n    durationSec: j.durationSec ?? j.segment?.durationSec ?? planner.durationSec ?? 30,\n    packageId: j.packageId ?? j.segment?.packageId,\n    orchestratorId: j.orchestratorId ?? j.segment?.orchestratorId ?? j.planMeta?.ids?.orchestratorId,\n    rails: MERGE_RAILS(j.rails || j.segment?.rails || [], DEFAULT_BROLL_RAILS),\n    meta: {\n      // ← pass-through videoType; do not coerce to \"broll\"\n      videoType: (j.videoType || j.meta?.videoType || planner.videoType || null),\n      driver: j.meta?.driver || planner.driver || \"narrator\"\n    }\n  };\n\n  // Decide prompt: prefer provided prompts.script; else synthesize (B-roll template)\n  const provided = S(prompts.script || \"\");\n  const prompt = provided || buildBrollScriptPrompt(planner, seg.rails);\n\n  if (!collapse(prompt)) {\n    OUT.push({ json: { error: \"No prompt specified\", seg, planner } });\n    continue;\n  }\n\n  OUT.push({\n    json: {\n      prompt,\n      seg,\n      planner,\n      planMeta: j.planMeta || null,\n      kind: \"broll_script_prompt\"\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -752
+      ],
+      "id": "cc847a61-4c2b-4f8c-9079-67f7b06e3eb7",
+      "name": "Code → Prompt Test Harness"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Init Envelope (B-Roll)\n// Mode: Run once for all items → emits MANY\n\nconst S = v => (v == null ? '' : String(v));\nconst collapse = s => S(s).replace(/[\\r\\n]+/g, ' ').replace(/\\s+/g, ' ').trim();\n\nfunction base36(len = 4) {\n  let str = '';\n  while (str.length < len) str += Math.random().toString(36).slice(2);\n  return str.slice(0, len).toUpperCase();\n}\n\nconst DEFAULT_BROLL_RAILS = [\n  'no on-screen text, subtitles, logos, watermarks, or readable signage',\n  'one setting per shot; do not mix distinct locations within a single shot',\n  'natural environmental motion only; avoid whip-pans or rapid, distracting movement',\n  'keep composition clean; avoid clutter and visual noise',\n];\n\nfunction mergeRails(incoming = [], defaults = []) {\n  const seen = new Set();\n  const out = [];\n  [...incoming, ...defaults].forEach(r => {\n    const key = collapse(r).toLowerCase();\n    if (key && !seen.has(key)) { seen.add(key); out.push(collapse(r)); }\n  });\n  return out;\n}\n\nconst asNum = v => (v === '' || v == null ? undefined : Number(v));\n\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json || {};\n\n  // ---- inputs from Prompt Test Harness shape ----\n  const segIn     = j.seg || j.segment || {};\n  const planner   = j.planner || {};\n  const planMeta  = j.planMeta || {};\n\n  // Prompts (support both new + legacy keys)\n  const prompts = {\n    script:    S(j.prompt || j.scriptPrompt || ''),\n    setting:   S(j.settingPrompt || ''),\n    direction: S(j.directionPrompt || ''),\n    negative:  S(j.negativePrompt || ''),\n  };\n\n  // Rails: prefer seg.rails, merge with defaults\n  const rails = mergeRails(Array.isArray(segIn.rails) ? segIn.rails : [], DEFAULT_BROLL_RAILS);\n\n  // Segment: prefer seg.*, then fallbacks\n  const segment = {\n    segId: segIn.segId || `SEG-${base36(4)}`,\n    track: segIn.track || 'broll',\n    startSec: asNum(segIn.startSec),\n    endSec: asNum(segIn.endSec),\n    durationSec: asNum(segIn.durationSec) ?? asNum(planner.durationSec),\n    packageId: segIn.packageId,\n    orchestratorId: segIn.orchestratorId || planMeta?.ids?.orchestratorId,\n  };\n\n  // Meta: start with seg.meta, backfill duration/videoType/driver\n  const metaIn = segIn.meta || {};\n  const meta = {\n    ...metaIn,\n    videoType: metaIn.videoType || planner.videoType || 'broll',\n    driver: metaIn.driver || planner.driver || 'narrator',\n  };\n  if (meta.durationSec == null && segment.durationSec != null) meta.durationSec = segment.durationSec;\n\n  // Scene (for convenience in later nodes)\n  const scene = collapse(planner.scene || j.scene || '');\n\n  // References: carry through any provided script (unchanged)\n  const references = {};\n  if (S(j.providedScript || '').trim()) {\n    references.providedScript = S(j.providedScript).trim();\n    if (S(j.providedScriptSource || '').trim()) {\n      references.providedScriptSource = S(j.providedScriptSource).trim();\n    }\n  }\n\n  // Flags\n  const flags = { isBrollValid: Boolean(j.isBrollValid ?? true) };\n\n  // Outputs placeholders (filled by later steps)\n  const outputs = { script: null, character: null, setting: null, direction: null };\n\n  // Final envelope (keep planner/planMeta for downstream)\n  const envelope = {\n    scene,\n    meta,\n    rails,\n    prompts,\n    outputs,\n    segment,\n    source: { planner, planMeta, segment },\n    references,\n    flags,\n  };\n\n  out.push({ json: envelope });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -752
+      ],
+      "id": "5d48b9fc-1a62-4b56-bc94-1d1b381573f8",
+      "name": "Init Envelope"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code → Build Script LLM Payload (B-ROLL ONLY, cue-free)\n// MODE: Run once for all items (MANY in → MANY out)\n\nconst S = v => (v == null ? \"\" : String(v));\nconst collapse = s => S(s).replace(/[\\r\\n]+/g, \" \").replace(/\\s+/g, \" \").trim();\n\nconst items = $input.all();\nconst OUT = [];\n\nitems.forEach((it) => {\n  const envIn = it.json || {};\n  const env = {\n    scene: envIn.scene || \"\",\n    meta: envIn.meta || {},\n    rails: Array.isArray(envIn.rails) ? envIn.rails : [],\n    prompts: envIn.prompts || {},\n    outputs: envIn.outputs || {},\n    source: envIn.source || {},\n    segment: envIn.segment || envIn.source?.segment || {},\n    references: envIn.references || {},\n    flags: envIn.flags || {},\n  };\n\n  // --- sanity checks\n  const scriptPrompt = S(env.prompts?.script || \"\");\n  if (!scriptPrompt.trim()) {\n    OUT.push({ json: { error: \"Missing prompts.script on input envelope.\", envelope: envIn } });\n    return;\n  }\n\n  const duration  = Number(env.meta.durationSec || 0) || 60;\n\n  // De-dup rails for compact context\n  const rails    = Array.from(new Set((env.rails || []).map(r => S(r).trim()).filter(Boolean)));\n  const negative = S(env.prompts.negative || \"\").trim();\n\n  // Optional: tone-only hint\n  const providedRef    = collapse(env.references?.providedScript || \"\").slice(0, 240);\n  const providedRefSrc = S(env.references?.providedScriptSource || \"\").trim();\n\n  // Lightweight POV hint\n  const sceneStr = [env.scene, env.source?.scene].filter(Boolean).join(\" \").toLowerCase();\n  const isVlog  = /\\b(vlog|diary|journal)\\b/.test(sceneStr);\n  const isThird = /\\b(explainer|documentary|docu|montage|recap|trailer|promo)\\b/.test(sceneStr);\n  let povHint = \"POINT OF VIEW: infer from genre.\";\n  if (isVlog) povHint += ' For this input, use first-person (\"I\").';\n  else if (isThird) povHint += \" For this input, use third-person or omniscient narration.\";\n\n  // --- SYSTEM PROMPT (B-ROLL ONLY)\n  const sysLines = [\n    // Critical guardrails for Qwen \"free thinking\" to avoid meta / <think>\n    \"ABSOLUTE RULE: Do not include analysis, explanations, or any '<think>' blocks. Return only the final spoken lines.\",\n    \"You are a B-roll voiceover scriptwriter.\",\n    \"Write only the narrator’s spoken lines — no shot lists, stage directions, labels, or cues.\",\n    \"VIDEO TYPE: B-ROLL ONLY — off-screen narration over visuals. Do not mention presenters, captions, or text on screen.\",\n    povHint,\n    `DURATION & PACE: Match ~${duration}s; target ~145–160 wpm. Use short, flowing lines and natural pauses instead of filler.`,\n    \"FORMATTING: One sentence or short phrase per line; hard line break after every sentence; 6–12 words per line (≤ ~14). Return only the spoken lines.\",\n    \"TONE FLEX (adaptive by topic or genre; may blend smoothly):\",\n    \"• Vlog / Lifestyle — conversational, personal, lightly playful.\",\n    \"• Podcast / Explainer — warm, balanced, confident cadence.\",\n    \"• Motivational / Fitness / Coaching — energetic, forward-driving, not shouty.\",\n    \"• Educational / History / Science — calm, clear, logically progressive.\",\n    \"• Storytelling / Narrative — cinematic pacing; curiosity → tension → release.\",\n    \"• Art / Culture / Music — creative, emotive, rhythmic phrasing.\",\n    \"• Tech / AI / Innovation — thoughtful, future-leaning, down-to-earth.\",\n    \"• Wellness / Mindfulness — gentle, spacious, reassuring.\",\n    \"• Kids / Family — simple, kind, age-appropriate; cozy wonder.\",\n    \"VOICE & POV: Off-screen narrator. Keep POV consistent.\",\n    \"FLOW: Hook → 2–3 connected beats → satisfying closing line. Use connective words (and, so, then, while, because) and time/place pivots. Prefer pauses/re-emphasis over invented fluff.\",\n    \"DO NOT: mention on-screen text, captions, logos, or watermarks; give viewer instructions; include SFX/MUSIC cues; or name brands/readable signage.\",\n    \"PACE: ~145–160 wpm; aim for 10–14 short lines per 15s.\",\n    \"NO PARAGRAPHS: do not return one big block of text.\",\n    'LANGUAGE STYLE: do not say \"as you can see\" or refer to on-screen text.',\n    \"SPOKEN-ONLY: return pure spoken words only.\",\n    \"NO CUES OR META: do not include gestures, emotions, or actions in any form.\",\n    \"FORBIDDEN PATTERNS: no asterisks *like this*, no (parentheses), no [brackets], no {braces}, no ALL-CAPS cues, no emojis/emoticons, no SFX/MUSIC tags.\",\n    \"CONTENT SAFETY: avoid brand/store names or specific venue callouts unless provided; keep locations generic; avoid readable signage.\",\n    rails.length ? `PRODUCTION GUARDRAILS (context only): ${rails.join(\" | \")}` : \"\",\n    negative ? `NEGATIVE VISUALS TO AVOID (downstream models): ${negative}` : \"\",\n    providedRef ? `TONE REFERENCE (do not copy verbatim): ${providedRef}${providedRefSrc ? `  [source: ${providedRefSrc}]` : \"\"}` : \"\",\n  ].filter(Boolean);\n\n  // --- USER PROMPT (verbatim from envelope)\n  const user = scriptPrompt;\n\n  // Hints for Qwen (safe if ignored by your node)\n  const STOP_SEQS = [\"<think>\", \"</think>\", \"```\"];\n  const maxTokens = Math.min(2000, Math.max(500, Math.round(duration * 8)));\n  const temperature = 0.6;\n\n  OUT.push({\n    json: {\n      messages: [\n        { role: \"system\", content: sysLines.join(\"\\n\") },\n        { role: \"user\",   content: user }\n      ],\n      // harmless hints you can map in your Qwen node if supported:\n      stop: STOP_SEQS,\n      maxTokens,\n      temperature,\n      videoTypeHint: \"broll\",       // fixed; we are b-roll only\n      envelope: env,\n      segment: env.segment,\n      flags: env.flags || {},\n      references: env.references || {}\n    }\n  });\n});\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -752
+      ],
+      "id": "4c456b9c-1662-41ae-bc8b-f9c68f1554ea",
+      "name": "Build Script LLM Payload"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[1].content }}",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.messages[0].content }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1344,
+        -560
+      ],
+      "id": "c2615eac-37a8-46b6-94e6-1ecd6888c879",
+      "name": "Script Writer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stash Script — clean + stash into envelope.outputs.script\n// Mode: Run once for all items → MANY in, MANY out\n\nconst S = v => (v == null ? \"\" : String(v));\n\n// ---------- helpers ----------\nfunction getScriptText(item) {\n  if (item.text) return S(item.text);\n  if (item.data && item.data.text) return S(item.data.text);\n  try {\n    const ch0 = item.choices?.[0]?.message?.content;\n    if (ch0) return S(ch0);\n  } catch {}\n  return \"\";\n}\n\nfunction cleanScript(raw) {\n  let s = S(raw);\n  // trim out hidden thinking / fenced blocks / roles\n  s = s.replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n  s = s.replace(/<think>[\\s\\S]*$/i, \"\");\n  if (/(analysis|break this down|requirements|word count|final (draft|version))/i.test(s)) {\n    const parts = s.split(/\\n{2,}/);\n    for (let i = 0; i < parts.length; i++) {\n      const chunk = parts[i].trim();\n      if (chunk && !/^<[^>]+>/.test(chunk)) { s = parts.slice(i).join(\"\\n\\n\"); break; }\n    }\n  }\n  s = s.replace(/```[\\s\\S]*?```/g, \"\");\n  s = s.replace(/<\\/?([a-z][a-z0-9]*)\\b[^>]*>/gi, \"\");\n  s = s.replace(/^\\s*[A-Z][\\w ]{0,20}:\\s*/gm, \"\");\n  s = s.replace(/^\\s*(assistant|system|user):\\s*/gim, \"\");\n  s = s.replace(/^\\s*[-*+]\\s+/gm, \"\");\n  s = s.replace(/^\\s*\\d+\\.\\s+/gm, \"\");\n  s = s.replace(/^\\s*>+\\s?/gm, \"\");\n  // remove common stage directions\n  s = s.replace(/\\((?:music|sfx|sound|camera|pan|tilt|zoom|cut)[^)]*\\)/gi, \"\");\n  s = s.replace(/\\[(?:music|sfx|sound|camera|pan|tilt|zoom|cut)[^\\]]*\\]/gi, \"\");\n  s = s.replace(/\\{(?:music|sfx|sound|camera|pan|tilt|zoom|cut)[^}]*\\}/gi, \"\");\n  s = s.replace(/\\r\\n/g, \"\\n\");\n  s = s.replace(/[ \\t]+$/gm, \"\");\n  s = s.replace(/\\n{3,}/g, \"\\n\\n\");\n  s = s.trim();\n  if (!s) s = S(raw).replace(/\\r\\n/g, \"\\n\").trim();\n  return s;\n}\n\nfunction sentenceSplitToLines(s) {\n  let out = s.replace(/([.!?…])\\s+/g, \"$1\\n\");\n  out = out.replace(/([.!?…]) {2,}/g, \"$1\\n\");\n  return out.split(\"\\n\").map(l => l.trim()).filter(Boolean).join(\"\\n\");\n}\n\nfunction softWrapLines(s, maxWords = 14, preferMin = 6) {\n  const lines = s.split(\"\\n\").flatMap(line => {\n    const words = line.trim().split(/\\s+/).filter(Boolean);\n    if (words.length <= maxWords) return [line.trim()];\n    const tryPunct = line.split(/([,;—–-])/);\n    if (tryPunct.length > 1) {\n      const rebuilt = [];\n      let buf = \"\";\n      tryPunct.forEach(part => {\n        buf = (buf ? buf + part : part);\n        const w = buf.trim().split(/\\s+/).filter(Boolean).length;\n        if (w >= preferMin && w <= maxWords) { rebuilt.push(buf.trim()); buf = \"\"; }\n      });\n      if (buf.trim()) rebuilt.push(buf.trim());\n      if (rebuilt.every(seg => seg.split(/\\s+/).length <= maxWords)) return rebuilt;\n    }\n    const chunks = [];\n    for (let i = 0; i < words.length; i += maxWords) {\n      chunks.push(words.slice(i, i + maxWords).join(\" \"));\n    }\n    return chunks;\n  });\n  return lines.join(\"\\n\");\n}\n\nfunction countWords(s) { return S(s).trim().split(/\\s+/).filter(Boolean).length; }\nfunction countNonEmptyLines(s) { return S(s).split(/\\n/).filter(l => l.trim()).length; }\n\n// Pull provided fields from multiple possible locations\nfunction getProvidedFromEnvelope(env) {\n  const paths = [\n    { base: env?.references, key: 'providedScript', src: 'references' },\n    { base: env?.source?.planner, key: 'providedScript', src: 'source.planner' },\n    { base: env?.source?.testCase, key: 'providedScript', src: 'source.testCase' },\n    { base: env?.source, key: 'providedScript', src: 'source' }\n  ];\n\n  for (const p of paths) {\n    const txt = S(p.base?.[p.key] || \"\").trim();\n    if (txt) {\n      // try to pick wpm/voice alongside, from the same object\n      const wpm   = Number(p.base?.providedWpm || 0) || null;\n      const voice = S(p.base?.providedVoice || \"\").trim() || null;\n      return { text: txt, source: p.src, providedWpm: wpm, providedVoice: voice };\n    }\n  }\n  return { text: \"\", source: \"\", providedWpm: null, providedVoice: null };\n}\n\n// ---------- main ----------\nconst items = $input.all();\nconst out = [];\n\nitems.forEach(it => {\n  const item = it.json || {};\n  let env = item.envelope;\n\n  // Try fallback to upstream if no envelope\n  if (!env) {\n    try {\n      const up = $items(\"Build Script LLM Payload\", 0, 0);\n      env = up[0].json.envelope;\n    } catch (e) {\n      out.push({ json: { error: \"No envelope found.\", debug: { keys: Object.keys(item) } } });\n      return;\n    }\n  }\n\n  // NEW: check all supported places for a provided script\n  const { text: providedScript, source: providedSourceLabel, providedWpm, providedVoice } =\n    getProvidedFromEnvelope(env);\n\n  let finalScript = \"\";\n  let rawScript   = \"\";\n  let scriptSource = \"\";\n\n  if (providedScript) {\n    rawScript = providedScript.replace(/\\r\\n/g, \"\\n\").trim();\n    finalScript = rawScript; // keep exactly as provided\n    scriptSource = providedSourceLabel || \"provided\";\n  } else {\n    // fall back to model output (unchanged behavior)\n    rawScript = getScriptText(item);\n    let cleaned = cleanScript(rawScript);\n    cleaned = sentenceSplitToLines(cleaned);\n    cleaned = softWrapLines(cleaned, 14, 6);\n    finalScript = cleaned;\n    scriptSource = \"llm\";\n  }\n\n  const outputs = Object.assign({}, env.outputs || {}, {\n    scriptRaw: rawScript,\n    script: finalScript,\n    scriptSource,\n    // pass along provided VO hints if we found them\n    providedWpm,\n    providedVoice\n  });\n\n  const metrics = Object.assign({}, env.metrics || {}, {\n    scriptWordCount: countWords(finalScript),\n    scriptLineCount: countNonEmptyLines(finalScript)\n  });\n\n  const outEnvelope = Object.assign({}, env, { outputs, metrics });\n  out.push({ json: outEnvelope });\n});\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -480
+      ],
+      "id": "f329719a-4fa9-4119-a39b-5476eb07c80b",
+      "name": "Stash Script"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -464
+      ],
+      "id": "9b342a21-4b04-4117-8f5e-69948e8be746",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stash Beats — normalize + stash into envelope.outputs.beats\n// MODE: Run once for all items (MANY in → MANY out)\n//\n// Input 0: Post-Extractor Sanitizer results (array of items), each like:\n//          { beats: [...], envelope, metrics? }\n// Output:  one updated envelope per input item\n//\n// ZERO TEXT EDITS: never paraphrase script lines.\n//\n// What this does per item:\n// - Resolve envelope (prefer inline; else pull from \"Stash Script\" same index).\n// - Accept beats array (verbatim text), coerce timing to whole seconds,\n//   sort, fix overlaps/min durations, snap first to 0 and last to target duration (if known).\n// - Re-ID sequentially (B1..Bn) for downstream consistency (original IDs kept in metrics).\n// - Compute beat diagnostics & stash beats into envelope.outputs.{beatsRaw, beats}.\n// - Emit one envelope JSON per input-0 item.\n\nconst S = v => (v == null ? \"\" : String(v));\nconst N = v => (Number.isFinite(Number(v)) ? Number(v) : 0);\nconst W = s => S(s).trim().split(/\\s+/).filter(Boolean).length;\nconst splitLines = s => S(s).replace(/\\r\\n/g, \"\\n\").split(\"\\n\");\nconst splitSentences = s =>\n  S(s).replace(/\\r\\n/g, \"\\n\")\n      .split(/(?<=[.!?])\\s+|\\n+/)\n      .map(t => t.trim())\n      .filter(Boolean);\n\n// Parse beats if they arrive as JSON string (rare here, but safe to support)\nfunction tryParseBeats(maybe) {\n  if (Array.isArray(maybe)) return maybe;\n  if (typeof maybe === \"string\") {\n    const clean = maybe.replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\")\n                       .replace(/<think>[\\s\\S]*$/i, \"\")\n                       .replace(/```[\\s\\S]*?```/g, \"\")\n                       .trim();\n    try { const arr = JSON.parse(clean); if (Array.isArray(arr)) return arr; } catch {}\n    const m = clean.match(/\\[\\s*(?:\\{[\\s\\S]*?\\}\\s*,\\s*)*\\{[\\s\\S]*?\\}\\s*\\]/);\n    if (m) { try { const arr = JSON.parse(m[0]); if (Array.isArray(arr)) return arr; } catch {} }\n  }\n  return null;\n}\n\nfunction envelopeFromJson(j) {\n  if (!j) return null;\n  if (j.scene || j.meta || j.outputs || j.segment || j.references || j.flags) return j;\n  if (j.envelope) return j.envelope;\n  return null;\n}\n\nfunction coerceBeat(b, idx) {\n  const id = S(b.id || `B${idx + 1}`).trim();\n  // normalize only whitespace; NEVER change content\n  const text = S(b.text || \"\").replace(/[ \\t]+/g, \" \").trim();\n  const startSec = Math.max(0, Math.round(N(b.startSec)));\n  const endSec   = Math.max(0, Math.round(N(b.endSec)));\n  return { id, text, startSec, endSec };\n}\n\n// Fallback: pull envelope from \"Stash Script\" with same item index\nfunction envelopeFromStashScript(index) {\n  try {\n    const hit = $items(\"Stash Script\", 0, index);\n    return envelopeFromJson(hit?.[0]?.json) || null;\n  } catch { return null; }\n}\n\nconst IN = $input.all(0);   // sanitizer outputs\nconst OUT = [];\n\nfor (let idx = 0; idx < IN.length; idx++) {\n  const item = IN[idx]?.json || {};\n\n  // 1) Resolve beats\n  let beats = null;\n  if (Array.isArray(item.beats)) {\n    beats = item.beats;\n  } else if (item.text) {\n    beats = tryParseBeats(item.text);\n  } else if (Array.isArray(item)) {\n    beats = item;\n  }\n\n  if (!Array.isArray(beats)) {\n    OUT.push({\n      json: {\n        error: \"Stash Beats expected an array of beats for this item.\",\n        index: idx,\n        debug: Object.keys(item || {})\n      }\n    });\n    continue;\n  }\n\n  // 2) Resolve envelope (inline > Stash Script[same index] > empty fallback)\n  let env = envelopeFromJson(item.envelope)\n        || envelopeFromStashScript(idx)\n        || { meta: {}, source: {}, prompts: {}, rails: [], outputs: {}, metrics: {} };\n\n  const targetDur = Math.max(0, Math.round(N(env?.meta?.durationSec)));\n\n  // 3) Normalize beats (IDs/timing only; text untouched)\n  let norm = beats.map(coerceBeat);\n\n  // sort by start then end\n  norm.sort((a, b) => (a.startSec - b.startSec) || (a.endSec - b.endSec));\n\n  const timingIssues = [];\n\n  // Snap first start to 0 if we know target duration\n  if (targetDur > 0 && norm.length && norm[0].startSec !== 0) {\n    timingIssues.push({ id: norm[0].id, issue: \"snapFirstToZero\", before: norm[0].startSec, after: 0 });\n    norm[0].startSec = 0;\n  }\n\n  // monotonic, non-overlapping, min duration 1s\n  for (let i = 0; i < norm.length; i++) {\n    const prev = norm[i - 1];\n    const cur  = norm[i];\n\n    if (i > 0 && cur.startSec < prev.endSec) {\n      timingIssues.push({ id: cur.id, issue: \"start<prevEnd\", before: { start: cur.startSec, prevEnd: prev.endSec } });\n      cur.startSec = prev.endSec;\n    }\n    if (cur.endSec <= cur.startSec) {\n      timingIssues.push({ id: cur.id, issue: \"end<=start\", before: { start: cur.startSec, end: cur.endSec }, after: cur.startSec + 1 });\n      cur.endSec = cur.startSec + 1;\n    }\n  }\n\n  // Snap last end to target if provided\n  if (targetDur > 0 && norm.length) {\n    const last = norm[norm.length - 1];\n    if (last.endSec !== targetDur) {\n      timingIssues.push({ id: last.id, issue: \"snapLastToDuration\", before: last.endSec, after: targetDur });\n      last.endSec = targetDur;\n      if (last.endSec <= last.startSec) {\n        const newStart = Math.max(0, targetDur - 1);\n        timingIssues.push({ id: last.id, issue: \"adjustLastStartForPositiveDuration\", newStart });\n        last.startSec = newStart;\n      }\n    }\n  }\n\n  // Re-ID to B1..Bn (keep originals for debug)\n  const originalIds = norm.map(b => b.id);\n  norm = norm.map((b, i) => ({ ...b, id: `B${i + 1}` }));\n\n  // Diagnostics\n  const durations = norm.map(b => b.endSec - b.startSec);\n  const beatDurations = durations.slice();\n  const gaps = [];\n  for (let i = 1; i < norm.length; i++) {\n    const gap = norm[i].startSec - norm[i - 1].endSec;\n    if (gap > 0) gaps.push({ after: norm[i - 1].id, before: norm[i].id, gapSec: gap });\n  }\n\n  const startsAtZero = norm.length ? norm[0].startSec === 0 : false;\n  const endsAtTarget = targetDur > 0 ? (norm.length ? norm[norm.length - 1].endSec === targetDur : false) : true;\n  const coverageOk = startsAtZero && endsAtTarget && gaps.length === 0;\n\n  const wordsPerBeat = norm.map(b => W(b.text));\n  const linesPerBeat = norm.map(b => splitLines(b.text).filter(l => l.trim()).length);\n  const sentsPerBeat = norm.map(b => splitSentences(b.text).length);\n  const totalWords   = wordsPerBeat.reduce((a, n) => a + n, 0);\n  const wpsPerBeat   = norm.map((b, i) => {\n    const d = Math.max(1, durations[i]);\n    return +((wordsPerBeat[i] || 0) / d).toFixed(2);\n  });\n\n  // Stash\n  const outputs = Object.assign({}, env.outputs || {}, {\n    beatsRaw: beats,  // original\n    beats: norm       // normalized\n  });\n\n  const metrics = Object.assign({}, env.metrics || {}, {\n    beatCount: norm.length,\n    totalBeatDuration: norm.length ? (norm[norm.length - 1].endSec - norm[0].startSec) : 0,\n    beatDurations,\n    beatDurationMin: durations.length ? Math.min(...durations) : 0,\n    beatDurationMax: durations.length ? Math.max(...durations) : 0,\n    beatDurationAvg: durations.length ? +(durations.reduce((a, n) => a + n, 0) / durations.length).toFixed(2) : 0,\n    beatWordsTotal: totalWords,\n    beatWordsPerBeat: wordsPerBeat,\n    beatLinesPerBeat: linesPerBeat,\n    beatSentencesPerBeat: sentsPerBeat,\n    beatWordsPerSecond: wpsPerBeat,\n    beatTimingIssues: timingIssues,\n    coverageOk,\n    continuityIssues: gaps,\n    debugOriginalIds: originalIds\n  });\n\n  const outEnvelope = Object.assign({}, env, { outputs, metrics });\n  OUT.push({ json: outEnvelope });\n}\n\n// Emit one envelope per input item\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -336
+      ],
+      "id": "3be25093-90eb-49ba-8a17-2903b7fcddbc",
+      "name": "Stash Beats"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SCENE: {{ $json.scene || \"(no scene provided)\" }}\nGUARDRAILS: no logos/text/signage; no prices/addresses; no camera/lens terms; avoid faces unless essential; one setting per intent; keep it literal.\n\nBEATS:\n{{ JSON.stringify(\n      ($json.outputs?.beats?.length ? $json.outputs.beats\n       : ($json.outputs?.beatsRaw?.length ? $json.outputs.beatsRaw : [])), \n      null, 2) }}\n\nIF BEATS is empty, OUTPUT EXACTLY: []",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the B-Roll Intent Miner.\n\nFor each beat, output exactly ONE concise visual intent = subject + action + setting, in ONE sentence.\n\nRules:\n- No camera/lens terms (pan, tilt, zoom, dolly, angle, close-up, frame, bokeh, rack focus, etc.).\n- No logos, text, signage, prices, or addresses.\n- Avoid recognizable faces unless a beat explicitly centers on a person; otherwise describe people generically (hands, silhouettes, backs).\n- One setting per intent. If multiple are implied, choose the dominant and ignore the rest.\n- Stay literal to the beat; do not invent new story beats, props, or locations. Prefer nouns already present in the beat or neutral generics.\n- Avoid subjective/poetic/pejorative wording (e.g., grungy, liquid sunlight, igniting, mythic, ultimate, perfect).\n- Tone: realistic, health-positive, safe behavior only.\n- Length: keep each intent under 160 characters and end with a period.\n\nOutput:\n- Return JSON ONLY — a plain array of objects; do NOT wrap inside a \"text\" field or quotes.\n- The array length MUST equal the number of beats provided.\n- The output must start with `[` and end with `]`.\n\nFormat example:\n[\n  { \"id\": \"B1\", \"intent\": \"...\" },\n  { \"id\": \"B2\", \"intent\": \"...\" }\n]"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1168,
+        -96
+      ],
+      "id": "325a8f81-90ce-4df8-a21f-6055b9d9b977",
+      "name": "Intent Miner"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stash Intents — normalize + stash into envelope.outputs.intents\n// MODE: Run once for all items (MANY in → MANY out)\n//\n// Input items (from Post-Intent Sanitizer):\n//   { intents, intentsRaw?, envelope? }  (one per segment)\n//\n// Output: one updated envelope per input item (same index alignment)\n//\n// Notes:\n// - Prefers envelope from current item; else falls back to Stash Beats by index.\n// - Keeps intents as-is with micro punctuation tidy (no paraphrasing).\n// - Stores: outputs.intents, outputs.intentsRaw, outputs.intentIndexById, outputs.intentsById\n// - Merges basic intent metrics into envelope.metrics\n\n// ---------- helpers ----------\nconst S = v => (v == null ? \"\" : String(v));\n\n// ensure a single sentence-ish string with terminal period (light touch)\nfunction normalizeIntentText(t) {\n  let s = S(t).trim().replace(/\\s{2,}/g, \" \");\n  if (!s) return s;\n  // collapse duplicate consecutive words: \"cup cup\" -> \"cup\"\n  s = s.replace(/\\b(\\w+)\\s+\\1\\b/gi, \"$1\");\n  // tiny grammar nudge seen in LLM outputs\n  s = s.replace(/\\b(steam|steams|steaming)\\s+are\\s+held\\b/gi, \"steam in\")\n       .replace(/\\b(steam|steams|steaming)\\s+held\\b/gi, \"$1 in\");\n  // single terminal punctuation\n  s = s.replace(/[.?!]+$/,\".\");\n  if (!/[.?!]$/.test(s)) s += \".\";\n  return s;\n}\n\n// coerce any shape into {id, intent}\nfunction coerceIntent(x, idx) {\n  const id = S(x?.id || `B${idx + 1}`).trim();\n  const body = (x && typeof x === \"object\") ? (x.intent ?? x.text ?? \"\") : x;\n  return { id, intent: normalizeIntentText(body) };\n}\n\n// attempt to read an envelope for a specific item index from a node name\nfunction tryEnvelopeFromNode(nodeName, idx) {\n  try {\n    const hit = $items(nodeName, 0, idx);\n    const j = hit?.[0]?.json;\n    if (!j) return null;\n    // Stash Beats emits the full envelope object\n    if (j.scene || j.meta || j.outputs || j.segment || j.references || j.flags) return j;\n    if (j.envelope) return j.envelope; // if wrapped\n  } catch {}\n  return null;\n}\n\n// ---------- main ----------\nconst IN  = $input.all();  // all items from Post-Intent Sanitizer\nconst OUT = [];\n\nfor (let idx = 0; idx < IN.length; idx++) {\n  const it = IN[idx] || {};\n  const j  = it.json || {};\n\n  // 1) Resolve envelope (prefer inline; else Stash Beats by index; else other fallbacks)\n  let env = j.envelope\n         || tryEnvelopeFromNode(\"Stash Beats\", idx)\n         || tryEnvelopeFromNode(\"Post-Intent Sanitizer\", idx) // in case envelope is nested there\n         || { meta:{}, source:{}, prompts:{}, rails:[], outputs:{}, metrics:{} };\n\n  // 2) Get intents (prefer sanitized/aligned)\n  let intents = Array.isArray(j.intents) ? j.intents : (Array.isArray(j) ? j : null);\n  let intentsRaw = Array.isArray(j.intentsRaw) ? j.intentsRaw : null;\n\n  if (!Array.isArray(intents)) {\n    OUT.push({\n      json: {\n        error: \"Stash Intents expected an array of intents.\",\n        index: idx,\n        debug: Object.keys(j || {})\n      }\n    });\n    continue;\n  }\n\n  // 3) Normalize intents lightly\n  const coerced = intents.map(coerceIntent);\n\n  // 4) Lookups\n  const intentIndexById = Object.fromEntries(coerced.map((it, i) => [it.id, i]));\n  const intentsById     = Object.fromEntries(coerced.map(it => [it.id, it.intent]));\n\n  // 5) Stash into envelope.outputs (preserve other outputs fields)\n  const outputs = Object.assign({}, env.outputs || {}, {\n    intentsRaw: Array.isArray(intentsRaw) ? intentsRaw : coerced, // keep raw if provided; else mirror\n    intents: coerced,\n    intentIndexById,\n    intentsById\n  });\n\n  // 6) Metrics\n  const lengths = coerced.map(x => S(x.intent).length);\n  const addlMetrics = {\n    intentCount: coerced.length,\n    intentCharLens: lengths,\n    intentCharAvg: lengths.length ? +(lengths.reduce((a,n)=>a+n,0)/lengths.length).toFixed(1) : 0,\n    intentCharMin: lengths.length ? Math.min(...lengths) : 0,\n    intentCharMax: lengths.length ? Math.max(...lengths) : 0\n  };\n  const metrics = Object.assign({}, env.metrics || {}, addlMetrics);\n\n  // 7) Emit updated envelope per item\n  const outEnvelope = Object.assign({}, env, { outputs, metrics });\n  OUT.push({ json: outEnvelope });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -96
+      ],
+      "id": "5d850ed3-c323-4e76-985a-15b1c9a3a1f7",
+      "name": "Stash Intents"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=DURATION: ~{{ $json.meta.durationSec }}s\nINTENTS: {{ JSON.stringify($json.outputs.intents, null, 2) }}",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the B-Roll Planner.\n\nGoal: Turn intents into a sequenced shot plan that fills ~{{ $json.meta.durationSec }}s total.\n\nRules:\n- Visual-only; NO camera/lens terms (no pan, zoom, angle, frame, bokeh, etc.).\n- No on-screen text/logos/signage/addresses or watermarks.\n- People are incidental (hands, silhouettes, backs) unless an intent centers on a person.\n- One clear setting per shot; keep shots internally consistent.\n- Default shot length 3–6s; allow 2–7s only if needed to hit total duration.\n- Prefer continuity across adjacent shots (time-of-day, locale, motion), but keep variety of subjects.\n- Map each shot to a source beat via \"beatId\".\n- Keep language literal and practical for production.\n\nReturn JSON ONLY (array of shots), each:\n{\n  \"shotId\":\"S01\",\n  \"beatId\":\"B1\",\n  \"startSec\":0,\n  \"endSec\":5,\n  \"subject\":\"what we see\",\n  \"action\":\"what it does\",\n  \"setting\":\"where it is; keep one setting; no labels/signage\",\n  \"notes\":\"constraints, safety, guardrails (brief)\",\n  \"tags\":[\"few\",\"keywords\"]\n}\n\nHARD RULES:\nReturn JSON ONLY. No markdown fences. No commentary. Use valid UTF-8. No trailing commas."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1168,
+        144
+      ],
+      "id": "39592e81-4ee1-4860-8aa7-1637f9497f21",
+      "name": "Planner",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===================== Planner Sanity (MANY in → MANY out) =====================\n// Purpose: tighten & normalize B-roll plans for ALL incoming items in this node.\n// Inputs:  one or more envelopes (each with outputs.shots / shotsRaw, meta.durationSec, etc.)\n// Output:  one cleaned envelope per input with { plan, outputs.shots, outputs.shotsRaw, plannerSanity, metrics updates }\n// ==============================================================================\n\n// ---------------- helpers ----------------\nconst S = v => (v == null ? \"\" : String(v).trim());\nconst secs = v => {\n  const n = Number(v);\n  return Number.isFinite(n) ? Math.max(0, n) : 0;\n};\n\nconst FORBIDDEN_TEXT = [\n  \"text\", \"logo\", \"watermark\", \"caption\", \"subtitle\", \"overlay\",\n  \"lower third\", \"ticker\", \"on-screen words\", \"superimposed text\"\n];\n\n// Heuristics to detect multiple settings inside a single string (avoid plain comma to reduce false positives)\nconst MULTI_SPLITTER = /\\b(?:vs\\.?|versus|and\\/or|or| & |;|\\/)\\b/i;\n\n// Prefer single clear setting\nfunction pickOneSetting(shot) {\n  if (Array.isArray(shot.settings) && shot.settings.length) {\n    return S(shot.settings[0]);\n  }\n  if (shot.setting && typeof shot.setting === \"string\") {\n    const s = S(shot.setting);\n    if (MULTI_SPLITTER.test(s)) {\n      const first = s.split(MULTI_SPLITTER).map(t => S(t)).filter(Boolean)[0];\n      return first || s;\n    }\n    return s;\n  }\n  return \"\";\n}\n\nfunction containsForbidden(str) {\n  const t = S(str).toLowerCase();\n  const hits = FORBIDDEN_TEXT.filter(w => t.includes(w));\n  return [...new Set(hits)];\n}\n\nfunction normKey(shot) {\n  const setting = S(shot.setting).toLowerCase();\n  const intent  = S(shot.intentPrimary || shot.intent || \"\").toLowerCase();\n  const subject = S(shot.subject || \"\").toLowerCase();\n  return `${setting}::${intent}::${subject}`;\n}\n\nfunction computeTotal(shots){\n  return shots.reduce((n,s)=>n + Math.max(0, secs(s.endSec) - secs(s.startSec)), 0);\n}\n\n// ---------------- core per-item pipeline ----------------\nfunction sanitizeEnvelope(env, itemIndex){\n  const DURATION_CAP = Number(env?.meta?.durationSec || 0) || null;\n\n  // Source shots: prefer env.outputs.shots (already sanitized upstream), else parse raw from plannerText fallback\n  const fromOutputs = Array.isArray(env?.outputs?.shots) ? env.outputs.shots : null;\n  const fromRaw     = Array.isArray(env?.outputs?.shotsRaw) ? env.outputs.shotsRaw : null;\n  const fromLegacy  = Array.isArray(env?.shots) ? env.shots : null;\n\n  let raw = fromOutputs || fromRaw || fromLegacy || [];\n\n  // If empty but planner text present, try to parse a JSON array from outputs.plannerText\n  if (!raw.length && typeof env?.outputs?.plannerText === \"string\") {\n    const blob = env.outputs.plannerText.trim().replace(/^```(?:json)?\\s*/i,\"\").replace(/```$/i,\"\");\n    const m = blob.match(/\\[[\\s\\S]*\\]/m);\n    if (m) {\n      try { const j = JSON.parse(m[0]); if (Array.isArray(j)) raw = j; } catch {}\n    }\n  }\n\n  // If still empty, nothing to clean — pass through with metrics\n  if (!raw.length) {\n    const passthrough = { ...(env || {}) };\n    passthrough.plan = [];\n    passthrough.plannerSanity = {\n      itemIndex,\n      shotCountIn: 0,\n      shotCountOut: 0,\n      totalDurationSec: 0,\n      durationCapSec: DURATION_CAP || null,\n      warningsCount: 0,\n      adjustmentsCount: 0,\n      warnings: [],\n      adjustments: []\n    };\n    passthrough.metrics = { ...(env.metrics || {}), brollShotCount: 0, brollDurationPlannedSec: 0 };\n    return passthrough;\n  }\n\n  // ---------------- CLEANING ----------------\n  const warnings = [];\n  const adjustments = [];\n\n  // Normalize fields and compute duration\n  let normalized = raw.map((s, idx) => {\n    const start = secs(s.startSec);\n    const end   = Math.max(start, secs(s.endSec));\n    const setting = pickOneSetting(s);\n\n    const bad = [\n      ...containsForbidden(setting),\n      ...containsForbidden(S(s.subject || \"\")),\n      ...containsForbidden(S(s.notes || \"\")),\n      ...containsForbidden(S(s.description || \"\")),\n    ];\n    if (bad.length) warnings.push(`Shot ${idx+1}: contains forbidden terms → ${bad.join(\", \")}`);\n\n    return {\n      ...s,\n      shotId: s.shotId || `shot_${idx + 1}`,\n      startSec: start,\n      endSec: end,\n      durationSec: +(Math.max(0, end - start)).toFixed(3),\n      setting,\n      settings: undefined, // enforce single setting\n    };\n  });\n\n  // Drop empties / zero-length\n  normalized = normalized.filter((s, i) => {\n    if (!s.setting) { warnings.push(`Shot ${i+1}: dropped (no setting after single-setting enforcement).`); return false; }\n    if (s.durationSec <= 0) { warnings.push(`Shot ${i+1}: dropped (non-positive duration).`); return false; }\n    return true;\n  });\n\n  // Sort by time\n  normalized.sort((a,b)=> (a.startSec - b.startSec) || (a.endSec - b.endSec));\n\n  // Fix overlaps\n  for (let i=1; i<normalized.length; i++){\n    const prev = normalized[i-1];\n    const cur  = normalized[i];\n    if (cur.startSec < prev.endSec){\n      const newStart = prev.endSec;\n      if (newStart >= cur.endSec){\n        warnings.push(`Shot ${i+1}: dropped (fully overlapped after timing fix).`);\n        cur._drop = true;\n      } else {\n        adjustments.push(`Shot ${i+1}: start adjusted ${cur.startSec}s → ${newStart}s to avoid overlap.`);\n        cur.startSec = +newStart.toFixed(3);\n        cur.durationSec = +(cur.endSec - cur.startSec).toFixed(3);\n      }\n    }\n  }\n  normalized = normalized.filter(s => !s._drop);\n\n  // Merge consecutive near-duplicates (same key)\n  const merged = [];\n  for (const s of normalized){\n    const last = merged[merged.length-1];\n    if (last && normKey(last) === normKey(s)){\n      last.endSec = Math.max(last.endSec, s.endSec);\n      last.durationSec = +(last.endSec - last.startSec).toFixed(3);\n      adjustments.push(`Merged consecutive duplicate for setting \"${s.setting}\".`);\n    } else {\n      merged.push({...s});\n    }\n  }\n\n  // Cap total duration (trim tail)\n  let totalPlanned = merged.reduce((n,s)=>n + s.durationSec, 0);\n  if (DURATION_CAP && totalPlanned > DURATION_CAP){\n    let remaining = DURATION_CAP;\n    for (const s of merged){\n      if (remaining <= 0){ s._drop = true; continue; }\n      if (s.durationSec > remaining){\n        s.endSec = +(s.startSec + remaining).toFixed(3);\n        adjustments.push(`Trimmed \"${s.shotId}\" to fit cap (${DURATION_CAP}s).`);\n        s.durationSec = +(s.endSec - s.startSec).toFixed(3);\n        remaining = 0;\n      } else {\n        remaining = +(remaining - s.durationSec).toFixed(3);\n      }\n    }\n  }\n  const finalPlan = merged.filter(s => !s._drop).map(s => ({\n    shotId: s.shotId,\n    beatId: s.beatId || null,\n    startSec: s.startSec,\n    endSec: s.endSec,\n    durationSec: s.durationSec,\n    setting: s.setting,\n    intentPrimary: s.intentPrimary || s.intent || \"\",\n    subject: s.subject || \"\",\n    description: S(s.description || \"\"),\n    notes: s.notes || undefined,\n    tags: Array.isArray(s.tags) ? s.tags : undefined\n  }));\n\n  // Mirror back to outputs.shots (clean plan) & preserve originals in outputs.shotsRaw if not already present\n  const out = { ...(env || {}) };\n  out.outputs = { ...(out.outputs || {}) };\n  if (!Array.isArray(out.outputs.shotsRaw) || !out.outputs.shotsRaw.length){\n    // preserve the incoming raw we actually cleaned\n    out.outputs.shotsRaw = raw.map(r => ({ ...r }));\n  }\n  out.outputs.shots = finalPlan.map(s => ({\n    shotId: s.shotId,\n    beatId: s.beatId,\n    startSec: s.startSec,\n    endSec: s.endSec,\n    subject: s.subject,\n    action: S((env?.action) || \"\"),   // keep schema stable; action usually lives on per-shot upstream, safe to leave empty\n    setting: s.setting,\n    notes: s.notes || \"\",\n    tags: s.tags || []\n  }));\n\n  // Metrics & report\n  const totalDurationSec = +computeTotal(finalPlan).toFixed(3);\n\n  out.plan = finalPlan;\n  out.metrics = { ...(out.metrics || {}), brollShotCount: finalPlan.length, brollDurationPlannedSec: totalDurationSec };\n\n  out.plannerSanity = {\n    itemIndex,\n    shotCountIn: raw.length,\n    shotCountOut: finalPlan.length,\n    totalDurationSec,\n    durationCapSec: DURATION_CAP || null,\n    warningsCount: warnings.length,\n    adjustmentsCount: adjustments.length,\n    warnings,\n    adjustments\n  };\n\n  return out;\n}\n\n// ---------------- main (process ALL inputs) ----------------\nconst IN = $input.all(0).length ? $input.all(0) : $input.all();  // support either wiring style\nconst OUT = [];\n\nfor (let i = 0; i < IN.length; i++){\n  const env = IN[i]?.json ?? IN[i] ?? {};\n  OUT.push({ json: sanitizeEnvelope(env, i) });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        144
+      ],
+      "id": "b97133c7-6de4-45f6-8e2e-7aa992944e69",
+      "name": "Planner sanity"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safety QA (all-items) — detect-only pass; DO NOT MODIFY writer text\n// Deterministic segId sequencing: SEG-01, SEG-02, SEG-03, ...\n// Stamps segId on env.segId, env.segment.segId, and source.* containers if present.\n\nconst S = v => (v == null ? \"\" : String(v));\nconst clone = o => JSON.parse(JSON.stringify(o));\nconst isShot = o => o && typeof o === \"object\" && typeof o.shotId === \"string\" && typeof o.text === \"string\";\nconst isEnvelope = o => o && typeof o === \"object\" && (typeof o.scene === \"string\" || typeof o.source === \"object\");\nconst pad2 = (n) => String(n).padStart(2, \"0\");\n\n// NOTE: Used only to help parse JSON blobs; does NOT touch emitted text.\nfunction stripThinkBlocks(t){\n  return S(t).replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n}\n\n// pull a JSON array of shots out of an LLM string (handles code fences & stray text)\nfunction parseShotsFromBlob(txt){\n  if (!txt) return [];\n  let t = stripThinkBlocks(txt);\n\n  try { const j = JSON.parse(t); if (Array.isArray(j) && j.every(isShot)) return j; } catch {}\n\n  const fence = t.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  if (fence){\n    try { const j = JSON.parse(fence[1]); if (Array.isArray(j) && j.every(isShot)) return j; } catch {}\n  }\n\n  const matches = [...t.matchAll(/\\[[\\s\\S]*?\\]/g)];\n  if (matches.length){\n    const raw = matches[matches.length - 1][0];\n    try { const j = JSON.parse(raw); if (Array.isArray(j) && j.every(isShot)) return j; } catch {}\n  }\n  return [];\n}\n\nconst cameraTerms = [\n  \"frame\",\"shot\",\"angle\",\"eye level\",\"eye-level\",\"close up\",\"close-up\",\"wide\",\n  \"depth of field\",\"dof\",\"bokeh\",\"focal length\",\"lens\",\"pan\",\"tilt\",\"zoom\",\n  \"rack focus\",\"cinematic camera\",\"gimbal\",\"handheld\",\"push in\",\"push-in\",\"pull out\",\"pull-out\",\"dolly\",\"truck\",\"crane\"\n];\nconst camRegs = cameraTerms.map(t=>{\n  const pat = t.replace(/\\s*-\\s*/g,\"[- ]\").replace(/\\s+/g,\"\\\\s+\");\n  return new RegExp(`\\\\b${pat}\\\\b`, \"gi\");\n});\n\n// broad brand lexicon (non-exhaustive; case-insensitive)\nconst brandish = /\\b(nike|adidas|apple|samsung|starbucks|coke|coca[-\\s]?cola|pepsi|tesla|google|amazon|facebook|instagram|tiktok|mcdonald'?s|kfc|sony|canon|nikon|red ?bull)\\b/gi;\n\n// signage / on-screen text mentions\nconst signage = /\\b(sign(?:age)?|label|logo|brand(?: ?name)?|caption|subtitle|lower third|on[-\\s]?screen(?:\\s*text)?|watermark|text)\\b/gi;\n\n// rails-derived negatives\nconst disallow = [\"logo\",\"watermark\",\"readable signage\",\"license plates\",\"text\",\"caption\",\"subtitle\",\"overlay\",\"lower third\"];\nconst negRegs = disallow.map(w => new RegExp(`\\\\b${w.replace(/\\s+/g,\"\\\\s+\")}\\\\b`, \"gi\"));\n\n// Detect-only: count occurrences; DO NOT change text\nfunction analyzeText(s, totals){\n  const t = S(s);\n\n  let cameraHits = 0, brandHits = 0, signageHits = 0, negHits = 0;\n  for (const re of camRegs){ const m = t.match(re); if (m) cameraHits += m.length; }\n  const b = t.match(brandish);  if (b) brandHits   += b.length;\n  const sg = t.match(signage);  if (sg) signageHits += sg.length;\n  for (const re of negRegs){ const m = t.match(re); if (m) negHits += m.length; }\n\n  totals.cameraHits += cameraHits;\n  totals.brandHits  += brandHits;\n  totals.signageHits+= signageHits;\n  totals.negHits    += negHits;\n\n  return { text: t, changed: false, cameraHits, brandHits, signageHits, negHits };\n}\n\n// ----------------- input resolution (Planner + Writer) -----------------\nconst allInputs = $input.all().map(x => x.json);\n\n// Planner array (array of envelopes)\nlet plannerArr =\n  allInputs.find(v => Array.isArray(v) && v.length && v.every(isEnvelope)) ||\n  (Array.isArray($json) && $json.length && $json.every(isEnvelope) ? $json : null);\n\nif (!plannerArr){\n  try {\n    const pTry = $items(\"Planner sanity\", 0, 0)?.map(x => x.json).flat() || [];\n    if (Array.isArray(pTry) && pTry.length && pTry.every(isEnvelope)) plannerArr = pTry;\n  } catch {}\n}\n\n// Writer items: array of objects each with .text that is a JSON array of {shotId,text}\nlet writerArr =\n  allInputs.find(v => Array.isArray(v) && v.length && v.every(o => typeof o === \"object\" && \"text\" in o)) ||\n  (Array.isArray($json) && $json.length && $json.every(o => typeof o === \"object\" && \"text\" in o) ? $json : null);\n\nif (!writerArr){\n  try {\n    const wTry = $items(\"Shot Writer\", 0, 0)?.map(x => x.json) || null;\n    if (Array.isArray(wTry) && wTry.length && wTry.every(o => typeof o === \"object\" && \"text\" in o)) writerArr = wTry;\n  } catch {}\n}\n\n// guard rails\nplannerArr = Array.isArray(plannerArr) ? clone(plannerArr) : [];\nwriterArr  = Array.isArray(writerArr)  ? clone(writerArr)  : [];\n\nconst writerShotsByIndex = writerArr.map((w, idx) => ({ idx, shots: parseShotsFromBlob(w.text) }));\nconst pairCount = Math.max(plannerArr.length, writerShotsByIndex.length);\n\n// ----------------- main pass (index-based segId) -----------------\nconst globalTotals = { items: 0, shots: 0, changed: 0, cameraHits: 0, brandHits: 0, signageHits: 0, negHits: 0 };\nconst outputs = [];\n\nfor (let i = 0; i < pairCount; i++){\n  const env = plannerArr[i] ? clone(plannerArr[i]) : {};\n  const wr  = writerShotsByIndex[i]?.shots || [];\n\n  // Deterministic: first item = SEG-01, second = SEG-02, ...\n  const segIdNorm = `SEG-${pad2(i + 1)}`;\n\n  // Stamp segId everywhere we expose it\n  env.segId = segIdNorm;\n  env.segment = env.segment || {};\n  env.segment.segId = segIdNorm;\n  if (env.source) {\n    if (env.source.segment) env.source.segment.segId = segIdNorm;\n    if (env.source.planner) env.source.planner.segId = segIdNorm;\n  }\n\n  // ---- Safety analysis (detect-only) ----\n  const perTotals = { changed:0, cameraHits:0, brandHits:0, signageHits:0, negHits:0 };\n  const cleaned = wr.map(sh => {\n    const { text, changed, cameraHits, brandHits, signageHits, negHits } = analyzeText(sh.text, perTotals);\n    return { shotId: sh.shotId, text, qaChanges: { changed, cameraHits, brandHits, signageHits, negHits } };\n  });\n\n  // attach under outputs without touching planner .shots/.plan\n  env.outputs = env.outputs || {};\n  env.outputs.writerShotsClean = cleaned;\n\n  // per-item QA summary\n  env.qa = env.qa || {};\n  env.qa.safetyQA = {\n    itemIndex: (env.plannerMetrics && env.plannerMetrics.itemIndex) || i,\n    writerShotsIn: wr.length,\n    writerShotsOut: cleaned.length,\n    totals: perTotals,\n    safe: perTotals.cameraHits === 0 && perTotals.brandHits === 0 && perTotals.signageHits === 0 && perTotals.negHits === 0\n  };\n\n  // roll up globals\n  globalTotals.items += 1;\n  globalTotals.shots += cleaned.length;\n  globalTotals.changed += perTotals.changed; // remains 0\n  globalTotals.cameraHits += perTotals.cameraHits;\n  globalTotals.brandHits  += perTotals.brandHits;\n  globalTotals.signageHits+= perTotals.signageHits;\n  globalTotals.negHits    += perTotals.negHits;\n\n  outputs.push({ json: env });\n}\n\n// Optional final summary\nif (outputs.length){\n  const first = outputs[0].json;\n  first.qa = first.qa || {};\n  first.qa.safetyQASummary = {\n    node: \"Safety QA\",\n    itemsProcessed: globalTotals.items,\n    shotsProcessed: globalTotals.shots,\n    totals: globalTotals,\n    allItemsSafe: globalTotals.cameraHits === 0 &&\n                  globalTotals.brandHits  === 0 &&\n                  globalTotals.signageHits=== 0 &&\n                  globalTotals.negHits    === 0\n  };\n}\n\nreturn outputs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        384
+      ],
+      "id": "bb649ba1-467a-4727-8c50-0b5cf9cd8278",
+      "name": "Safety QA"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SCENE CONTEXT:\n{{ $json.scene || \"(none)\" }}\n\nSCRIPT (verbatim):\n{{ $json.outputs.script }}\n\nVIDEO TYPE: {{ $json.meta.videoType || \"broll\" }}\nTOTAL DURATION: {{ $json.meta.durationSec }} seconds",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the Beat Extractor.\n\nGoal\n- Produce beat timings from a narrator script for a single segment.\n- For combo segments: ALWAYS return exactly ONE beat covering the full duration.\n- For non-combo (pure b-roll) segments: split into 6–12 concise beats.\n\nInputs (templated values are provided in the user message)\n- scene (context only)\n- script (verbatim narration text)\n- videoType (e.g., \"combo\" or \"broll\")\n- durationSec (integer; total seconds for this segment)\n\nGlobal rules\n- Use whole seconds only (no decimals).\n- Beats must be contiguous, non-overlapping, and start at 0.\n- The final beat MUST end exactly at {{ $json.meta.durationSec }}.\n- Each beat’s \"text\" must be 1–2 narrator lines copied verbatim (no rewriting).\n- Skip any line with brand names, addresses, prices, or camera jargon; if skipped, merge with adjacent permissible lines to keep 1–2 lines per beat.\n- IDs must be sequential: B1, B2, B3, …\n\nSpecial cases\n- If videoType == \"combo\": return EXACTLY ONE beat:\n  [{ \"id\":\"B1\",\"text\":(up to 2 lines verbatim from the script), \"startSec\":0, \"endSec\": {{ $json.meta.durationSec }} }]\n- If the script is empty or a single short line: return one beat spanning the full duration (same shape as above), regardless of videoType.\n\nB-roll splitting (when videoType != \"combo\")\n- Aim for 6–12 beats total.\n- Distribute seconds as evenly as possible across beats.\n- If perfect division isn’t possible, allocate the remainder seconds to earlier beats (B1, B2, …) so that the last beat still ends at {{ $json.meta.durationSec }}.\n\nOutput format\n- Return JSON ARRAY ONLY. No commentary, no extra keys, no <think> tags.\n\nExample (shape only)\n[\n  { \"id\": \"B1\", \"text\": \"...\", \"startSec\": 0, \"endSec\": 6 },\n  { \"id\": \"B2\", \"text\": \"...\", \"startSec\": 6, \"endSec\": 12 }\n]"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1168,
+        -336
+      ],
+      "id": "20abb78f-7a71-4d01-ae9e-37dadb72d5dd",
+      "name": "Beat Extractor"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SCENE: {{ $json.scene }}\nHARD RULES: no text/logos; realistic; healthy/positive; avoid unsafe handling; neutral brand.\nSHOT PLAN:\n{{ JSON.stringify($json.plan, null, 2) }}\nCONSTRAINTS: Use each shot's setting and subject as the visual anchor. Do not switch locations within a shot. No camera terms. No dialogue. No readable signage.",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the B-Roll Shot Writer.\n\nFor each beat in the plan:\n- Generate at least ONE shot. (Every beat must have ≥1 shot, never zero.)\n- If the beat duration is long (≥8 seconds), allow multiple shots (2–3) that divide the time naturally.\n- Every shot at least 2.5 seconds long\n\nFor each shot:\n- Return one paragraph (30–55 words), present tense, third-person.\n- Use plain, descriptive language. \n- No camera/lens terms.\n- No dialogue or quotes.\n- No on-screen text, logos, or brand names (whole-word).\n- Describe subject, action, surfaces/materials, palette, light feel, and small natural motion (steam, water, leaves, fabric, hands kept below faces).\n- Keep language grounded, visual, and consistent with scene.\n\nRespect structure:\n- Match the order and count from the provided plan exactly (one array item per shot).\n- Assign sequential shot IDs as in the plan.\n\nOUTPUT: Return JSON ONLY in this shape:\n[\n  { \"shotId\": \"S01\", \"text\": \"...\" },\n  { \"shotId\": \"S02\", \"text\": \"...\" }\n]"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1168,
+        384
+      ],
+      "id": "c7bd0190-f285-4de9-9a83-992cfc66753a",
+      "name": "Shot Writer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Post-extractor sanitizer (B-Roll/A-Roll)\n// MODE: Run once for all items\n// Inputs:\n//   - Input 0: Beat Extractor (JSON array in .text or {beats})\n// Output: one result per input-0 item (beats + matching envelope from \"Stash Script\")\n//\n// ZERO SCRUBBING: do NOT alter script text.\n\nconst S = v => (v == null ? \"\" : String(v));\n\n// Parse beats from text without touching content\nfunction parseBeatsFromText(text) {\n  const raw = S(text);\n  const clean = raw\n    .replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\")\n    .replace(/<think>[\\s\\S]*$/i, \"\")\n    .replace(/```[\\s\\S]*?```/g, \"\")\n    .trim();\n\n  try {\n    const arr = JSON.parse(clean);\n    if (Array.isArray(arr)) return arr;\n  } catch {}\n\n  const m = clean.match(/\\[\\s*(?:\\{[\\s\\S]*?\\}\\s*,\\s*)*\\{[\\s\\S]*?\\}\\s*\\]/);\n  if (!m) return null;\n  try {\n    const arr = JSON.parse(m[0]);\n    return Array.isArray(arr) ? arr : null;\n  } catch {}\n  return null;\n}\n\nfunction envelopeFromJson(j) {\n  if (!j) return null;\n  if (j.scene || j.meta || j.outputs || j.segment || j.references || j.flags) return j;\n  if (j.envelope) return j.envelope; // some nodes wrap under .envelope\n  return null;\n}\n\n// --- Inputs ---\nconst IN0 = $input.all(0); // Beat Extractor items\n\n// Standard way to fetch ALL items from an executed node by name:\nlet STASH_ITEMS = [];\ntry {\n  STASH_ITEMS = $items('Stash Script') || [];\n} catch {\n  STASH_ITEMS = [];\n}\n\nconst OUT = [];\n\nfor (let idx = 0; idx < IN0.length; idx++) {\n  const j = IN0[idx]?.json || {};\n\n  // 1) Parse beats for this item\n  let beats = null;\n  if (Array.isArray(j)) {\n    beats = j;\n  } else if (Array.isArray(j.beats)) {\n    beats = j.beats;\n  } else if (j.text) {\n    beats = parseBeatsFromText(j.text);\n  }\n  if (!Array.isArray(beats)) {\n    OUT.push({\n      json: { error: 'Expected beats array for input item.', index: idx, debug: Object.keys(j || {}) }\n    });\n    continue;\n  }\n\n  // 2) Matching envelope from Stash Script by the SAME item index\n  const stashAtIdx = STASH_ITEMS[idx]?.json || null;\n  let envelope = envelopeFromJson(stashAtIdx)\n              || envelopeFromJson(j) // inline fallback if present\n              || { meta: {}, source: {}, prompts: {}, rails: [] };\n\n  // 3) Pass beats through exactly (only normalize number types)\n  const passthroughBeats = beats.map(b => ({\n    id: b.id,\n    text: b.text,\n    startSec: (typeof b.startSec === 'number') ? b.startSec : Number(b.startSec),\n    endSec:   (typeof b.endSec   === 'number') ? b.endSec   : Number(b.endSec),\n  }));\n\n  // OPTIONAL: keep beats ordered and report simple timing issues\npassthroughBeats.sort((a, b) => (a.startSec ?? 0) - (b.startSec ?? 0));\n\nconst timingIssues = [];\nfor (let i = 1; i < passthroughBeats.length; i++) {\n  const prev = passthroughBeats[i-1], cur = passthroughBeats[i];\n  if (cur.startSec < prev.endSec) {\n    timingIssues.push({ between: [prev.id, cur.id], type: \"overlap\", prevEnd: prev.endSec, curStart: cur.startSec });\n  } else if (cur.startSec > prev.endSec) {\n    timingIssues.push({ between: [prev.id, cur.id], type: \"gap\", prevEnd: prev.endSec, curStart: cur.startSec });\n  }\n}\n\n  OUT.push({\n    json: {\n      beats: passthroughBeats,\n      envelope,\n      segment: envelope.segment || envelope.source?.segment || null,\n      flags: envelope.flags || null,\n      references: envelope.references || null,\n      metrics: {\n        itemsIn: 1,\n        beatsIn: beats.length,\n        beatsOut: passthroughBeats.length,\n        textAltered: false,\n        timingIssues,\n        textAltered: false\n      }\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -336
+      ],
+      "id": "7f3c8042-11c2-45cb-9c24-87dade733378",
+      "name": "Post-extractor sanitizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ================= Post-Intent Sanitizer (MANY in → MANY out) =================\n// Inputs:\n//   - Input 0: Intent Miner items (each like { text: \"[{id,intent},...]\" } or array)\n//   - Input 1 (optional): Stash Beats items (full envelopes, same indexing)\n//      * If not wired, will fallback to $items(\"Stash Beats\", 0, idx)\n// Output: one result per input-0 item: { intents, intentsRaw, envelope, metrics, notes }\n// ==============================================================================\n\n// ---------- tiny helpers ----------\nconst S = v => (v == null ? \"\" : String(v));\nconst splitSentences = (s) =>\n  S(s).replace(/\\r\\n/g, \"\\n\")\n      .split(/(?<=[.!?])\\s+|\\n+/)\n      .map(t => t.trim())\n      .filter(Boolean);\n\n// ---------- forbidden buckets (generic; NOT scene-specific) ----------\nconst cameraJargon = /\\b(pan|tilt|zoom|push[- ]?in|pull[- ]?out|dolly|truck|crane|gimbal|steadicam|handheld|rack focus|bokeh|depth of field|angle|close[- ]?up|wide|frame)\\b/i;\nconst signageWords = /\\b(sign|signage|text|caption|logo|watermark|subtitle|lower third)s?\\b/i;\nconst currencySigns = /[€£$¥₩₽₹₱]/;\nconst currencyCodes = /\\b(usd|eur|gbp|jpy|cny|inr|mxn|brl|cad|aud|chf|zar|sek|nok|dkk|pln|try|ils)\\b/i;\nconst currencyWords = /\\b(euro|euros|dollar|dollars|pound|pounds|yen|yuan|rupee|rupees|peso|pesos|real|reais|dirham|dinar|won|franc|rand|lira|krona|krone|zloty|złoty|shekel|shekels)\\b/i;\nconst pricePattern = new RegExp(\n  `(${currencySigns.source}\\\\s?\\\\d+[\\\\d.,]*|\\\\b\\\\d+[\\\\d.,]*\\\\s?${currencyWords.source}\\\\b|${currencyCodes.source}\\\\s?\\\\d+[\\\\d.,]*)`,\n  \"i\"\n);\nconst addressPattern = /\\b\\d{1,5}\\s+[A-Z][a-z]+(?:\\s[A-Z][a-z]+)*\\s(st\\.?|street|rd\\.?|road|ave\\.?|avenue|blvd\\.?|boulevard|ln\\.?|lane|dr\\.?|drive|way|pl\\.?|place|ct\\.?|court|sq\\.?|square)\\b|#\\s?\\d+|\\b(apt|unit)\\s?\\d+\\b/i;\n\n// ---------- generic quality checks ----------\nconst verbLex = /\\b([a-z]+(?:ing|ed|s))\\b/i;\nconst safeVerbHints = /\\b(glow|steam|move|walk|stand|draw|approach|catch|display|hold|breathe|wake|pour|open|close|pass|rise|fall|cook|serve|read|play|sit)\\b/i;\nconst locish = /\\b(on|in|at|by|through|across|under|over|inside|outside|along|near|beside|between|around)\\b/i;\n\nfunction isCompliantGeneric(s, allowPrices=false) {\n  const t = S(s).trim();\n  if (!t) return false;\n  if (splitSentences(t).length !== 1) return false;\n  if (!verbLex.test(t) && !safeVerbHints.test(t)) return false;\n  if (!allowPrices && pricePattern.test(t)) return false;\n  if (addressPattern.test(t)) return false;\n  if (signageWords.test(t)) return false;\n  if (cameraJargon.test(t)) return false;\n  return true;\n}\n\nfunction enforceOneSettingGeneric(text){\n  const parts = S(text).split(/\\s+(?:and|while|as|then|;)\\s+/i);\n  if (parts.length === 1) return text;\n  const scored = parts.map(p => ({ p: p.trim(), score: (p.match(locish)||[]).length }));\n  scored.sort((a,b)=>b.score-a.score);\n  return (scored[0]?.p || parts[0]).trim();\n}\n\n// Micro, domain-agnostic fixes only (no content invention)\nfunction microFix(t){\n  let s = S(t);\n  s = s.replace(/\\b(\\w+)\\s+\\1\\b/gi, \"$1\");             // dup word collapse\n  s = s.replace(/\\b(on|in|at)\\s+\\1\\b/gi, \"$1\");        // repeated preps\n  s = s.replace(/\\s+,/g, \",\").replace(/\\s{2,}/g, \" \").trim();\n  if (!/[.!?]$/.test(s)) s += \".\";\n  s = s.replace(/^([a-z])/, (m,a)=>a.toUpperCase());\n  return s;\n}\n\nfunction cleanIntentStringGeneric(s, allowPrices=false){\n  let t = S(s).trim();\n  const parts = splitSentences(t);\n  t = parts.length ? parts[0] : t;\n\n  if (!allowPrices && pricePattern.test(t)) t = t.replace(pricePattern, \" \");\n  if (addressPattern.test(t)) t = t.replace(addressPattern, \" \");\n  t = t.replace(signageWords, \" \");\n  t = t.replace(cameraJargon, \" \");\n  t = t.replace(/\\b(grungy|mythic|ethereal|heavenly|epic|luxury|premium|perfect|ultimate|liquid|pulsating|igniting)\\b/ig, \" \");\n  t = enforceOneSettingGeneric(t);\n  t = microFix(t);\n\n  if (t.length > 180) t = t.slice(0,177).replace(/\\s+\\S*$/,\"\") + \"...\";\n  return t.trim();\n}\n\n// ---------- robust parser for many LLM shapes ----------\nconst tryParse = (x) => {\n  if (!x) return null;\n  if (Array.isArray(x)) return x;\n\n  const coerce = (s) => {\n    if (typeof s !== \"string\") return null;\n    let t = s.trim();\n    t = t.replace(/^```(?:json)?\\s*/i, \"\").replace(/```$/i, \"\").trim();\n    t = t.replace(/&quot;/g,'\"').replace(/&#34;/g,'\"')\n         .replace(/&#39;|&apos;/g,\"'\")\n         .replace(/&amp;/g,\"&\");\n    try { const j = JSON.parse(t); if (Array.isArray(j)) return j; } catch {}\n    const m = t.match(/\\[[\\s\\S]*?\\]/);\n    if (m) { try { const j = JSON.parse(m[0]); if (Array.isArray(j)) return j; } catch {} }\n    const pairs = [];\n    const rx = /{[^}]*?\"id\"\\s*:\\s*\"([^\"]+)\"[^}]*?\"intent\"\\s*:\\s*\"([^\"]+)\"[^}]*?}/g;\n    let mm; while ((mm = rx.exec(t)) !== null) pairs.push({ id: String(mm[1]), intent: String(mm[2]) });\n    return pairs.length ? pairs : null;\n  };\n\n  if (typeof x === \"string\") return coerce(x);\n  if (typeof x === \"object\") {\n    if (Array.isArray(x.text)) return x.text;\n    if (typeof x.text === \"string\") { const j = coerce(x.text); if (j) return j; }\n    if (Array.isArray(x.json)) return x.json;\n    if (typeof x.json === \"string\") { const j = coerce(x.json); if (j) return j; }\n    if (typeof x.message === \"string\") { const j = coerce(x.message); if (j) return j; }\n    if (typeof x.data === \"string\") { const j = coerce(x.data); if (j) return j; }\n  }\n  return null;\n};\n\n// ---------- load all inputs ----------\nconst IN_INTENTS = $input.all(0); // Intent Miner items\nlet   IN_STASH   = [];\ntry { IN_STASH = $input.all(1); } catch { IN_STASH = []; } // Stash Beats wired?\n\nfunction envelopeFromJson(j) {\n  if (!j) return null;\n  if (j.scene || j.meta || j.outputs || j.segment || j.references || j.flags) return j;\n  if (j.envelope) return j.envelope;\n  return null;\n}\n\nfunction getEnvelopeForIndex(idx) {\n  // 1) Prefer wired second input (same index)\n  const wired = envelopeFromJson(IN_STASH[idx]?.json);\n  if (wired) return wired;\n\n  // 2) Fallback: fetch the ENTIRE item list from \"Stash Beats\" and index\n  try {\n    // try default (all runs)\n    const all = $items(\"Stash Beats\");\n    if (Array.isArray(all) && all[idx]?.json) {\n      const j = all[idx].json;\n      const env = envelopeFromJson(j) || j;\n      if (env) return env;\n    }\n  } catch {}\n\n  try {\n    // explicitly use run index 0 as an alternative\n    const hit = $items(\"Stash Beats\", 0, idx);\n    if (hit?.[0]?.json) {\n      const j = hit[0].json;\n      const env = envelopeFromJson(j) || j;\n      if (env) return env;\n    }\n  } catch {}\n\n  // 3) Last-resort: look up by node name variants (some deployments rename slightly)\n  const ALIASES = [\"Stash-Beats\", \"Stash Beats (B-Roll)\"];\n  for (const name of ALIASES) {\n    try {\n      const all2 = $items(name);\n      if (Array.isArray(all2) && all2[idx]?.json) {\n        const j = all2[idx].json;\n        const env = envelopeFromJson(j) || j;\n        if (env) return env;\n      }\n    } catch {}\n  }\n\n  // 4) Skeleton fallback\n  return { meta:{}, outputs:{}, prompts:{}, source:{}, rails:[] };\n}\n\n// ---------- process all items ----------\nconst OUT = [];\n\nfor (let idx = 0; idx < IN_INTENTS.length; idx++) {\n  const cur = IN_INTENTS[idx]?.json ?? IN_INTENTS[idx];\n\n  // envelope + beats for this index\n  const envelope = getEnvelopeForIndex(idx);\n  const beats = envelope?.outputs?.beats || [];\n\n  // parse intents for this item\n  let intentsIn = null;\n  if (Array.isArray(cur)) intentsIn = cur;\n  if (!intentsIn && cur?.text != null) intentsIn = tryParse(cur.text);\n  if (!intentsIn && cur?.json != null) intentsIn = tryParse(cur.json);\n  if (!intentsIn) intentsIn = tryParse(cur);\n\n  if (!Array.isArray(intentsIn)) {\n    OUT.push({ json: { error: \"Intent Sanitizer: expected an array of intents (or {text:'[...]'}).\", index: idx, debug: Object.keys(cur || {}) } });\n    continue;\n  }\n\n  // price allowance (policy mirror)\n  const envBlob = JSON.stringify(envelope || {});\n  const allowPrices = Boolean(envelope?.meta?.allowPrices) || /\\b(allow|include|mention)\\s+price(s)?\\b/i.test(envBlob);\n\n  // normalize + align\n  const idFromIdx = i => `B${i+1}`;\n  const intentsRaw = intentsIn.map(x => ({ id: S(x.id || \"\"), intent: S(x.intent || x.text || \"\") }));\n\n  const aligned = [];\n  const passThroughIds = [];\n  const sanitizedIds = [];\n  const filledFromBeats = [];\n\n  for (let i = 0; i < beats.length; i++) {\n    const beat = beats[i];\n    const key  = S(beat?.id || idFromIdx(i)).toUpperCase();\n\n    const found = intentsRaw.find(it => S(it.id).toUpperCase() === key) || intentsRaw[i] || null;\n    const raw   = found ? S(found.intent) : \"\";\n\n    let out;\n    if (raw && isCompliantGeneric(raw, allowPrices)) {\n      out = microFix(raw);\n      passThroughIds.push(idFromIdx(i));\n    } else if (raw) {\n      out = cleanIntentStringGeneric(raw, allowPrices);\n      sanitizedIds.push(idFromIdx(i));\n    } else {\n      const seed = S(beat?.text || \"\").replace(/\\s+/g,\" \").slice(0,160);\n      out = cleanIntentStringGeneric(seed || `Beat ${i+1}.`, allowPrices);\n      filledFromBeats.push(idFromIdx(i));\n    }\n\n    aligned.push({ id: idFromIdx(i), intent: out });\n  }\n\n  // metrics per item\n  const metrics = {\n    itemIndex: idx,\n    intentsIn: intentsRaw.length,\n    beats: beats.length,\n    alignedCount: aligned.length,\n    truncatedExtras: Math.max(0, intentsRaw.length - beats.length),\n    filledFromBeats,\n    sanitizedCount: sanitizedIds.length,\n    passThroughIds,\n    intentCharMin: aligned.length ? Math.min(...aligned.map(a=>a.intent.length)) : 0,\n    intentCharMax: aligned.length ? Math.max(...aligned.map(a=>a.intent.length)) : 0,\n    intentCharAvg: aligned.length ? +(aligned.reduce((n,a)=>n+a.intent.length,0)/aligned.length).toFixed(1) : 0,\n    oneSentenceOk: aligned.map(a => splitSentences(a.intent).length === 1),\n    emptyIntentIds: aligned.filter(a => !S(a.intent)).map(a=>a.id),\n  };\n\n  OUT.push({\n    json: {\n      intents: aligned,\n      intentsRaw,\n      envelope,\n      metrics,\n      notes: {\n        policy: allowPrices ? \"Prices allowed (explicit request).\" : \"Prices stripped by default; set envelope.meta.allowPrices=true to permit.\",\n        mode: \"Prefer compliant raw; conservative micro-fixes only.\",\n        alignment: \"Aligned by beat ID, fallback by index; count matches envelope.outputs.beats.\"\n      }\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -96
+      ],
+      "id": "7777215a-cc0e-42c6-814a-14cb6076d9c3",
+      "name": "Post-Intent Sanitizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ================= Post-Planner Sanitizer (MANY in → MANY out) =================\n// Shot ordering/IDs:\n//   - Sort globally by beatId (numeric) then by original startSec (then original shotId as tiebreaker)\n//   - Renumber shotId *within each beat* to S01, S02, ... (zero-padded)\n//   - Rebuild timestamps linearly in that new order\n// Inputs:\n//   - Input 0: Planner items (each like { text: \"[{shotId,...}, ...]\" } or {shots:[...]})\n//   - Input 1 (optional): Stash Intents items (full envelopes, same indexing)\n// Output: one full envelope per input-0 item with { outputs.shots, outputs.plannerText, plannerMetrics }\n// ==============================================================================\n\nconst S = v => (v == null ? \"\" : String(v));\nconst deepClone = o => JSON.parse(JSON.stringify(o));\nconst safeNumber = (n, def = 0) => {\n  const x = Number(n);\n  return Number.isFinite(x) ? x : def;\n};\n\nconst cameraJargon = /\\b(pan|tilt|zoom|push[- ]?in|pull[- ]?out|dolly|truck|crane|gimbal|steadicam|handheld|rack focus|bokeh|depth of field|angle|timelapse|time[- ]?lapse|hyperlapse|slow[- ]?motion|fps|frame[- ]?rate)\\b/ig;\n\nfunction cleanText(x) {\n  let t = S(x).trim();\n  t = t.replace(cameraJargon, \"\").replace(/\\s{2,}/g,\" \").trim();\n  t = t.replace(/^\\s*of\\s+/i, \"\");\n  if (!t) return t;\n  if (!/[.!?]$/.test(t)) t += \".\";\n  t = t.replace(/[.?!]+$/, \".\");\n  return t;\n}\n\nconst computeTotal = (shots) =>\n  shots.reduce((s, sh) => s + Math.max(0, safeNumber(sh.endSec) - safeNumber(sh.startSec)), 0);\n\nfunction parseShotsFromPlannerItem(item) {\n  if (Array.isArray(item?.json?.outputs?.shots)) return deepClone(item.json.outputs.shots);\n  if (Array.isArray(item?.json?.shots))         return deepClone(item.json.shots);\n  if (Array.isArray(item?.outputs?.shots))      return deepClone(item.outputs.shots);\n  if (Array.isArray(item?.shots))               return deepClone(item.shots);\n\n  let blob = S(item?.json?.text ?? item?.text ?? item?.json ?? \"\");\n  if (!blob && typeof item === \"string\") blob = item;\n  if (!blob) return [];\n\n  blob = blob.replace(/^```(?:json)?\\s*/i, \"\").replace(/```$/i, \"\").trim();\n\n  const mArr = blob.match(/\\[[\\s\\S]*\\]$/m) || blob.match(/\\[[\\s\\S]*\\]/m);\n  if (mArr) {\n    try { const arr = JSON.parse(mArr[0]); if (Array.isArray(arr)) return arr; } catch {}\n  }\n\n  const objs = [];\n  const re = /\\{\\s*\"shotId\"[\\s\\S]*?\\}/g;\n  let m;\n  while ((m = re.exec(blob)) !== null) {\n    try {\n      const o = JSON.parse(m[0]);\n      if (o && (o.shotId || o.subject || o.action)) objs.push(o);\n    } catch {}\n  }\n  return objs;\n}\n\nfunction normalizeShot(sh, idx){\n  let startSec = safeNumber(sh.startSec, 0);\n  let endSec   = safeNumber(sh.endSec,   startSec + 4);\n  if (endSec < startSec) [startSec, endSec] = [endSec, startSec];\n  if (endSec - startSec < 0.01) endSec = startSec + 0.01;\n\n  return {\n    shotId: sh.shotId || `S${String(idx + 1).padStart(2, \"0\")}`,\n    beatId: sh.beatId || null,\n    startSec, endSec,\n    subject: cleanText(sh.subject || \"\"),\n    action:  cleanText(sh.action  || \"\"),\n    setting: cleanText(sh.setting || \"\"),\n    notes:   S(sh.notes || \"\").trim(),\n    tags:    Array.isArray(sh.tags) ? sh.tags.map(S) : []\n  };\n}\n\n// ---- NEW: order by beat then renumber shotId within each beat (S01, S02, …) ----\nconst parseBeatNum = (b) => {\n  if (!b) return Infinity;\n  const n = parseInt(String(b).replace(/\\D+/g, \"\"), 10);\n  return Number.isFinite(n) ? n : Infinity;\n};\n\nfunction orderAndRenumberByBeat(shots) {\n  // stable original index to preserve planner intent inside the same beat\n  const withIdx = shots.map((s,i)=>({...s, __idx:i}));\n\n  // sort globally: beat (numeric) → startSec → original shotId (numeric-aware) → original index\n  withIdx.sort((a,b)=>{\n    const ba = parseBeatNum(a.beatId), bb = parseBeatNum(b.beatId);\n    if (ba !== bb) return ba - bb;\n\n    const sa = safeNumber(a.startSec, 0), sb = safeNumber(b.startSec, 0);\n    if (sa !== sb) return sa - sb;\n\n    const idcmp = String(a.shotId).localeCompare(String(b.shotId), undefined, { numeric:true, sensitivity:\"base\" });\n    if (idcmp !== 0) return idcmp;\n    return a.__idx - b.__idx;\n  });\n\n  // renumber within each beat\n  const out = [];\n  let curBeat = null, counter = 0;\n  for (const s of withIdx) {\n    if (s.beatId !== curBeat) { curBeat = s.beatId; counter = 0; }\n    counter += 1;\n    const newShotId = `S${String(counter).padStart(2,\"0\")}`; // S01, S02, ...\n    out.push({ ...s, shotId: newShotId });\n  }\n\n  // strip helper\n  return out.map(({__idx, ...rest}) => rest);\n}\n\nfunction packMonotonic(shots){\n  let t = 0;\n  return shots.map(sh=>{\n    const dur = Math.max(0.01, sh.endSec - sh.startSec);\n    const start = t;\n    const end = start + dur;\n    t = end;\n    return Object.assign({}, sh, { startSec:start, endSec:end });\n  });\n}\n\nfunction scaleToTarget(shots, target){\n  const cur = computeTotal(shots);\n  if (!(target > 0) || !(cur > 0)) return { shots, didScale:false };\n  if (Math.abs(cur - target) < 1e-6) return { shots, didScale:false };\n\n  const k = target / cur;\n  let t = 0;\n  const out = shots.map(sh=>{\n    const dur = Math.max(0.01, (sh.endSec - sh.startSec) * k);\n    const start = t;\n    const end = start + dur;\n    t = end;\n    return Object.assign({}, sh, { startSec:start, endSec:end });\n  });\n  return { shots: out, didScale:true };\n}\n\nconst snap = (x, p = 3) => +Number(x).toFixed(p);\n\n// ---------------- envelope sourcing (exactly like Post-Intent) ----------------\nconst IN_PLANNER = $input.all(0);\nlet   IN_STASH   = [];\ntry { IN_STASH = $input.all(1); } catch { IN_STASH = []; }\n\nfunction envelopeFromJson(j) {\n  if (!j) return null;\n  if (j.scene || j.meta || j.outputs || j.segment || j.references || j.flags) return j;\n  if (j.envelope) return j.envelope;\n  return null;\n}\n\nfunction getEnvelopeForIndex(idx) {\n  const wired = envelopeFromJson(IN_STASH[idx]?.json);\n  if (wired) return wired;\n\n  try {\n    const all = $items(\"Stash Intents\");\n    if (Array.isArray(all) && all.length) {\n      const cidx = Math.min(idx, all.length - 1);\n      const j = all[cidx]?.json ?? all[cidx];\n      const env = envelopeFromJson(j) || j;\n      if (env) return env;\n    }\n  } catch {}\n\n  try {\n    const hit = $items(\"Stash Intents\", 0, idx);\n    const j = hit?.[0]?.json ?? hit?.[0];\n    const env = envelopeFromJson(j) || j;\n    if (env) return env;\n  } catch {}\n\n  const ALIASES = [\"Stash-Intents\", \"Stash Intents (B-Roll)\"];\n  for (const name of ALIASES) {\n    try {\n      const all2 = $items(name);\n      if (Array.isArray(all2) && all2.length) {\n        const cidx = Math.min(idx, all2.length - 1);\n        const j = all2[cidx]?.json ?? all2[cidx];\n        const env = envelopeFromJson(j) || j;\n        if (env) return env;\n      }\n    } catch {}\n  }\n\n  return { meta:{}, outputs:{}, prompts:{}, source:{}, rails:[], metrics:{} };\n}\n\nfunction getTargetDuration(env){\n  const m = Number(env?.meta?.durationSec);\n  if (m > 0) return m;\n  const beats = env?.outputs?.beats;\n  if (Array.isArray(beats) && beats.length){\n    const sum = beats.reduce((acc,b)=>acc + Math.max(0, safeNumber(b.endSec)-safeNumber(b.startSec)), 0);\n    if (sum > 0) return sum;\n  }\n  return 0;\n}\n\n// ---------------- process all planner items ----------------\nconst OUT = [];\n\nfor (let idx = 0; idx < IN_PLANNER.length; idx++) {\n  const cur = IN_PLANNER[idx]?.json ?? IN_PLANNER[idx];\n\n  // 1) envelope for this index (clamped if stash count < planner count)\n  const env = getEnvelopeForIndex(idx);\n  const outputs = Object.assign({}, env.outputs || {});\n\n  // 2) keep raw planner blob\n  const rawText = S(cur?.text ?? cur?.outputs?.text ?? \"\");\n  if (rawText) outputs.plannerText = rawText;\n\n  // 3) parse + normalize\n  let shots = parseShotsFromPlannerItem(cur).map(normalizeShot);\n\n  // 3.1) **ORDER + RENUMBER within beat**: Bxx → S01,S02,... then rebuild timeline\n  shots = orderAndRenumberByBeat(shots);\n\n  // 3.2) pack contiguously (keeps each shot's duration, rebuilds start/end)\n  shots = packMonotonic(shots);\n\n  // 4) lock to target duration (if any)\n  const target = getTargetDuration(env);\n  const beforeTotal = computeTotal(shots);\n  const { shots: scaled, didScale } = scaleToTarget(shots, target);\n  shots = scaled;\n\n  // 5) round timings & snap last end to target\n  if (shots.length) {\n    shots = shots.map(s => ({\n      ...s,\n      startSec: snap(s.startSec, 3),\n      endSec: snap(s.endSec, 3),\n    }));\n    if (target > 0) {\n      shots[shots.length - 1].endSec = snap(target, 3);\n    }\n  }\n\n  outputs.shots = shots;\n\n  const plannerMetrics = {\n    itemIndex: idx,\n    shotCount: shots.length,\n    totalDuration: +computeTotal(shots).toFixed(3),\n    timeMonotonic: shots.every((s,i,a)=> i===0 || s.startSec >= a[i-1].endSec - 1e-6),\n    lockedToTarget: didScale,\n    targetDuration: target || null,\n    beforeDuration: +beforeTotal.toFixed(3)\n  };\n\n  OUT.push({ json: Object.assign({}, env, { outputs, plannerMetrics }) });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        144
+      ],
+      "id": "2dc5ebfb-b90f-4946-8ada-a268ce85041b",
+      "name": "Post-Planner Sanitizer"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        -752
+      ],
+      "id": "14c6d340-c18a-492c-afbd-05e065733a1f",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f7f240ed-c380-4b59-ad8c-dd8fd6c67b3d",
+              "leftValue": "={{ !!$json.envelope.references?.providedScript && $json.envelope.references.providedScript.trim().length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "d510f245-7bf0-4acf-bdb7-f96d93acae16",
+              "leftValue": "={{ !!$json.envelope.source?.planner?.providedScript && $json.envelope.source.planner.providedScript.trim().length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1168,
+        -496
+      ],
+      "id": "6963d301-2914-4cad-a665-b816f9765748",
+      "name": "Provided Script?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const content =\n  $json.choices?.[0]?.message?.content ??\n  $json.message?.content ??\n  $json.text ?? \"\";\n\nreturn [{\n  json: {\n    ...$json,\n    script: String(content || \"\"),\n    __scriptFromLLM: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -560
+      ],
+      "id": "193db605-046f-40d4-a7b9-4bb8f1629ef6",
+      "name": "Normalize Model Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Sanitizer (Batch) → BRoll pass-through + per-shot prompts (+ stable seg-beat-shot keys)\n// Ordering: beatId (numeric) → shotId (numeric)\n// Writer text mapping: index-align when shotIds collide (e.g., S01 in every beat)\n\nconsole.log(\"Final sanitizer: items in =\", $input.all().length);\nconst IN  = $input.all();\nconst OUT = [];\n\n// ---------------- helpers ----------------\nconst to3 = (v) => Math.round(Number(v || 0) * 1000) / 1000;\nconst collapse = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst pad2 = (n) => String(Math.max(0, Number(n||0))).padStart(2, '0');\nconst numFromId = (id) => { const m = String(id||'').match(/(\\d+)/); return m ? Number(m[1]) : 0; };\n\nfunction uniq(arr) {\n  const seen = new Set(); const out = [];\n  for (const x of arr || []) { const k = collapse(x); if (!k || seen.has(k)) continue; seen.add(k); out.push(x); }\n  return out;\n}\n\n// Deduplicate a CSV string at the token level (case-insensitive), preserving first-seen casing\nfunction dedupeCSV(csv) {\n  const seen = new Set(); const out = [];\n  for (const raw of String(csv || '').split(',')) {\n    const t = collapse(raw);\n    if (!t) continue;\n    const key = t.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key); out.push(t);\n  }\n  return out.join(', ');\n}\n\n// Convert rails (prohibitions) into clean negative terms\nfunction railsToNegatives(rails = []) {\n  const deny = [];\n  for (const r of rails) {\n    const k = String(r || '').toLowerCase();\n    if (/no on-screen text|subtitles|logos|watermarks|readable signage/i.test(k)) {\n      deny.push('text','logo','watermark','lettering','overlays','lower thirds','readable signage','captions');\n    }\n    if (/avoid fast|whip/i.test(k)) deny.push('fast motion','whip pan','hyper-accelerated movement','camera shake');\n    if (/avoid clutter|keep composition clean/i.test(k)) deny.push('visual clutter','busy background','noisy composition');\n    if (/title-safe/i.test(k)) deny.push('edge cropping','cut-off faces');\n    if (/face fully visible|mouth|jawline/i.test(k)) deny.push('occluded face','blocked mouth','blocked jawline');\n  }\n  return uniq(deny);\n}\n\n// Summarize direction into a short hint\nfunction summarizeDirection(dir = '') {\n  const s = collapse(dir).toLowerCase();\n  const hints = new Set();\n  if (/smooth|unhurried|gentle/i.test(s)) hints.add('smooth, unhurried motion');\n  if (/environment|steam|leaves|light changes|traffic|people passing/i.test(s)) hints.add('subtle environmental movement');\n  if (/transition|match|continuity/i.test(s)) hints.add('gentle transitions');\n  if (/no fast|avoid fast|whip/i.test(s)) hints.add('no fast pans or whip moves');\n  if (/incidental|no direct-to-camera|presenter may appear only incidentally/i.test(s)) hints.add('presenter incidental only');\n  const out = Array.from(hints);\n  return out.length ? out.slice(0, 3).join('; ') : 'smooth natural motion; gentle transitions; no fast pans';\n}\n\n// Stable shotKey using ORIGINAL segId\nfunction makeShotKey(segId, beatId, shotId) {\n  const b = pad2(numFromId(beatId) || 1);\n  const s = pad2(numFromId(shotId) || 1);\n  return `${String(segId||'SEG-01')}-B${b}-S${s}`;\n}\n\n// Global collision tracker across the whole batch run\nconst globalKeyCounts = new Map();\nfunction uniquify(key) {\n  const c = (globalKeyCounts.get(key) || 0) + 1;\n  globalKeyCounts.set(key, c);\n  return c === 1 ? key : `${key}-DUP${c}`;\n}\n\n// Sort by beat (numeric) → shot (numeric) with safe tie-breakers\nfunction sortByBeatThenShot(a, b) {\n  const ba = numFromId(a.beatId), bb = numFromId(b.beatId);\n  if (ba !== bb) return ba - bb;\n  const sa = numFromId(a.shotId), sb = numFromId(b.shotId);\n  if (sa !== sb) return sa - sb;\n  // fallbacks: original startSec, then string compare\n  const sta = Number(a.startSec||0), stb = Number(b.startSec||0);\n  if (sta !== stb) return sta - stb;\n  return String(a.shotId||'').localeCompare(String(b.shotId||''), undefined, { numeric:true, sensitivity:'base' });\n}\n\n// --------------- main ---------------\nfor (const it of IN) {\n  const item   = it?.json ?? it ?? {};\n  const source = { ...(item.source || {}) };\n\n  // ensure segment\n  let seg = source.segment || item.segment || null;\n  if (!seg) {\n    seg = {\n      segId: source.segId || \"SEG-01\",\n      track: \"broll\",\n      orchestratorId: source.orchestratorId || item.orchestratorId,\n      packageId: source.packageId || item.packageId,\n      comboId: source.comboId || item.comboId,\n      startSec: 0,\n      endSec: Number(source.durationSec || item.meta?.durationSec || 0),\n    };\n    seg.durationSec = to3(seg.endSec - seg.startSec);\n  } else {\n    seg.startSec    = to3(seg.startSec);\n    seg.endSec      = to3(seg.endSec);\n    seg.durationSec = to3(seg.endSec - seg.startSec);\n  }\n\n  // repair segment times if needed\n  if (!(seg.durationSec > 0)) {\n    const shotList = Array.isArray(item.plan) ? item.plan : (Array.isArray(item.shots) ? item.shots : []);\n    let newStart = 0, newEnd = 0;\n    if (shotList.length) {\n      const starts = shotList.map(x => Number(x?.startSec)).filter(Number.isFinite);\n      const ends   = shotList.map(x => Number(x?.endSec)).filter(Number.isFinite);\n      if (starts.length && ends.length) { newStart = Math.min(...starts); newEnd = Math.max(...ends); }\n    }\n    const metaDur   = Number(item.meta?.durationSec || 0);\n    const sourceDur = Number(source.durationSec || 0);\n    const planTotal = Number(item.plannerMetrics?.totalDuration || 0);\n    const planTarget= Number(item.plannerMetrics?.targetDuration || 0);\n    const dur = (newEnd>newStart)?(newEnd-newStart):(metaDur||sourceDur||planTotal||planTarget||0);\n    seg.startSec = to3((newEnd>newStart)?newStart:0);\n    seg.endSec   = to3(seg.startSec + dur);\n    seg.durationSec = to3(seg.endSec - seg.startSec);\n  }\n  source.segment = seg;\n\n  // outputs (pass-through)\n  const outputs = {\n    script:    item.outputs?.script,\n    character: item.outputs?.character,\n    setting:   item.outputs?.setting,\n    direction: item.outputs?.direction\n  };\n\n  // shots source (prefer plan)\n  const shotSrc = Array.isArray(item.plan) ? item.plan : (Array.isArray(item.shots) ? item.shots : []);\n  // canonicalize minimal fields\n  let shots = shotSrc.map(sh => ({\n    shotId:   sh.shotId,\n    beatId:   sh.beatId,\n    subject:  collapse(sh.subject),\n    tags:     Array.isArray(sh.tags) ? sh.tags : [],\n    notes:    collapse(sh.notes),\n    setting:  collapse(sh.setting),\n    startSec: Number(sh.startSec ?? 0),\n    endSec:   Number(sh.endSec ?? 0),\n    durationSec: Number(sh.durationSec ?? (Number(sh.endSec ?? 0) - Number(sh.startSec ?? 0)))\n  }));\n\n  // ---- enforce ordering by beat → shot ----\n  shots.sort(sortByBeatThenShot);\n\n  // ---- assign shotKeys (unique across batch) ----\n  shots = shots.map(sh => {\n    const baseKey = makeShotKey(seg.segId, sh.beatId, sh.shotId);\n    return { ...sh, shotKey: uniquify(baseKey) };\n  });\n\n  // ---- writer text mapping ----\n  const writerList = Array.isArray(item.outputs?.writerShotsClean) ? item.outputs.writerShotsClean : [];\n  // If lengths match, index-align (robust when all shotIds == S01 per beat)\n  let writerByIndex = new Map();\n  if (writerList.length === shots.length) {\n    writerList.forEach((w, i) => writerByIndex.set(i, collapse(w.text)));\n  }\n  // Fallback maps\n  const writerByComposite = new Map(writerList.map(w => {\n    const key = `${String(w.beatId||'') }::${String(w.shotId||'')}`;\n    return [key, collapse(w.text)];\n  }));\n  const writerByShotId = new Map(writerList.map(w => [String(w.shotId||''), collapse(w.text)]));\n\n  // global prompt parts\n  const rails = Array.isArray(item.rails) ? item.rails : [];\n  const negFromRails = railsToNegatives(rails);\n  const negProvided  = collapse(item.prompts?.negative || '');\n  const negCommons   = ['ai artifacts','warped geometry','double subjects','deformed hands','low-res','blurry','strobing','banding','overexposed highlights'];\n  const NEGATIVE_BASE = dedupeCSV(uniq([negProvided, ...negFromRails, ...negCommons]).join(', '));\n  const dirHint   = summarizeDirection(item.prompts?.direction);\n  const fpsOut    = Number(item.settings?.fps || 30) || 30;\n  const videoType = item.meta?.videoType || \"broll\";\n\n  // Build per-shot prompts\n  const shotPrompts = shots.map((sh, i) => {\n    // pick writer text by priority: index → composite → shotId → synthesized\n    const compositeKey = `${String(sh.beatId||'')}::${String(sh.shotId||'')}`;\n    const writerText = (writerByIndex.get(i))\n                    || (writerByComposite.get(compositeKey))\n                    || (writerByShotId.get(String(sh.shotId||'')))\n                    || null;\n\n    const fallbackPositive = collapse([sh.subject, sh.setting, uniq(sh.tags || []).join(', ')].filter(Boolean).join('. '));\n    let positive = collapse(writerText || fallbackPositive) || 'simple cinematic view';\n\n    let negativeCsv = NEGATIVE_BASE;\n    if (/logo|brand|signage|watermark/i.test(sh.notes || '')) {\n      negativeCsv = dedupeCSV(negativeCsv + ', logo, brand marks, readable signage, watermark');\n    }\n\n    const dSec = Number.isFinite(Number(sh.durationSec)) && Number(sh.durationSec) > 0\n      ? Number(sh.durationSec)\n      : Math.max(0, Number(sh.endSec||0) - Number(sh.startSec||0));\n\n    return {\n      shotKey: sh.shotKey,\n      shotId:  sh.shotId,\n      beatId:  sh.beatId,\n      durationSec: to3(dSec),\n      t2i: {\n        engine: 'sdxl',\n        positive,\n        negative: negativeCsv,\n        subject: sh.subject || null,\n        setting: sh.setting || null,\n        tags:    uniq(sh.tags || [])\n      },\n      i2v: {\n        engine: 'hunyuan',\n        positive,\n        negative: negativeCsv,\n        motionHint: dirHint,\n        fps: fpsOut\n      }\n    };\n  });\n\n  const shotCount      = shots.length || Number(item.plannerMetrics?.shotCount || 0);\n  const totalDuration  = Number(item.plannerMetrics?.totalDuration ?? seg.durationSec ?? 0);\n  const targetDuration = Number(item.plannerMetrics?.targetDuration ?? source.durationSec ?? 0);\n\n  OUT.push({\n    json: {\n      // checklist/meta (pass-through)\n      scene:          source.scene,\n      driver:         source.driver,\n      wantsCutaways:  source.wantsCutaways,\n      character:      source.character,\n      setting:        source.setting,\n      action:         source.action,\n      directorsNotes: source.directorsNotes,\n      script:         outputs.script,\n      wantsMusic:     source.wantsMusic,\n      musicDesc:      source.musicDesc,\n      wantsCaptions:  source.wantsCaptions,\n      durationSec:    source.durationSec,\n      referenceText:  source.referenceText,\n      id:             source.id,\n      comboId:        source.comboId,\n      providedScript: source.providedScript,\n      providedWpm:    source.providedWpm,\n      providedVoice:  source.providedVoice,\n      segId:          seg.segId,\n      track:          seg.track,\n      startSec:       seg.startSec,\n      endSec:         seg.endSec,\n      orchestratorId: seg.orchestratorId,\n      videoType:      videoType,\n      packageId:      seg.packageId,\n\n      source,\n      segment: seg,\n      prompts: item.prompts,\n      outputs,\n\n      // ordered + keyed shots and prompts\n      shots,\n      shotPrompts,\n\n      // metrics\n      shotCount,\n      totalDuration,\n      targetDuration,\n\n      // convenience mirrors for first shot (legacy)\n      shotId:  shots[0]?.shotId,\n      beatId:  shots[0]?.beatId,\n      subject: shots[0]?.subject,\n      tags:    shots[0]?.tags\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        384
+      ],
+      "id": "b654b05a-2057-4acd-99a1-430f07865e8a",
+      "name": "Final sanitizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Beat Validator & Repair (per-item)\n// Expects current item.json = envelope with meta.durationSec & outputs.script\n// Optionally has outputs.beats (LLM result) or outputs.beatsRaw\n\nfunction S(v){ return v == null ? \"\" : String(v); }\nfunction clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }\nfunction words(s){ return S(s).trim().split(/\\s+/).filter(Boolean).length; }\nfunction isBeat(o){\n  return o && typeof o === \"object\" &&\n         typeof o.id === \"string\" &&\n         typeof o.text === \"string\" &&\n         Number.isFinite(Number(o.startSec)) &&\n         Number.isFinite(Number(o.endSec));\n}\nfunction deepClone(o){ return JSON.parse(JSON.stringify(o)); }\n\nfunction targetBeatCount(env){\n  const dur = Number(env.meta?.durationSec || 0) || 0;\n  const wc  = words(env.outputs?.script || \"\");\n  if (dur <= 8 || wc <= 12) return 1;                      // short VO → 1 beat\n  return clamp(Math.round(dur / 7), 1, 12);                // default policy\n}\n\nfunction normalize(beats, n, duration){\n  // 1) filter valid\n  let b = (Array.isArray(beats) ? beats : []).filter(isBeat).map(x => ({\n    id: S(x.id).trim(),\n    text: S(x.text).trim(),\n    startSec: Math.max(0, Math.round(Number(x.startSec)||0)),\n    endSec:   Math.max(0, Math.round(Number(x.endSec)||0)),\n  }));\n  // 2) order by startSec, drop overlaps later\n  b.sort((a,b)=> a.startSec - b.startSec || a.endSec - b.endSec);\n\n  // If empty → create one beat\n  if (!b.length){\n    return [{\n      id: \"B1\",\n      text: \"\", startSec: 0, endSec: Math.max(0, Math.round(duration))\n    }];\n  }\n\n  // 3) force contiguity and whole seconds\n  let cur = 0;\n  for (const beat of b){\n    const len = Math.max(1, Math.round(beat.endSec - beat.startSec));\n    beat.startSec = cur;\n    beat.endSec   = cur + len;\n    cur = beat.endSec;\n  }\n\n  // 4) resize list to exactly n beats\n  if (b.length > n){\n    // merge extra beats into the last one\n    const keep = b.slice(0, n-1);\n    const mergedText = b.slice(n-1).map(x=>x.text).filter(Boolean).join(\" \");\n    const lastStart  = keep.length ? keep[keep.length-1].endSec : 0;\n    keep.push({ id: \"B\"+n, text: mergedText || \"…\", startSec: lastStart, endSec: lastStart+1 });\n    b = keep;\n  } else if (b.length < n){\n    // split the last beat to reach n\n    while (b.length < n){\n      const last = b[b.length-1];\n      const mid  = Math.max(last.startSec+1, Math.floor((last.startSec + last.endSec)/2));\n      const newBeat = { id: \"B\"+(b.length+1), text: last.text, startSec: mid, endSec: last.endSec };\n      last.endSec   = mid;\n      b.push(newBeat);\n    }\n  }\n\n  // 5) set final end to duration; spread if we overflow/underflow\n  const total = b[0].startSec + b.reduce((acc,x,i)=> (i===0?0:acc) + (x.endSec - x.startSec), 0);\n  const span  = b[b.length-1].endSec - b[0].startSec;\n  const target = Math.max(1, Math.round(duration));\n  // ensure sequential & contiguous\n  let cursor = 0;\n  const evenLen = Math.max(1, Math.floor(target / n));\n  for (let i=0;i<b.length;i++){\n    b[i].startSec = cursor;\n    b[i].endSec   = (i === b.length-1) ? target : cursor + evenLen;\n    cursor = b[i].endSec;\n  }\n\n  // 6) re-ID strictly B1..Bn and trim text\n  for (let i=0;i<b.length;i++){\n    b[i].id   = \"B\"+(i+1);\n    b[i].text = S(b[i].text).trim();\n  }\n  return b;\n}\n\nconst OUT = [];\nfor (const it of $input.all()){\n  const env = deepClone(it.json || {});\n  const duration = Number(env.meta?.durationSec || env.segment?.durationSec || env.durationSec || 0) || 0;\n  const targetN  = targetBeatCount(env);\n\n  // candidate beats from LLM (either outputs.beats or outputs.beatsRaw)\n  const raw = Array.isArray(env.outputs?.beats) ? env.outputs.beats :\n              Array.isArray(env.outputs?.beatsRaw) ? env.outputs.beatsRaw : [];\n\n  let beats = normalize(raw, targetN, duration);\n\n  // If any empty text, backfill from script slice\n  const script = S(env.outputs?.script || \"\");\n  if (script){\n    beats = beats.map((b,i)=>({\n      ...b,\n      text: b.text || (i===0 ? script : script)  // simple backfill; keep deterministic\n    }));\n  }\n\n  // write back + metrics\n  env.outputs = env.outputs || {};\n  env.outputs.beats = beats;\n\n  env.metrics = env.metrics || {};\n  env.metrics.beatCount = beats.length;\n  env.metrics.totalBeatDuration = beats.length ? (beats[beats.length-1].endSec - beats[0].startSec) : 0;\n  env.metrics.beatDurations = beats.map(b=> b.endSec - b.startSec);\n  env.metrics.beatDurationMin = Math.min(...env.metrics.beatDurations);\n  env.metrics.beatDurationMax = Math.max(...env.metrics.beatDurations);\n  env.metrics.beatDurationAvg = Math.round(env.metrics.beatDurations.reduce((a,c)=>a+c,0)/beats.length * 100)/100;\n  env.metrics.beatTimingIssues = [];\n  // validation flags\n  const lastOk = beats[beats.length-1].endSec === Math.round(duration);\n  const contiguous = beats.every((b,i)=> i===0 || b.startSec === beats[i-1].endSec);\n  if (!lastOk) env.metrics.beatTimingIssues.push(\"final_end_mismatch\");\n  if (!contiguous) env.metrics.beatTimingIssues.push(\"not_contiguous\");\n\n  OUT.push({ json: env });\n}\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -336
+      ],
+      "id": "bd199064-7e63-4069-b54f-5089b5721601",
+      "name": "Beat Validator"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Final Node → TrackEDL (non-forcing track/videoType)\n * Ensures each SHOT has { shotKey, segId, beatId, shotId } at top level,\n * and exposes a flat shotsIndex/promptsIndex for the next node.\n */\n\nconst ROUND = (x) => Math.round(Number(x || 0) * 1000) / 1000;\nconst pickFirst = (...xs) => xs.find(v => v !== undefined && v !== null && v !== '') ?? null;\n\nconst numFromId = (id) => { const m = String(id||'').match(/(\\d+)/); return m ? Number(m[1]) : 0; };\nconst sortBeatShot = (a, b) => {\n  const ba = numFromId(a.beatId), bb = numFromId(b.beatId);\n  if (ba !== bb) return ba - bb;\n  const sa = numFromId(a.shotId), sb = numFromId(b.shotId);\n  if (sa !== sb) return sa - sb;\n  const sta = Number(a.startSec||0), stb = Number(b.startSec||0);\n  if (sta !== stb) return sta - stb;\n  return String(a.shotId||'').localeCompare(String(b.shotId||''), undefined, { numeric:true, sensitivity:'base' });\n};\n\n// Parse \"SEG-02-B01-S07\" → { segId:\"SEG-02\", beatId:\"B01\", shotId:\"S07\" }\nfunction parseShotKey(sk) {\n  const m = String(sk || '').match(/^SEG-(\\d+)-B(\\d+)-S(\\d+)$/i);\n  if (!m) return null;\n  const seg = `SEG-${m[1].padStart(2, '0')}`;\n  const beat = `B${m[2].padStart(2, '0')}`;\n  const shot = `S${m[3].padStart(2, '0')}`;\n  return { segId: seg, beatId: beat, shotId: shot };\n}\nfunction synthShotKey(segId, beatId, shotId) {\n  const seg = String(segId || '').trim();\n  const beat = String(beatId || '').trim();\n  const shot = String(shotId || '').trim();\n  return (seg && beat && shot) ? `${seg}-${beat}-${shot}` : '';\n}\n\nfunction rebuildContiguous(shots, startAt = 0, totalTarget = null) {\n  if (!Array.isArray(shots) || !shots.length) return [];\n  const arr = shots.map(s => ({ ...s }));\n\n  // prefer durationSec; else compute from start/end; else even split\n  const durs = arr.map(s => {\n    const d = Number(s.durationSec);\n    if (d > 0) return d;\n    const a = Number(s.startSec), b = Number(s.endSec);\n    if (Number.isFinite(a) && Number.isFinite(b) && b > a) return b - a;\n    return NaN;\n  });\n  const allGood = durs.every(d => Number.isFinite(d) && d > 0);\n\n  let useDur = durs;\n  if (!allGood) {\n    const fallbackTotal = Number(totalTarget) > 0 ? Number(totalTarget) : null;\n    const even = (fallbackTotal || shots.length * 3) / shots.length; // default 3s each\n    useDur = shots.map(() => even);\n  }\n\n  let t = Number(startAt) || 0;\n  const out = arr.map((s, i) => {\n    const start = t;\n    const end = start + Number(useDur[i] || 0);\n    t = end;\n    return { ...s, startSec: ROUND(start), endSec: ROUND(end), durationSec: ROUND(end - start) };\n  });\n\n  if (Number(totalTarget) > 0 && out.length) {\n    const firstStart = Number(startAt) || 0;\n    out[out.length - 1].endSec = ROUND(firstStart + Number(totalTarget));\n    out[out.length - 1].durationSec = ROUND(out[out.length - 1].endSec - out[out.length - 1].startSec);\n  }\n  return out;\n}\n\nfunction alignPromptsToShots(shots, shotPrompts, segIdForShots) {\n  if (!Array.isArray(shotPrompts)) return [];\n  const byShotKey = new Map(shotPrompts.map(p => [String(p.shotKey||''), p]));\n  const byComposite = new Map(shotPrompts.map(p => [`${String(p.beatId||'')}::${String(p.shotId||'')}`, p]));\n  const out = [];\n  shots.forEach((s, i) => {\n    const k1 = String(s.shotKey || '');\n    const k2 = `${String(s.beatId||'')}::${String(s.shotId||'')}`;\n    const hit = (k1 && byShotKey.get(k1)) || byComposite.get(k2) || shotPrompts[i] || null;\n    if (hit) {\n      out.push({\n        ...hit,\n        segId: s.segId || segIdForShots || hit.segId || null,\n        shotKey: s.shotKey || hit.shotKey,\n        shotId:  s.shotId,\n        beatId:  s.beatId,\n        durationSec: ROUND(Number(s.durationSec || hit.durationSec || 0))\n      });\n    }\n  });\n  return out;\n}\n\n// --- 0) Gather inbound ---\nconst raw = $input.all();\nif (raw.length === 1 && raw[0]?.json?.kind === 'TrackEDL') {\n  return [{ json: raw[0].json }];\n}\n\n// --- 1) Flatten to segment-like entries ---\nlet IN = [];\nfor (const it of raw) {\n  const v = it?.json;\n  if (!v) continue;\n  if (Array.isArray(v)) IN.push(...v);\n  else if (v.kind === 'TrackEDL' && Array.isArray(v.segments)) IN.push(...v.segments);\n  else IN.push(v);\n}\nif (!IN.length) {\n  return [{\n    json: {\n      kind: 'TrackEDL',\n      track: null,\n      videoType: null,\n      segments: [],\n      totalDurationSec: 0,\n      flags: { captions: false, music: false },\n      speech: { voiceId: null, wps: null, wpm: null },\n      title: null,\n      routeUsed: null,\n      requestId: null,\n      _meta: { builtAt: new Date().toISOString(), segCount: 0, warnings: ['empty input'] }\n    }\n  }];\n}\n\n// --- 2) Normalize each segment and STAMP IDS on every shot ---\nconst warnings = [];\nconst segs = IN.map((it) => {\n  const s = { ...it };\n\n  // segment timing (prefer explicit, else from shots, else fallback)\n  const segIn = s.segment || {};\n  const segStart = Number(segIn.startSec ?? s.startSec ?? 0) || 0;\n  let segEnd = Number(segIn.endSec ?? s.endSec);\n  let segDur = Number(segIn.durationSec ?? s.durationSec);\n\n  const shotsIn = Array.isArray(s.shots) ? s.shots.slice() : [];\n  const shotSum = shotsIn.reduce((acc, sh) => {\n    const d = Number(sh.durationSec);\n    if (d > 0) return acc + d;\n    const a = Number(sh.startSec), b = Number(sh.endSec);\n    return acc + (Number.isFinite(a) && Number.isFinite(b) && b > a ? (b - a) : 0);\n  }, 0);\n\n  if (!(segDur > 0) && !(Number.isFinite(segEnd) && segEnd > segStart)) {\n    if (shotSum > 0) {\n      segDur = shotSum;\n      segEnd = segStart + segDur;\n    } else {\n      segDur = Number(s.source?.segment?.durationSec) || Number(s.meta?.durationSec) || 30;\n      segEnd = segStart + segDur;\n      warnings.push(`defaulted segment duration for ${segIn.segId || s.segId || 'unknown'}`);\n    }\n  } else if (!(segDur > 0)) {\n    segDur = segEnd - segStart;\n  } else if (!(Number.isFinite(segEnd) && segEnd > segStart)) {\n    segEnd = segStart + segDur;\n  }\n\n  const seg = {\n    ...segIn,\n    segId: segIn.segId || s.segId || 'SEG-01',\n    track: segIn.track ?? s.track ?? null,\n    startSec: ROUND(segStart),\n    endSec: ROUND(segEnd),\n    durationSec: ROUND(segDur),\n    orchestratorId: segIn.orchestratorId || s.orchestratorId || s.source?.segment?.orchestratorId || s.source?.planMeta?.ids?.orchestratorId || null\n  };\n\n  // ---- SHOTS: order, rebuild timing, and ensure all FOUR IDs are present ----\n  let shotsOrdered = shotsIn.slice().sort(sortBeatShot);\n  shotsOrdered = rebuildContiguous(shotsOrdered, seg.startSec, seg.durationSec);\n\n  const shotsStamped = shotsOrdered.map(sh => {\n    const parsed = parseShotKey(sh.shotKey);\n    const shotId = String(pickFirst(sh.shotId, parsed?.shotId)) || '';\n    const beatId = String(pickFirst(sh.beatId, parsed?.beatId)) || '';\n    const segId  = String(pickFirst(sh.segId, parsed?.segId, seg.segId)) || '';\n    const shotKey = String(pickFirst(sh.shotKey, synthShotKey(segId, beatId, shotId))) || '';\n    return { ...sh, segId, beatId, shotId, shotKey };\n  });\n\n  // ---- PROMPTS: align & carry the same IDs onto each prompt row ----\n  const promptsIn = Array.isArray(s.shotPrompts) ? s.shotPrompts.slice() : [];\n  const shotPrompts = alignPromptsToShots(shotsStamped, promptsIn, seg.segId);\n\n  return {\n    ...s,\n    segment: seg,\n    track: seg.track ?? s.track ?? null,\n    videoType: s.videoType ?? s.meta?.videoType ?? null,\n    shots: shotsStamped,\n    shotPrompts\n  };\n});\n\n// --- 3) Sort segments and compute total ---\nsegs.sort((a,b) => (a.segment.startSec - b.segment.startSec));\nconst totalDurationSec = ROUND(segs.reduce((acc, s) => acc + Number(s.segment?.durationSec || 0), 0));\n\n// --- 4) Header fields (no forcing) ---\nconst trackCounts = {};\nconst vtCounts = {};\nfor (const s of segs) {\n  const t = (s.segment?.track ?? s.track);\n  if (t) trackCounts[String(t)] = (trackCounts[String(t)] || 0) + 1;\n  const vt = (s.videoType ?? s.meta?.videoType);\n  if (vt) vtCounts[String(vt)] = (vtCounts[String(vt)] || 0) + 1;\n}\nconst pickMajority = (m) => Object.entries(m).sort((a,b)=>b[1]-a[1])[0]?.[0] ?? null;\nconst trackHeader     = pickMajority(trackCounts);\nconst videoTypeHeader = pickMajority(vtCounts);\n\nconst captionsList = segs.map(s => !!(s.meta?.wantsCaptions || s.source?.planner?.wantsCaptions));\nconst musicList    = segs.map(s => !!(s.meta?.wantsMusic    || s.source?.planner?.wantsMusic));\nconst voiceList    = segs.map(s => s.speech?.voiceId || s.source?.planMeta?.speech?.voiceId).filter(Boolean);\nconst wpsList      = segs.map(s => Number(s.speech?.wps || s.source?.planMeta?.speech?.wps)).filter(x => !Number.isNaN(x));\nconst wpmList      = segs.map(s => Number(s.speech?.wpm || s.source?.planMeta?.speech?.wpm)).filter(x => !Number.isNaN(x));\n\nconst requestId = pickFirst(...segs.map(s => s.requestId || s.source?.requestId || s.source?.planMeta?.ids?.orchestratorId));\nconst title     = pickFirst(...segs.map(s => s.title || s.source?.title || s.source?.planner?.scene));\nconst routeUsed = pickFirst(...segs.map(s => s.route || s.videoType || s.meta?.videoType)) || videoTypeHeader || null;\n\n// --- 5) Convenience indices for the NEXT NODE ---\nconst shotsIndex = [];\nconst promptsIndex = [];\nsegs.forEach((seg, segIdx) => {\n  (seg.shots || []).forEach((sh, shotIdx) => {\n    shotsIndex.push({\n      segIdx,\n      shotIdx,\n      segId: sh.segId, beatId: sh.beatId, shotId: sh.shotId, shotKey: sh.shotKey,\n      startSec: sh.startSec, endSec: sh.endSec, durationSec: sh.durationSec,\n      track: seg.segment?.track ?? seg.track ?? null,\n      videoType: seg.videoType ?? null\n    });\n  });\n  (seg.shotPrompts || []).forEach((sp, pIdx) => {\n    promptsIndex.push({\n      segIdx,\n      promptIdx: pIdx,\n      segId: sp.segId, beatId: sp.beatId, shotId: sp.shotId, shotKey: sp.shotKey,\n      durationSec: sp.durationSec ?? null\n    });\n  });\n});\n\n// --- 6) Emit TrackEDL ---\nconst out = {\n  kind: 'TrackEDL',\n  track: trackHeader,\n  videoType: videoTypeHeader,\n  segments: segs,\n  totalDurationSec,\n  flags: {\n    captions: captionsList.filter(Boolean).length >= Math.ceil(captionsList.length/2),\n    music:    musicList.filter(Boolean).length    >= Math.ceil(musicList.length/2)\n  },\n  speech: {\n    voiceId: voiceList[0] || null,\n    wps:     wpsList[0]   || null,\n    wpm:     wpmList[0]   || null\n  },\n  title,\n  routeUsed,\n  requestId,\n  // 🔽 indexes for the next node\n  shotsIndex,\n  promptsIndex,\n  _meta: {\n    builtAt: new Date().toISOString(),\n    segCount: segs.length,\n    warnings\n  }\n};\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        384
+      ],
+      "id": "9a571884-cc15-4239-8364-f1c0551fa49b",
+      "name": "Segments → EDL"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -464
+      ],
+      "id": "22143032-e581-400a-8e3d-f3876e034aad",
+      "name": "OpenRouter Chat Model5",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        -208
+      ],
+      "id": "de209da5-0c3b-47d7-87b3-cfc3778544dc",
+      "name": "OpenRouter Chat Model10",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        -208
+      ],
+      "id": "6a1e76bb-ee61-4fb8-84df-91c2c6739a9e",
+      "name": "OpenRouter Chat Model11",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        32
+      ],
+      "id": "67915383-fb72-4920-b0dd-2d8627861ca3",
+      "name": "OpenRouter Chat Model12",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        32
+      ],
+      "id": "b8953557-b96c-42b5-b7b7-02632a3ef2ae",
+      "name": "OpenRouter Chat Model13",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        272
+      ],
+      "id": "1478d62f-48ac-445c-8783-71b7f6273ae0",
+      "name": "OpenRouter Chat Model14",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        272
+      ],
+      "id": "3ec661f2-0962-473e-a2e2-b66b31753891",
+      "name": "OpenRouter Chat Model15",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        528
+      ],
+      "id": "b3be7725-15b0-47e6-a410-b27c3599a0ec",
+      "name": "OpenRouter Chat Model16",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        528
+      ],
+      "id": "54259d83-e06b-45e0-840e-93a49dd0984e",
+      "name": "OpenRouter Chat Model17",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "ok": true,
+          "orchestratorId": "CO-1a2b3c",
+          "videoType": "combo",
+          "segId": "SEG-02",
+          "track": "broll",
+          "startSec": 11.25,
+          "endSec": 16.875,
+          "durationSec": 5.625,
+          "notes": "broll segment",
+          "packageId": "BR-7g8h9i",
+          "meta": {
+            "driver": "character",
+            "wantsCutaways": true,
+            "wantsMusic": true,
+            "wantsCaptions": true,
+            "durationSec": 45,
+            "videoType": "combo"
+          },
+          "rails": [
+            "keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair",
+            "no on-screen text, no logos, no watermarks, no lettering of any kind",
+            "natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)",
+            "preserve title-safe margins; avoid edge cropping of face"
+          ],
+          "wpm": 150,
+          "voice": "first-person anchor",
+          "wordsBudget": 14,
+          "script": "Over 40 million use ChatGPT daily for health tips, making AI a frontline medical guide.",
+          "scriptSource": "provided",
+          "testCase": {
+            "scene": "A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day",
+            "driver": "narrator",
+            "wantsCutaways": true,
+            "character": "n/a",
+            "setting": "Infant Mark Zuckerberg sits at an evening news anchor desk, studio lit room as he discusses breaking AI news topics of the day.",
+            "action": "the infant Mark Zuckerberg is sitting at the evening news anchor desk, moving naturally as if in a live conversation as he breaks news.",
+            "directorsNotes": "",
+            "wantsMusic": true,
+            "musicDesc": "",
+            "wantsCaptions": false,
+            "durationSec": 5.625,
+            "referenceText": "OpenAI disclosed that over 40 million people worldwide use ChatGPT daily to seek health information, indicating that AI tools are becoming a frontline resource for medical guidance",
+            "id": "4d5e6f",
+            "comboId": "CO-1a2b3c",
+            "providedScript": "Over 40 million use ChatGPT daily for health tips, making AI a frontline medical guide.",
+            "providedWpm": 150,
+            "providedVoice": "first-person anchor",
+            "scriptMode": "provided",
+            "segId": "SEG-02"
+          }
+        }
+      },
+      {
+        "json": {
+          "ok": true,
+          "orchestratorId": "CO-1a2b3c",
+          "videoType": "combo",
+          "segId": "SEG-04",
+          "track": "broll",
+          "startSec": 28.125,
+          "endSec": 33.75,
+          "durationSec": 5.625,
+          "notes": "broll segment",
+          "packageId": "BR-7g8h9i",
+          "meta": {
+            "driver": "character",
+            "wantsCutaways": true,
+            "wantsMusic": true,
+            "wantsCaptions": true,
+            "durationSec": 45,
+            "videoType": "combo"
+          },
+          "rails": [
+            "keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair",
+            "no on-screen text, no logos, no watermarks, no lettering of any kind",
+            "natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)",
+            "preserve title-safe margins; avoid edge cropping of face"
+          ],
+          "wpm": 150,
+          "voice": "first-person anchor",
+          "wordsBudget": 14,
+          "script": "Meanwhile, Nvidia, AMD, Intel, and Google race to build next-gen processors for smarter AI platforms.",
+          "scriptSource": "provided",
+          "testCase": {
+            "scene": "A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day",
+            "driver": "narrator",
+            "wantsCutaways": true,
+            "character": "n/a",
+            "setting": "Infant Mark Zuckerberg sits at an evening news anchor desk, studio lit room as he discusses breaking AI news topics of the day.",
+            "action": "the infant Mark Zuckerberg is sitting at the evening news anchor desk, moving naturally as if in a live conversation as he breaks news.",
+            "directorsNotes": "",
+            "wantsMusic": true,
+            "musicDesc": "",
+            "wantsCaptions": false,
+            "durationSec": 5.625,
+            "referenceText": "The broader AI infrastructure race intensified as Nvidia, AMD, Intel, and Google vied to define the next generation of chips and platform layers",
+            "id": "0j1k2l",
+            "comboId": "CO-1a2b3c",
+            "providedScript": "Meanwhile, Nvidia, AMD, Intel, and Google race to build next-gen processors for smarter AI platforms.",
+            "providedWpm": 150,
+            "providedVoice": "first-person anchor",
+            "scriptMode": "provided",
+            "segId": "SEG-04"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set → Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set → Test Cases": {
+      "main": [
+        []
+      ]
+    },
+    "Code → Prompt Test Harness": {
+      "main": [
+        [
+          {
+            "node": "Init Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Envelope": {
+      "main": [
+        [
+          {
+            "node": "Build Script LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Script LLM Payload": {
+      "main": [
+        [
+          {
+            "node": "Provided Script?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Script Writer": {
+      "main": [
+        [
+          {
+            "node": "Normalize Model Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Script": {
+      "main": [
+        [
+          {
+            "node": "Beat Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Script Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Beats": {
+      "main": [
+        [
+          {
+            "node": "Intent Miner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Miner": {
+      "main": [
+        [
+          {
+            "node": "Post-Intent Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stash Intents": {
+      "main": [
+        [
+          {
+            "node": "Planner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner": {
+      "main": [
+        [
+          {
+            "node": "Post-Planner Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner sanity": {
+      "main": [
+        [
+          {
+            "node": "Shot Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety QA": {
+      "main": [
+        [
+          {
+            "node": "Final sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Beat Extractor": {
+      "main": [
+        [
+          {
+            "node": "Beat Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shot Writer": {
+      "main": [
+        [
+          {
+            "node": "Safety QA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post-extractor sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Stash Beats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post-Intent Sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Stash Intents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post-Planner Sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Planner sanity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code → Prompt Test Harness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provided Script?": {
+      "main": [
+        [
+          {
+            "node": "Script Writer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stash Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Model Output": {
+      "main": [
+        [
+          {
+            "node": "Stash Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Beat Validator": {
+      "main": [
+        [
+          {
+            "node": "Post-extractor sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Segments → EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Script Writer",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model10": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Beat Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model11": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Beat Extractor",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model12": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Intent Miner",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model13": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Intent Miner",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model14": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Planner",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model15": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Planner",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model16": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Shot Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model17": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Shot Writer",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "30a6434a-b8ef-4610-abc3-52af8eb2a2a9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "482BZDMXNzBO21PF",
+  "tags": []
+}

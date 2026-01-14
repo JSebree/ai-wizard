@@ -4,3 +4,8 @@ dist/
 .env.*
 .DS_Store
 .vscode/
+
+# Backend artifacts
+backend/temp/
+backend/output/
+output/

@@ -49,8 +49,9 @@ export default function VodCard({ vod, onUseTemplate, onDelete, isOwner = true, 
 
                 {/* Status Overlay */}
                 {isPending && (
-                    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>Processing...</span>
+                    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <span style={{ color: "white", fontSize: 12, fontWeight: 600 }}>Processing...</span>
+                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                     </div>
                 )}
 

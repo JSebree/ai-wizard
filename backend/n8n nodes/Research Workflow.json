@@ -1,0 +1,479 @@
+{
+  "name": "Research Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        0
+      ],
+      "id": "ab0252d6-9fcd-493d-9b1a-52f3178e6c66",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "665c943b-6b04-49a9-895c-e9a66ab97ec7",
+              "name": "referenceText",
+              "value": "={{ $json.body.ui.referenceText }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        560,
+        -112
+      ],
+      "id": "6ab0fcb6-1050-44bc-805c-f9aecc1a94eb",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.referenceText }}",
+        "options": {
+          "topic": "general",
+          "search_depth": "advanced",
+          "chunks_per_source": 3,
+          "max_results": 10
+        }
+      },
+      "type": "@tavily/n8n-nodes-tavily.tavily",
+      "typeVersion": 1,
+      "position": [
+        704,
+        -112
+      ],
+      "id": "aeb93688-0d94-4b15-b745-b3e4ac210866",
+      "name": "Search",
+      "credentials": {
+        "tavilyApi": {
+          "id": "s5jIeugBoK24VlJu",
+          "name": "Tavily account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=USER_QUERY:\n{{ $json.user_query }}\n\nSOURCES:\n{{ JSON.stringify($json.sources) }}\n// Each source must be an object like: { \"url\": \"...\", \"title\": \"...\", \"content\": \"clean text...\" }\n\nINSTRUCTIONS:\n- Follow the System rules strictly.\n- Determine the best task_type for USER_QUERY and apply the corresponding template.\n- Keep the JSON small but complete, grounded only in SOURCES.\n- Do not include markdown. Output a single JSON object only.",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are a grounded synthesis engine.\n\nHARD RULES\n- Use ONLY the SOURCES provided in the user message. Do not browse or invent facts.\n- If evidence is thin, say so explicitly and mark confidence lower.\n- Prefer recent, primary, and directly relevant passages from SOURCES.\n- Return a SINGLE valid JSON object that matches the schema below. No markdown, no extra text.\n\nWORKFLOW\n1) Interpret the user query (task type, constraints like timeframe, count limits, region, etc.).\n2) Select only relevant snippets from SOURCES; ignore off-topic items.\n3) Produce the answer in a clear structure that fits the detected task type.\n4) Add citations for each key claim (array of {url, title} from SOURCES).\n5) State confidence and any gaps/ambiguities.\n\nOUTPUT JSON SCHEMA\n{\n  \"interpreted_query\": string,          // how you understood the request in plain words\n  \"task_type\": \"summary\"|\"list\"|\"qa\"|\"comparison\"|\"recipe\"|\"plan\"|\"timeline\"|\"pros_cons\"|\"other\",\n  \"constraints\": {                       // extracted from the user request (optional keys)\n    \"time_window\": string|null,          // e.g., \"past 7 days\"\n    \"count\": number|null,                // e.g., \"top 3\"\n    \"location\": string|null,\n    \"other\": string|null\n  },\n  \"answer\": {                            // shape varies by task_type (see TEMPLATES below)\n    \"sections\": [                        // generic fallback: ordered sections with bullets\n      {\n        \"title\": string,\n        \"bullets\": [\n          { \"text\": string, \"citations\": [{\"url\": string, \"title\": string}] }\n        ]\n      }\n    ],\n    \"extras\": {}                         // optional: e.g., ingredients/steps for recipes, tables for comparisons\n  },\n  \"sources_used\": [ {\"url\": string, \"title\": string} ],\n  \"confidence\": \"low\"|\"medium\"|\"high\",\n  \"notes\": string                        // short caveats or “what’s missing”; \"\" if none\n}\n\nTEMPLATES (if applicable)\n- If the query asks for a LIST (e.g., “top N”, “best/worst”, “key points”), set task_type=\"list\" and put items as sections[0].bullets with N items.\n- If it asks for PROS/CONS, set task_type=\"pros_cons\" and use two sections titled \"Pros\" and \"Cons\".\n- If it asks for a SUMMARY/NEWS, set task_type=\"summary\" and create 2–4 sections (Context, What’s New, Why It Matters, Outlook).\n- If it asks for a RECIPE, set task_type=\"recipe\"; in answer.extras include:\n  { \"servings\": number|null, \"ingredients\": [string], \"steps\": [string], \"tips\": [string] }\n- If it asks for COMPARISON, set task_type=\"comparison\"; in answer.extras include:\n  { \"criteria\": [string], \"items\": [{ \"name\": string, \"pros\": [string], \"cons\": [string] }] }\n- If it asks for a PLAN, include \"steps\": [ { \"step\": number, \"action\": string, \"citations\":[...] } ].\n- Always cite each key bullet/claim with at least one source; combine multiple sources when useful.\n\nVALIDATION\n- If SOURCES do not support the user request, return a minimal JSON with empty sections and notes explaining what’s missing (e.g., “no recent sources for timeframe”).\n- Output only the final JSON and wrap it between the lines\n<<<BEGIN_JSON>>> and <<<END_JSON>>>."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1024,
+        -112
+      ],
+      "id": "9eac49e0-5ce1-4f64-9e03-fc43219dba99",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        16
+      ],
+      "id": "87b99e8b-fc29-4f25-bbd0-283e85dbbbb0",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all bullet texts from every section into one unified string\nconst itemsOut = [];\n\nfor (const item of items) {\n  const data = { ...(item.json || {}) };\n  const sections = data?.answer?.sections || [];\n\n  // Collect all bullet text lines\n  const lines = [];\n  for (const sec of sections) {\n    const title = sec?.title ? `\\n${sec.title}:\\n` : \"\";\n    if (title) lines.push(title);\n    for (const bullet of (sec?.bullets || [])) {\n      if (bullet?.text) lines.push(`- ${bullet.text}`);\n    }\n  }\n\n  // Join into a clean text block\n  const referenceText = lines.join(\"\\n\");\n\n  // --- OVERWRITE original referenceText fields with the new one ---\n  // 1) top-level ui.referenceText (if exists)\n  if (data.ui && typeof data.ui === \"object\") {\n    data.ui.referenceText = referenceText;\n  }\n\n  // 2) body.ui.referenceText (your incoming webhook payload shape)\n  if (data.body && data.body.ui && typeof data.body.ui === \"object\") {\n    data.body.ui.referenceText = referenceText;\n  }\n\n  // 3) keep a top-level referenceText for convenience (optional)\n  data.referenceText = referenceText;\n\n  itemsOut.push({ json: data });\n}\n\nreturn itemsOut;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        -32
+      ],
+      "id": "b08676ac-37dd-4ba3-8824-d826a373a915",
+      "name": "Combine Answer Text"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * n8n PostLLM sanitizer for \"generic structured JSON\" responses.\n * - Accepts items whose LLM output may be in $.json.text (string) or already parsed.\n * - Removes <think>…</think>, leading/trailing prose, and extracts the largest JSON block.\n * - Returns one clean JSON per input item with guaranteed keys.\n */\n\nfunction stripThink(s) {\n  return String(s || \"\").replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n}\n\nfunction extractLargestJson(s) {\n  // Find the largest balanced {...} block\n  const str = String(s || \"\");\n  let best = \"\";\n  let depth = 0, start = -1;\n  for (let i = 0; i < str.length; i++) {\n    const ch = str[i];\n    if (ch === \"{\") {\n      if (depth === 0) start = i;\n      depth++;\n    } else if (ch === \"}\") {\n      if (depth > 0) {\n        depth--;\n        if (depth === 0 && start !== -1) {\n          const block = str.slice(start, i + 1);\n          if (block.length > best.length) best = block;\n        }\n      }\n    }\n  }\n  return best || str.trim();\n}\n\nfunction safeParseJson(s) {\n  try { return JSON.parse(s); } catch { return null; }\n}\n\nfunction arr(v) { return Array.isArray(v) ? v : []; }\nfunction obj(v) { return v && typeof v === \"object\" ? v : {}; }\nfunction str(v) { return (v == null) ? \"\" : String(v); }\n\nfunction normCitation(c) {\n  const o = obj(c);\n  return { url: str(o.url), title: str(o.title) };\n}\n\nfunction uniqBy(arr, keyFn) {\n  const seen = new Set();\n  const out = [];\n  for (const x of arr) {\n    const k = keyFn(x);\n    if (!seen.has(k)) { seen.add(k); out.push(x); }\n  }\n  return out;\n}\n\nfunction enforceCount(sections, count) {\n  if (!Number.isFinite(count) || count <= 0) return sections;\n  // If task_type is pros_cons, enforce 3/3 on first two sections (Pros/Cons)\n  // Otherwise cap bullets in each section to `count`\n  return sections.map((sec, idx) => {\n    const s = obj(sec);\n    const bullets = arr(s.bullets);\n    if (bullets.length > count) s.bullets = bullets.slice(0, count);\n    return { title: str(s.title || (idx === 0 ? \"Section 1\" : `Section ${idx+1}`)), bullets: s.bullets.map(b => {\n      const bb = obj(b);\n      return {\n        text: str(bb.text),\n        citations: arr(bb.citations).map(normCitation)\n      };\n    }) };\n  });\n}\n\nfunction normalizeEnvelope(raw) {\n  const out = obj(raw);\n\n  // Top-level keys\n  out.interpreted_query = str(out.interpreted_query || raw?.query || \"\");\n  out.task_type = str(out.task_type || \"other\");\n  out.constraints = obj(out.constraints);\n  if (out.constraints.count != null && !Number.isFinite(out.constraints.count)) {\n    // try to coerce\n    const n = Number(out.constraints.count);\n    out.constraints.count = Number.isFinite(n) ? n : null;\n  }\n  if (out.constraints.count == null) out.constraints.count = null;\n  out.constraints.time_window = out.constraints.time_window ?? null;\n  out.constraints.location = out.constraints.location ?? null;\n  out.constraints.other = out.constraints.other ?? null;\n\n  // Answer\n  const answer = obj(out.answer);\n  let sections = arr(answer.sections).map(sec => {\n    const s = obj(sec);\n    return {\n      title: str(s.title || \"\"),\n      bullets: arr(s.bullets).map(b => {\n        const bb = obj(b);\n        return {\n          text: str(bb.text),\n          citations: arr(bb.citations).map(normCitation)\n        };\n      })\n    };\n  });\n\n  // Enforce count if provided\n  sections = enforceCount(sections, out.constraints.count || 0);\n\n  out.answer = {\n    sections,\n    extras: obj(answer.extras)\n  };\n\n  // sources_used: dedupe from citations if missing/empty\n  let sourcesUsed = arr(out.sources_used).map(normCitation);\n  if (sourcesUsed.length === 0) {\n    const allCites = [];\n    for (const sec of out.answer.sections) {\n      for (const b of sec.bullets) allCites.push(...b.citations);\n    }\n    sourcesUsed = uniqBy(allCites.filter(c => c.url), c => c.url);\n  }\n  out.sources_used = sourcesUsed;\n\n  // confidence + notes\n  const conf = str(out.confidence).toLowerCase();\n  out.confidence = (conf === \"low\" || conf === \"medium\" || conf === \"high\") ? conf : \"medium\";\n  out.notes = str(out.notes || \"\");\n\n  return out;\n}\n\nreturn items.map(item => {\n  // 1) Get raw string from LLM\n  const j = obj(item.json);\n  const rawStr =\n    typeof j === \"string\" ? j :\n    (j.text != null ? String(j.text) :\n    (j.output != null ? String(j.output) :\n    JSON.stringify(j)));\n\n  // 2) Strip <think>…</think>\n  const noThink = stripThink(rawStr);\n\n  // 3) Extract biggest JSON block\n  const jsonBlock = extractLargestJson(noThink);\n\n  // 4) Parse safely\n  const parsed = safeParseJson(jsonBlock);\n\n  // 5) If still not JSON, return a minimal envelope with an error note\n  if (!parsed || typeof parsed !== \"object\") {\n    return {\n      json: normalizeEnvelope({\n        interpreted_query: \"\",\n        task_type: \"other\",\n        constraints: {},\n        answer: { sections: [], extras: {} },\n        sources_used: [],\n        confidence: \"low\",\n        notes: \"PostLLM could not parse a valid JSON block from the LLM output.\"\n      })\n    };\n  }\n\n  // 6) Normalize schema\n  const clean = normalizeEnvelope(parsed);\n\n  return { json: clean };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        -112
+      ],
+      "id": "3cefe659-4873-46bb-b973-60cc4dc353ab",
+      "name": "PostLLM Sanitizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = items[0].json;  // or adapt if your payload structure differs\nconst sources = (row.results || row.sources || []).map(r => ({\n  url: r.url,\n  title: r.title || \"\",\n  content: r.content || \"\"\n}));\nreturn [{ json: {\n  user_query: row.query || row.user_query,\n  sources\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -112
+      ],
+      "id": "dab84e10-dab7-4894-ae1a-0446b6d5181e",
+      "name": "LLM Normalizer"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "665c943b-6b04-49a9-895c-e9a66ab97ec7",
+              "name": "referenceText",
+              "value": "=research the best viral short stry practices and write a short 60 second childrens story about a small white bunny trying to find her way home through the forest",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        224
+      ],
+      "id": "baa46cd3-097c-4887-8eb7-e66d9717799b",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        224
+      ],
+      "id": "02b54936-82d8-4b01-b02f-f929a6021109",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1664,
+        -32
+      ],
+      "id": "47c9d307-b0f0-47a2-bd30-671eb217333f",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        16
+      ],
+      "id": "88952ef6-b350-456d-9e4d-3fe137d0930f",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f7aabc1f-2780-4975-a5d3-d4312827991a",
+              "leftValue": "={{ $json.notes }}",
+              "rightValue": " \"PostLLM could not parse a valid JSON block from the LLM output.\"",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        -112
+      ],
+      "id": "5f701e54-53aa-4282-a481-d9e5f384dda8",
+      "name": "If"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.simplifies.click",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "content-length": "1618",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "http://localhost:5174",
+            "priority": "u=1, i",
+            "referer": "http://localhost:5174/",
+            "sec-ch-ua": "\"Google Chrome\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "via": "2.0 Caddy",
+            "x-forwarded-for": "23.113.216.173",
+            "x-forwarded-host": "n8n.simplifies.click",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "ui": {
+              "scene": "A spoken work poetry reading on stage with Demarco.",
+              "driver": "character",
+              "wantsCutaways": true,
+              "character": "African American male in his mid twenties. Athletic with expressive tattoos and hair. ",
+              "setting": "Stage of a concert venue",
+              "action": "Demarco recites poetry on stage live ",
+              "wantsMusic": true,
+              "musicCategoryLabel": "Ambient / Soundscape",
+              "wantsCaptions": true,
+              "durationSec": 45,
+              "referenceText": "Get inspiration from the best public spoken word poems online",
+              "research": true,
+              "voiceId": "recording",
+              "voiceUrl": "https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4",
+              "voice_ref_url": "https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4",
+              "title": "Demarco recites 4",
+              "characterName": "Demarco",
+              "userEmail": "jerick.sebree@gmail.com",
+              "userFirstName": "Jerick",
+              "userLastName": "Sebree",
+              "characterImage": "https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_fullbody_centered?.png",
+              "settingImage": "https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg",
+              "character_image_url": "https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_fullbody_centered?.png",
+              "setting_image_url": "https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg",
+              "camera_angle": "Standard",
+              "advanced": {
+                "enabled": true,
+                "style": "Photorealistic",
+                "resolution": "SD",
+                "musicVolume": 0.1,
+                "voiceVolume": 1,
+                "includeVocals": false,
+                "seed": 446625324
+              }
+            },
+            "user_id": "3ad0105d-7dfd-4790-b1c5-9bade4fb2406"
+          },
+          "webhookUrl": "https://n8n.simplifies.click/webhook/sceneme",
+          "executionMode": "production",
+          "requestId": "188910",
+          "user_character_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_recites_4/Demarco_recites_4_1768144710387.png",
+          "": ""
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search": {
+      "main": [
+        [
+          {
+            "node": "LLM Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "PostLLM Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostLLM Sanitizer": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        []
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Combine Answer Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "bc800f9d-b8fb-446b-83b2-e8b157beb1ad",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "DBlRpm0yCBTUacq4",
+  "tags": []
+}

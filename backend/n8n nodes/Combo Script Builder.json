@@ -1,0 +1,884 @@
+{
+  "name": "Combo Script Builder",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "3895d869-0a07-43bc-b07c-6bed6569d08a",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -528
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"testCases\": [\n    {\n      \"scene\": \"Lifestyle vlog: a 27-year-old travel vlogger shares their morning in Lisbon with the audience.\",\n      \"driver\": \"character\",\n      \"wantsCutaways\": true,\n      \"character\": \"27 y/o travel vlogger, casual, friendly, youthful energy\",\n      \"setting\": \"bright apartment interior with large windows and neutral décor, subtle morning light\",\n      \"action\": \"direct-to-camera speaking, light hand gestures below chin, relaxed posture\",\n      \"directorsNotes\": \"conversational, upbeat but natural, keep flow like a vlog entry\",\n      \"wantsMusic\": false,\n      \"musicDesc\": \"\",\n      \"wantsCaptions\": true,\n      \"durationSec\": 60,\n      \"referenceText\": \"This morning in Lisbon, I started my day with coffee on the balcony, the sound of trams outside, and a simple breakfast of fresh fruit and bread.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "15db7e3f-5258-4bb8-8c9f-86eda301157c",
+      "name": "Set → Test Cases",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        1440,
+        -528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Prompt Test Harness (Combo-aware: A-Roll primary, optional B-Roll briefs)\n// Mode: Run once for all items (JavaScript)\n// Input: { testCases: [ { ... } ] } from Set → Test Cases\n\nconst S = (v) => (v == null ? '' : String(v));\nconst collapse = (s) => S(s).replace(/[\\r\\n]+/g, ' ').replace(/\\s+/g, ' ').trim();\n\nfunction guardrails({ wantsCaptions }) {\n  const base = [\n    'keep face fully visible; do not obstruct the mouth or jawline with hands, props, or hair',\n    'no on-screen text, no logos, no watermarks, no lettering of any kind',\n    'natural head/eye movement only; mouth stays neutral/relaxed (no exaggerated smiles or frowns)',\n  ];\n  if (wantsCaptions) base.push('preserve title-safe margins; avoid edge cropping of face');\n  return base;\n}\n\nfunction makePrompts(t) {\n  const scene          = collapse(t.scene);\n  const driver         = (S(t.driver).toLowerCase() === 'character') ? 'character' : 'narrator';\n  const character      = collapse(t.character || '');\n  const setting        = collapse(t.setting || '');\n  const action         = collapse(t.action || '');\n  const directorsNotes = collapse(t.directorsNotes || '');\n  const wantsMusic     = Boolean(t.wantsMusic);\n  const musicDesc      = collapse(t.musicDesc || '');\n  const wantsCaptions  = Boolean(t.wantsCaptions);\n  const durationSec    = Number(t.durationSec || 30);\n  const referenceText  = collapse(t.referenceText || '');\n\n  // NEW: a-roll persona + style passthroughs\n  const characterName   = collapse(t.characterName || '');\n  const characterGender = collapse(t.characterGender || '');\n  const style           = collapse(t.style || '');\n\n  // Combo-aware: respect incoming wantsCutaways (true => Combo; false => A-roll only)\n  const wantsCutaways  = Boolean(t.wantsCutaways);\n\n  const rails = guardrails({ wantsCaptions });\n\n  // 1) Script prompt (A-roll primary; allow cutaways if wantsCutaways)\n  const scriptPrompt = [\n    `TASK: Write a concise ${durationSec}s ${driver}-driven A-roll video script.`,\n    `SCENE: ${scene}`,\n    setting ? `SETTING: ${setting}` : '',\n    (character && driver === 'character') ? `ON-CAMERA CHARACTER: ${character}` : '',\n    characterName ? `CHARACTER NAME: ${characterName}` : '',\n    characterGender ? `CHARACTER GENDER: ${characterGender}` : '',\n    action ? `ACTION: ${action}` : '',\n    referenceText ? `REFERENCE TEXT (content substance): ${referenceText}` : '',\n    `STYLE NOTES: ${directorsNotes || 'steady A-roll delivery, conversational tone'}`,\n    style ? `VISUAL STYLE: ${style}` : '',\n    wantsCutaways ? 'EDIT PLAN: A-roll primary; B-roll cutaways permitted and referenced sparingly.' : 'EDIT PLAN: A-roll only; no cut-aways referenced.',\n    wantsCaptions ? 'CAPTIONS: Keep lines short and punctuated for easy captioning.' : '',\n    wantsMusic ? `MUSIC: ${musicDesc || 'light underscore acceptable.'}` : 'MUSIC: none required.',\n    `GUARDRAILS: ${rails.join('; ')}.`,\n    'OUTPUT: Script with clearly separated lines for spoken dialog/narration. No stage directions that violate guardrails.',\n  ].filter(Boolean).join('\\n');\n\n  // 2) Character prompt (A-roll keyframe)\n  const characterPrompt = [\n    'ROLE: Generate a still/keyframe description for the on-camera character.',\n    character ? `CHARACTER: ${character}` : 'CHARACTER: a natural on-camera presenter',\n    characterName ? `CHARACTER NAME: ${characterName}` : '',\n    characterGender ? `CHARACTER GENDER: ${characterGender}` : '',\n    'FRAMING: eye-level, camera-facing, medium to tight close-up',\n    'EXPRESSION: calm eyes; neutral mouth expression; natural blinks',\n    'LIGHTING: cinematic but clean; flattering key + soft fill',\n    style ? `VISUAL STYLE: ${style}` : '',\n    `GUARDRAILS: ${rails.join('; ')}.`,\n    'OUTPUT: Visual-only description. No camera jargon, no text.',\n  ].filter(Boolean).join('\\n');\n\n  // 3) Setting prompt (environment / backdrop)\n  const settingPrompt = [\n    'ROLE: Describe the scene setting/background succinctly for a generative background or establishing shot.',\n    setting ? `SETTING: ${setting}` : 'SETTING: neutral studio backdrop',\n    'LOOK: cohesive, realistic, avoids busy signage or any readable text',\n    style ? `VISUAL STYLE: ${style}` : '',\n    `GUARDRAILS: ${rails.join('; ')}.`,\n    'OUTPUT: Purely visual description.',\n  ].filter(Boolean).join('\\n');\n\n  // 4) Direction / motion prompt (A-roll)\n  const directionPrompt = [\n    'ROLE: Direction for movement and framing.',\n    'A-ROLL: maintain eye-level MCU framing; natural head and eye movement; some idle motion; steady shot; no fast pushes or whip pans.',\n    wantsCutaways ? 'CUTAWAYS: brief, relevant inserts tied to spoken lines; keep transitions gentle.' : 'NO CUT-AWAYS: keep continuous A-roll.',\n    wantsCaptions ? 'CAPTION-SAFE: keep chin, mouth, and eyes clear; leave margin at bottom third.' : '',\n    'EXPRESSION: mouth neutral/relaxed; allow expression via eyes/eyebrows.',\n    style ? `VISUAL STYLE: ${style}` : '',\n    `HARD RULES: ${rails.join('; ')}.`,\n    'OUTPUT: 2–3 sentences, plain English.',\n  ].filter(Boolean).join('\\n');\n\n  // 5) Negative prompt (shared)\n  const negativePrompt = [\n    'text, logo, watermark, subtitles, overlays, lower thirds, captions rendered in-frame',\n    'hands or objects covering mouth/jaw/face, occluded lips',\n    'exaggerated mouth poses, screaming mouth, wide-open grin',\n    'blurry, low-res, double face, extra limbs, distorted anatomy',\n  ].join(', ');\n\n  // --- B-ROLL BRIEFS (only if wantsCutaways) ---\n  let brollSettingPrompt = null;\n  let brollDirectionPrompt = null;\n  let brollNegativePrompt = null;\n\n  if (wantsCutaways) {\n    brollSettingPrompt = [\n      'ROLE: Describe B-roll environments that pair naturally with spoken A-roll lines.',\n      scene ? `SCENE: ${scene}` : '',\n      'LOOK: grounded, realistic, no readable signage or labels; one setting per shot.',\n      style ? `VISUAL STYLE: ${style}` : '',\n      referenceText ? `SUBSTANCE TO COVER: ${referenceText}` : '',\n      `GUARDRAILS: ${rails.join('; ')}.`,\n      'OUTPUT: 2–4 succinct environment descriptions (one per line), purely visual.',\n    ].filter(Boolean).join('\\n');\n\n    brollDirectionPrompt = [\n      'ROLE: Direction for B-roll sequencing and motion.',\n      'MOTION: small, natural movements (people passing, steam, light shifts); avoid whip-like motion.',\n      'COMPOSITION: one setting per shot; keep subject clear; avoid clutter.',\n      'TRANSITIONS: simple, gentle; match to nearby A-roll beats.',\n      style ? `VISUAL STYLE: ${style}` : '',\n      `HARD RULES: ${rails.join('; ')}.`,\n      'OUTPUT: 2–3 sentences, plain English.',\n    ].filter(Boolean).join('\\n');\n\n    brollNegativePrompt = [\n      'text, logos, watermarks, readable signage, license plates',\n      'jarring fast motion, strobing, AI artifacts, warped geometry',\n      'people addressing camera directly, lip-synced presenter',\n      'blurry, low-res, double subjects',\n    ].join(', ');\n  }\n\n  const meta = {\n    driver,\n    wantsCutaways,\n    wantsMusic,\n    wantsCaptions,\n    durationSec,\n    // echo fields for downstream convenience\n    characterName,\n    characterGender,\n    style,\n  };\n\n  return {\n    // A-roll prompts\n    scriptPrompt,\n    characterPrompt,\n    settingPrompt,\n    directionPrompt,\n    negativePrompt,\n\n    // B-roll prompts (null when not applicable)\n    brollSettingPrompt,\n    brollDirectionPrompt,\n    brollNegativePrompt,\n\n    rails,\n    meta,\n    source: t, // echo for audit\n  };\n}\n\n// ---- main ----\nconst testCases = Array.isArray($json.testCases) ? $json.testCases : [];\nif (!testCases.length) {\n  return [{ json: { error: 'No testCases array on input.' } }];\n}\n\nreturn testCases.map(tc => ({ json: makePrompts(tc) }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        -368
+      ],
+      "id": "57a264ac-7f65-42b6-8c7d-3a4b0a9792eb",
+      "name": "Code → Prompt Test Harness"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Init Envelope (Generic: A-Roll / B-Roll / Combo)\n// Mode: Run once for all items (expects ONE item)\n// Input: one item from \"Code → Prompt Test Harness\"\n// Output: a single normalized envelope object\n\nconst S = (v) => (v == null ? '' : String(v));\nconst collapse = (s) => S(s).replace(/[\\r\\n]+/g, ' ').replace(/\\s+/g, ' ').trim();\n\nconst inItem = $json || {};\nconst prompts = {\n  script:    S(inItem.scriptPrompt || ''),\n  character: S(inItem.characterPrompt || ''),\n  setting:   S(inItem.settingPrompt || ''),\n  direction: S(inItem.directionPrompt || ''),\n  negative:  S(inItem.negativePrompt || ''),\n\n  // NEW: pass through combo B-roll prompts if present\n  brollSetting:   S(inItem.brollSettingPrompt || ''),\n  brollDirection: S(inItem.brollDirectionPrompt || ''),\n  brollNegative:  S(inItem.brollNegativePrompt || ''),\n};\n\n// Rails (guardrails) fallback\nconst rails =\n  Array.isArray(inItem.rails) && inItem.rails.length\n    ? inItem.rails.map(collapse)\n    : [\n        'no on-screen text, no logos, no watermarks, no lettering of any kind',\n        'preserve title-safe margins; avoid edge cropping of face',\n      ];\n\n// Meta — derive from upstream; add videoType\nconst metaIn = inItem.meta || {};\nconst driverIn = String(metaIn.driver || '').toLowerCase() === 'character' ? 'character' : 'narrator';\nconst wantsCutawaysIn = Boolean(metaIn.wantsCutaways);\n\n// videoType mapping:\n// - character + cutaways    => combo\n// - character + no cutaways => aroll_only\n// - narrator (no on-cam talent) => broll_only\nfunction mapVideoType(driver, wantsCutaways) {\n  if (driver === 'character') return wantsCutaways ? 'combo' : 'aroll_only';\n  return 'broll_only';\n}\n\nconst meta = {\n  driver:        driverIn,\n  wantsCutaways: wantsCutawaysIn,\n  wantsMusic:    Boolean(metaIn.wantsMusic),\n  wantsCaptions: Boolean(metaIn.wantsCaptions),\n  durationSec:   Number(metaIn.durationSec || 30),\n  videoType:     mapVideoType(driverIn, wantsCutawaysIn),\n};\n\n// Scene & source echo\nconst source = inItem.source || {};\nconst scene  = collapse(source.scene || '');\n\n// Outputs placeholders for LLM specialists\nconst outputs = {\n  script:    null,  // to be filled by Script Writer LLM\n  character: null,  // to be filled by Character Image Prompt LLM\n  setting:   null,  // to be filled by Setting/Background LLM\n  direction: null,  // to be filled by Direction/I2V LLM\n};\n\n// Build final envelope\nconst envelope = {\n  scene,\n  meta,\n  rails,\n  prompts,\n  outputs,\n  source, // full echo for auditability\n};\n\nreturn [{ json: envelope }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        -368
+      ],
+      "id": "ddb6bb9b-2004-488c-ae6a-329f161c916d",
+      "name": "Init Envelope"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1392,
+        -368
+      ],
+      "id": "8d6cfd23-65da-42fe-ad77-a566eb122050",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=// User Prompt — n8n-aware (envelope from previous node), A-Roll Weighted with Cutaway Policy\n\nYou are given exactly one envelope JSON from Init Envelope:\n{{ JSON.stringify($json) }}\n\nConstants:\n- A_WEIGHT_DEFAULT = 0.75  // aim for 75% A-roll by time\n- MIN_SEGMENTS = 2\n- MAX_SEGMENTS = 10\n\nInstructions:\n1) Let env = parsed envelope. Read env.meta.videoType and totalD = Number(env.meta.durationSec).\n\n2) If env.meta.videoType !== \"combo\":\n   - Build a single-track blueprint covering [0, totalD] on the appropriate track:\n     • If env.meta.videoType === \"aroll_only\" → track=\"aroll\"\n     • If env.meta.videoType === \"broll_only\" → track=\"broll\"\n   - fanout.<thatTrack> has ONE testCase using env.source fields; the other track is null.\n\n3) If env.meta.videoType === \"combo\":\n   - Apply cutaway policy:\n       • B-roll (cutaway) total time ≤ round(totalD * 0.25, 3).\n       • Allowable cutaway count by duration:\n           – <6s → 0\n           – 6–45s → ≤1\n           – >45–90s → ≤2\n           – >90–135s → ≤3\n           – Continue adding +1 per additional 45s.\n       • Respect both caps (time ≤25% and count ≤ allowed).\n       • Prefer individual cutaway durations ~4–8s; avoid ≤3s snippets.\n   - Compute time allocation:\n       • A_total = clamp(round(totalD * A_WEIGHT_DEFAULT, 3), 0, totalD)\n       • B_total = min(round(totalD - A_total, 3), totalD * 0.25)\n   - Decide B_blocks = min(allowed cutaway count, floor(B_total / 4)) but ≥1 if B_total > 0.\n   - Decide A_blocks = B_blocks or B_blocks+1, always starting with A-roll and ending on A-roll if possible.\n   - Split A_total evenly across A_blocks (snap each to 3 decimals); last A block gets remainder to ensure sums match. Same for B_total across B_blocks.\n   - Assemble alternating segments [A,B,A,B,…], each with:\n       segId, track, startSec, endSec, durationSec, notes (\"aroll segment\"/\"broll segment\").\n   - Ensure final endSec ≤ totalD; trim the last segment if needed.\n\n4) Fanout payloads:\n   - aroll.packageId = \"AR-\" + base36(6–8); broll.packageId = \"BR-\" + base36(6–8).\n   - Create one testCase per segment on that track (so testCases.length === number of segments for that track).\n   - Required fields for each testCase (exact names):\n     scene, driver, wantsCutaways, character, setting, action, directorsNotes, wantsMusic, musicDesc, wantsCaptions, durationSec, referenceText, id, comboId.\n   - Rules:\n       • A-roll: driver=\"character\", wantsCutaways=true, wantsCaptions = Boolean(env.source?.wantsCaptions).\n       • B-roll: driver=\"character\", wantsCutaways=true, wantsCaptions = Boolean(env.source?.wantsCaptions).\n   - durationSec for each testCase = that segment’s durationSec.\n   - referenceText: derive a brief slice from env.source.referenceText that matches the segment’s substance. Do not invent new text.\n   - id = base36(6–8). comboId = orchestratorId.\n\n5) echo = { scene: env.scene || env.source?.scene || \"\", meta: env.meta, rails: env.rails || [] }.\n\n6) IDs:\n   - orchestratorId = \"CO-\" + base36(6–8).\n   - Segment IDs as \"SEG-\" + 2-digit zero-padded index starting at 01.\n\n7) Return ONLY the JSON object with keys: orchestratorId, videoType, blueprint, fanout, echo. No prose, no markdown.",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=// System Prompt — Combo Orchestrator (A-Roll Weighted + Cutaway Policy)\n\nYou are the Combo Orchestrator.\n\nInput: exactly one “envelope” JSON object.\nOutput: ONE JSON object with keys: orchestratorId, videoType, blueprint, fanout, echo. No prose.\n\nBehavior:\n- If envelope.meta.videoType !== \"combo\":\n  - Produce a single-track blueprint (all segments on that track).\n  - Produce fanout for that track only (the other track = null).\n\n- If envelope.meta.videoType === \"combo\":\n  - Build an A-roll–weighted plan (character-driven with cutaways/B-roll).\n  - Target ratio: A-roll ≈ 0.75 (0.72–0.78 allowed), B-roll = remainder. \n  - **Cutaway Policy (B-roll):**\n    • Cap total B-roll duration at ~25% of total video length (never exceed 25%).\n    • Allowable count by total duration:\n        – <6s: 0 cutaways\n        – 6–45s (inclusive): up to 1 cutaway\n        – >45–90s (inclusive): up to 2 cutaways\n        – ≥90–135s: up to 3 cutaways\n        – Continue scaling in the same pattern (each +45s allows +1 cutaway).\n    • Space cutaways sensibly: avoid back-to-back or “every few seconds” patterns; prefer ≥15–20s between cutaways when duration allows.\n    • Prefer individual cutaway lengths ~4–8s; avoid ultra-short ≤3s cutaways.\n    • Even if the allowable count is higher, respect the 25% total-duration cap first.\n  - Segment pattern: alternate by blocks starting with A-roll (A, B, A, B, …). \n    • Determine the number of B-roll blocks using the policy above, then set A-roll blocks = B-roll blocks or B-roll blocks + 1 so that A-roll remains the majority and the sequence starts/ends gracefully on A-roll when possible.\n  - Time allocation:\n    • Allocate total A-roll time ≈ 75%, total B-roll time ≤ 25%.\n    • Within each track, split its allocated time evenly across its blocks; the last block on each track receives any rounding remainder.\n  - Notes can be short: \"aroll segment\"/\"broll segment\" + brief substance.\n\nIDs:\n- orchestratorId: \"CO-\" + base36(6–8)\n- Segment IDs: \"SEG-\" + zero-padded index (01..)\n- Package IDs: \"AR-\" + base36(6–8), \"BR-\" + base36(6–8)\n- Every fanout testCase must include: \"id\" (unique) and \"comboId\" (set to orchestratorId)\n\nDurations:\n- Sum of segment durations ≤ envelope.meta.durationSec\n- For each segment: durationSec = endSec - startSec\n- Use 2–3 decimal precision (snap to 3 decimals for math; JSON may print without trailing zeros)\n\nField sourcing (no invention):\n- Prefer envelope.source.* for testCases (scene, driver, wantsCutaways, character, setting, action, directorsNotes, wantsMusic, musicDesc, wantsCaptions, referenceText)\n- If missing, fall back to envelope.scene or envelope.meta or prompts only when strictly necessary\n- Do not invent new fields; only copy/derive\n\nTrack Rules:\n- A-roll testCase: driver=\"character\", wantsCutaways=false, wantsCaptions = Boolean(envelope.source.wantsCaptions)\n- B-roll testCase: driver=\"character\", wantsCutaways=false, wantsCaptions = Boolean(envelope.source.wantsCaptions)\n- For each segment, tailor referenceText briefly to that segment’s substance (derive from source.referenceText where possible; may slice by clauses/words)\n\nSchemas (REQUIRED and EXACT):\n{\n  \"orchestratorId\": \"CO-xxxxxx\",\n  \"videoType\": \"combo\" | \"aroll_only\" | \"broll_only\",\n  \"blueprint\": [\n    {\n      \"segId\": \"SEG-01\",\n      \"track\": \"aroll\" | \"broll\",\n      \"startSec\": number,\n      \"endSec\": number,\n      \"durationSec\": number,\n      \"notes\": string\n    }\n  ],\n  \"fanout\": {\n    \"aroll\": {\n      \"packageId\": \"AR-xxxxxx\",\n      \"testCases\": [\n        {\n          \"scene\": string,\n          \"driver\": \"character\",\n          \"wantsCutaways\": false,\n          \"character\": string,\n          \"setting\": string,\n          \"action\": string,\n          \"directorsNotes\": string,\n          \"wantsMusic\": boolean,\n          \"musicDesc\": string,\n          \"wantsCaptions\": boolean,\n          \"durationSec\": number,\n          \"referenceText\": string,\n          \"id\": string,\n          \"comboId\": string\n        }\n      ]\n    },\n    \"broll\": {\n      \"packageId\": \"BR-xxxxxx\",\n      \"testCases\": [\n        {\n          \"scene\": string,\n          \"driver\": \"narrator\",\n          \"wantsCutaways\": true,\n          \"character\": \"n/a\",\n          \"setting\": string,\n          \"action\": string,\n          \"directorsNotes\": string,\n          \"wantsMusic\": boolean,\n          \"musicDesc\": string,\n          \"wantsCaptions\": false,\n          \"durationSec\": number,\n          \"referenceText\": string,\n          \"id\": string,\n          \"comboId\": string\n        }\n      ]\n    }\n  },\n  \"echo\": { \"scene\": string, \"meta\": object, \"rails\": array }\n}\n\nValidation:\n- All required fields present\n- durationSec values equal endSec - startSec (snap to 3 decimals)\n- Blueprint respects cutaway cap (B-roll total ≤ 0.25 * total duration) and cutaway count limits by duration bucket\n- Last segment endSec ≤ envelope.meta.durationSec\n- Output valid JSON only"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1952,
+        -368
+      ],
+      "id": "5f965381-1c9e-4fca-84ce-d496a21efcf3",
+      "name": "Combo Orchestrator"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        -240
+      ],
+      "id": "1c71c953-3068-4d1f-9ff4-0e7658ca3665",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.track }}",
+                    "rightValue": "aroll",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "62eb5efb-5dd0-4473-a5a8-cf0ec189edee"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "aroll"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "da20b5a9-ec1c-4b0c-a3b5-8277cb5f314f",
+                    "leftValue": "={{ $json.track }}",
+                    "rightValue": "broll",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "broll"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1616,
+        240
+      ],
+      "id": "bc10b3d2-3333-4c36-929c-e4a17105da2f",
+      "name": "Router"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2048,
+        240
+      ],
+      "id": "97582900-f949-4112-b3f2-c3c83f054a05",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code → Blueprint Validator (JS / n8n Code node)\n// Input: raw LLM or upstream output (array|string|object)\n// Output: single JSON object with { ok, errors, warnings, checks, payload }\n\n//////////////////////////// helpers ////////////////////////////\nfunction base36(n=6){ const c=\"0123456789abcdefghijklmnopqrstuvwxyz\"; let s=\"\"; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*36)]; return s; }\nfunction ensurePrefix(id,prefix){ return (typeof id===\"string\" && id.startsWith(prefix)) ? id : `${prefix}${id||base36()}`; }\nfunction toNum3(x){ const n=Number(x); return Number.isFinite(n) ? Math.round(n*1000)/1000 : 0; }\nfunction clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }\n\nconst stripThink  = s => String(s).replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\nconst stripFences = s => String(s).replace(/```(?:json)?\\s*([\\s\\S]*?)```/gi, \"$1\");\nconst tryJSON = s => { try { return JSON.parse(s); } catch { return null; } };\n\n//////////////////////////// parsing ////////////////////////////\nfunction parseLoose(input){\n  let raw = input;\n\n  // n8n sometimes passes arrays\n  if (Array.isArray(raw)) raw = raw[0];\n\n  // unwrap {text}\n  if (raw && typeof raw === \"object\" && typeof raw.text === \"string\") raw = raw.text;\n\n  // ✅ Already-parsed envs (from Post-Compose / Script Distributor)\n  if (raw && typeof raw === \"object\") {\n    const r = raw.json && typeof raw.json === \"object\" ? raw.json : raw;\n    if (r.orchestratorId || r.blueprint || r.fanout || r.beats || r.segments) return r;\n  }\n\n  // String payloads from LLM\n  if (typeof raw === \"string\") {\n    let s = stripFences(stripThink(raw));\n    const a = s.indexOf(\"{\"), b = s.lastIndexOf(\"}\");\n    if (a !== -1 && b !== -1 && b > a) s = s.slice(a, b + 1);\n    let once = tryJSON(s);\n    if (once && typeof once === \"object\") return once;\n    if (typeof once === \"string\") {\n      const twice = tryJSON(once);\n      if (twice && typeof twice === \"object\") return twice;\n    }\n  }\n\n  throw new Error(\"Unable to parse LLM output into JSON object.\");\n}\n\n//////////////////////////// normalization ////////////////////////////\nfunction normalize(o){\n  // shells\n  if (!o.orchestratorId) o.orchestratorId = `CO-${base36(6)}`;\n  if (!o.videoType)      o.videoType      = \"combo\";\n  if (!Array.isArray(o.blueprint)) o.blueprint = [];\n  o.fanout = o.fanout && typeof o.fanout === \"object\" ? o.fanout : {};\n  o.fanout.aroll = o.fanout.aroll || { packageId: `AR-${base36(6)}`, testCases: [] };\n  o.fanout.broll = o.fanout.broll || { packageId: `BR-${base36(6)}`, testCases: [] };\n  o.fanout.aroll.packageId = ensurePrefix(o.fanout.aroll.packageId, \"AR-\");\n  o.fanout.broll.packageId = ensurePrefix(o.fanout.broll.packageId, \"BR-\");\n  o.fanout.aroll.testCases = Array.isArray(o.fanout.aroll.testCases) ? o.fanout.aroll.testCases : [];\n  o.fanout.broll.testCases = Array.isArray(o.fanout.broll.testCases) ? o.fanout.broll.testCases : [];\n  o.echo = o.echo && typeof o.echo === \"object\" ? o.echo : {};\n  o.echo.meta = o.echo.meta && typeof o.echo.meta === \"object\" ? o.echo.meta : {};\n  o.echo.rails = Array.isArray(o.echo.rails) ? o.echo.rails : [];\n\n  // ids\n  o.orchestratorId = ensurePrefix(o.orchestratorId, \"CO-\");\n\n  // duration cap (prefer blueprint end if meta missing)\n  const bpLastEnd = Array.isArray(o.blueprint) && o.blueprint.length\n    ? Number(o.blueprint[o.blueprint.length - 1]?.endSec) : null;\n  const maxDur = Number(o?.echo?.meta?.durationSec) || Number(o?.meta?.durationSec) || bpLastEnd || 60;\n\n  // blueprint timing\n  let lastEnd = 0;\n  o.blueprint = o.blueprint.map((seg, i) => {\n    const segId = seg?.segId || `SEG-${String(i+1).padStart(2,\"0\")}`;\n    const track = String(seg?.track).toLowerCase() === \"broll\" ? \"broll\" : \"aroll\";\n    let start = toNum3(seg?.startSec ?? (i === 0 ? 0 : lastEnd));\n    let end   = toNum3(seg?.endSec   ?? (start + (toNum3(seg?.durationSec)||0)));\n    start = clamp(start, 0, maxDur);\n    end   = clamp(Math.max(end, start), 0, maxDur);\n    const durationSec = toNum3(end - start);\n    lastEnd = end;\n    return {\n      segId, track, startSec: start, endSec: end, durationSec,\n      notes: typeof seg?.notes === \"string\" ? seg.notes\n            : (track === \"broll\" ? \"broll segment\" : \"aroll segment\"),\n    };\n  });\n\n  // align last to maxDur\n  if (o.blueprint.length) {\n    const last = o.blueprint[o.blueprint.length - 1];\n    if (last.endSec > maxDur) {\n      last.endSec = toNum3(maxDur);\n      last.durationSec = toNum3(last.endSec - last.startSec);\n    }\n  }\n\n  // test-case cleanup\n  const fixTestCase = (tc, isAroll) => {\n    const cleaned = { ...tc };\n    cleaned.scene = String(cleaned.scene ?? \"\");\n    cleaned.setting = String(cleaned.setting ?? \"\");\n    cleaned.action = String(cleaned.action ?? \"\");\n    cleaned.directorsNotes = String(cleaned.directorsNotes ?? \"\");\n    cleaned.wantsMusic = Boolean(cleaned.wantsMusic);\n    cleaned.musicDesc = String(cleaned.musicDesc ?? \"\");\n    cleaned.wantsCaptions = isAroll ? Boolean(cleaned.wantsCaptions) : false;\n    cleaned.durationSec = toNum3(cleaned.durationSec ?? 0);\n    cleaned.referenceText = String(cleaned.referenceText ?? \"\");\n    if (!cleaned.id) cleaned.id = base36(6);\n    cleaned.comboId = o.orchestratorId;\n    cleaned.driver = isAroll ? \"character\" : \"narrator\";\n    cleaned.wantsCutaways = !isAroll;\n    cleaned.character = isAroll ? String(cleaned.character ?? \"on-camera presenter\") : \"n/a\";\n    return cleaned;\n  };\n  o.fanout.aroll.testCases = o.fanout.aroll.testCases.map(tc => fixTestCase(tc, true));\n  o.fanout.broll.testCases = o.fanout.broll.testCases.map(tc => fixTestCase(tc, false));\n\n  // map blueprint → testCases\n  const bpByTrack = {\n    aroll: o.blueprint.filter(s => s.track === \"aroll\"),\n    broll: o.blueprint.filter(s => s.track === \"broll\"),\n  };\n  function assignSegIds(trackKey){\n    const tcs = o.fanout[trackKey]?.testCases || [];\n    const bps = bpByTrack[trackKey];\n    const bpIndexBySeg = Object.fromEntries(bps.map((s,i)=>[s.segId,i]));\n    for (let i = 0; i < tcs.length; i++) {\n      const tc = tcs[i];\n      let bp;\n      if (tc.segId && bpIndexBySeg[tc.segId] != null) bp = bps[bpIndexBySeg[tc.segId]];\n      else bp = bps[i];\n\n      if (bp) {\n        if (!tc.segId) tc.segId = bp.segId;\n        if (!tc.durationSec) tc.durationSec = toNum3(bp.durationSec);\n      }\n    }\n  }\n  assignSegIds(\"aroll\");\n  assignSegIds(\"broll\");\n\n  // seed minimal cases if a track is empty\n  if (!o.fanout.aroll.testCases.length && o.videoType !== \"broll_only\") {\n    const firstA = bpByTrack.aroll[0];\n    o.fanout.aroll.testCases.push(fixTestCase({\n      id: base36(6),\n      comboId: o.orchestratorId,\n      segId: firstA?.segId,\n      durationSec: toNum3(firstA?.durationSec ?? maxDur),\n      referenceText: String(o?.prompts?.script ?? o?.source?.referenceText ?? \"\"),\n    }, true));\n  }\n  if (!o.fanout.broll.testCases.length && o.videoType !== \"aroll_only\") {\n    const firstB = bpByTrack.broll[0];\n    o.fanout.broll.testCases.push(fixTestCase({\n      id: base36(6),\n      comboId: o.orchestratorId,\n      segId: firstB?.segId,\n      durationSec: toNum3(firstB?.durationSec ?? maxDur),\n      referenceText: String(o?.prompts?.brollSetting ?? o?.source?.referenceText ?? \"\"),\n    }, false));\n  }\n\n  return o;\n}\n\n//////////////////////////// validation ////////////////////////////\nfunction validate(o){\n  const errors = [];\n  const warnings = [];\n\n  // presence\n  if (!o || typeof o !== \"object\") errors.push(\"Root is not an object\");\n  if (!o.orchestratorId || typeof o.orchestratorId !== \"string\")\n    errors.push(\"Missing orchestratorId\");\n  if (!Array.isArray(o.blueprint) || o.blueprint.length === 0)\n    errors.push(\"Missing or empty blueprint\");\n  if (!o.videoType || typeof o.videoType !== \"string\")\n    errors.push(\"Missing videoType\");\n\n  if (!Array.isArray(o.blueprint)) {\n    return { errors, warnings, checks: { timing_nonoverlap: false } };\n  }\n\n  // timing checks\n  let lastEnd = 0;\n  let timing_nonoverlap = true;\n  let durations_match = true;\n\n  for (let i = 0; i < o.blueprint.length; i++){\n    const b = o.blueprint[i];\n    const start = Number(b.startSec);\n    const end   = Number(b.endSec);\n    const dur   = Number(b.durationSec);\n    if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(dur)) {\n      errors.push(`blueprint[${i}] has non-numeric timing`);\n      continue;\n    }\n    if (start < 0 || end < 0 || dur <= 0) errors.push(`blueprint[${i}] has non-positive timing`);\n    if (Math.abs((end - start) - dur) > 0.005) {\n      durations_match = false;\n      errors.push(`blueprint[${i}] duration != end - start`);\n    }\n    if (i > 0 && start < lastEnd - 0.003) {\n      timing_nonoverlap = false;\n      errors.push(`blueprint[${i}] overlaps previous segment (start=${start} < lastEnd=${lastEnd})`);\n    }\n    lastEnd = Math.max(lastEnd, end);\n  }\n\n  // total duration\n  const maxEnd = o.blueprint.reduce((m,b)=>Math.max(m, Number(b.endSec)||0), 0);\n  const totalD = Number(o?.echo?.meta?.durationSec) > 0 ? Number(o.echo.meta.durationSec) : maxEnd;\n  if (!Number.isFinite(totalD) || totalD <= 0) errors.push(\"Missing/invalid total duration (echo.meta.durationSec)\");\n\n  // cutaway rules for combo\n  let broll_ratio=null, broll_total=null, broll_count=null, allowedBCount=null, aroll_total=null;\n  if (String(o.videoType).toLowerCase() === \"combo\") {\n    const bSegs = o.blueprint.filter(s => s.track === \"broll\");\n    const aSegs = o.blueprint.filter(s => s.track === \"aroll\");\n    broll_total = bSegs.reduce((s,b)=>s + Number(b.durationSec||0),0);\n    aroll_total = aSegs.reduce((s,b)=>s + Number(b.durationSec||0),0);\n    broll_count = bSegs.length;\n    broll_ratio = totalD > 0 ? broll_total/totalD : 0;\n\n    // count allowance: <6s→0; 6–45→1; >45–90→2; >90–135→3; etc.\n    allowedBCount = totalD < 6 ? 0 : Math.floor(totalD/45) + 1;\n    if (broll_count > allowedBCount) {\n      errors.push(`Too many B-roll segments: got ${broll_count}, allowed ${allowedBCount} for totalD=${totalD}s`);\n    }\n\n    // ratio must be ≤ 0.25 hard cap (allow tiny float jitter)\n    if (broll_ratio > 0.252) {\n      errors.push(`B-roll exceeds 25% cap: ${(broll_ratio*100).toFixed(1)}% (> 25%)`);\n    }\n\n    // A-roll must be majority\n    if (aroll_total <= 0) errors.push(\"A-roll total duration is zero in combo plan.\");\n    if (aroll_total <= broll_total) warnings.push(\"A-roll is not the majority of time.\");\n  }\n\n  // package ids\n  const ids_prefixed = {\n    orchestratorId: typeof o.orchestratorId === \"string\" && o.orchestratorId.startsWith(\"CO-\"),\n    arollPackageId: typeof o?.fanout?.aroll?.packageId === \"string\" && o.fanout.aroll.packageId.startsWith(\"AR-\"),\n    brollPackageId: typeof o?.fanout?.broll?.packageId === \"string\" && o.fanout.broll.packageId.startsWith(\"BR-\"),\n  };\n\n  // drivers + wantsCutaways sanity (light)\n  const wantsCutaways_flags = {\n    aroll: (o.fanout?.aroll?.testCases || []).every(tc => tc.wantsCutaways === false),\n    broll: (o.fanout?.broll?.testCases || []).every(tc => tc.wantsCutaways === true),\n  };\n  const drivers = {\n    aroll: (o.fanout?.aroll?.testCases || []).every(tc => tc.driver === \"character\") ? \"character\" : \"mixed\",\n    broll: (o.fanout?.broll?.testCases || []).every(tc => tc.driver === \"narrator\") ? \"narrator\" : \"mixed\",\n  };\n\n  // fanout coverage per segId\n  const segIdsA = new Set(o.blueprint.filter(s=>s.track===\"aroll\").map(s=>s.segId));\n  const segIdsB = new Set(o.blueprint.filter(s=>s.track===\"broll\").map(s=>s.segId));\n  const aTCs = (o.fanout?.aroll?.testCases || []);\n  const bTCs = (o.fanout?.broll?.testCases || []);\n  const missingA = [...segIdsA].filter(id => !aTCs.some(tc => tc.segId === id));\n  const missingB = [...segIdsB].filter(id => !bTCs.some(tc => tc.segId === id));\n  if (missingA.length) warnings.push(`A-roll fanout missing segIds: ${missingA.join(\", \")}`);\n  if (missingB.length) warnings.push(`B-roll fanout missing segIds: ${missingB.join(\", \")}`);\n\n  const checks = {\n    timing_nonoverlap,\n    durations_match_end_minus_start: durations_match,\n    total_duration_sec: totalD,\n    broll_total_sec: broll_total,\n    broll_ratio,\n    broll_count,\n    broll_count_allowed: allowedBCount,\n    aroll_total_sec: aroll_total,\n    starts_with_aroll_and_ends_with_aroll:\n      (o.blueprint[0]?.track === \"aroll\") && (o.blueprint[o.blueprint.length-1]?.track === \"aroll\"),\n    ids_prefixed,\n    wantsCutaways_flags,\n    drivers\n  };\n\n  return { errors, warnings, checks };\n}\n\n//////////////////////////// entry ////////////////////////////\ntry {\n  const parsed  = parseLoose($json);\n  const cleaned = normalize(parsed);\n  const { errors, warnings, checks } = validate(cleaned);\n\n  return [{\n    json: {\n      ok: errors.length === 0,\n      errors,\n      warnings,\n      checks,\n      payload: cleaned\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      ok: false,\n      errors: [ String(err?.message || err) ],\n      warnings: [],\n      checks: { parse_failed: true },\n      payload: null\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        -96
+      ],
+      "id": "0fc4822b-7362-4641-96cd-0c1c4adefa2b",
+      "name": "Blueprint Validator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizer (n8n Code node — Run once for all items)\n\nfunction normalizeTrackEDL(edl) {\n  if (!edl || edl.kind !== \"TrackEDL\") return edl;\n  const out = JSON.parse(JSON.stringify(edl));\n  if (Array.isArray(out.segments)) {\n    out.segments = out.segments.map(normalizeSegment);\n  }\n  // do NOT add meta at the TrackEDL level\n  return out;\n}\n\nfunction normalizeSegment(node) {\n  const out = JSON.parse(JSON.stringify(node));\n\n  const S = (v) => (v == null ? \"\" : String(v));\n\n  // ---------- helpers ----------\n  const pad2 = (n) => String(n).padStart(2, \"0\");\n  const onlyNum = (s) => {\n    const m = String(s ?? \"\").match(/\\d+/);\n    return m ? +m[0] : 0;\n  };\n  const normBeat = (b) => \"B\" + pad2(onlyNum(b));\n  const normShotId = (s) => \"S\" + pad2(onlyNum(s));\n\n  const coalesce = (...vals) => vals.find((v) => v !== undefined && v !== null);\n  const coalesceBool = (...vals) => {\n    for (const v of vals) {\n      if (v === true) return true;\n      if (v === false) return false;\n    }\n    return false; // hard failsafe\n  };\n\n  const dedupeCSV = (csv) => {\n    if (!csv || typeof csv !== \"string\") return csv;\n    const uniq = Array.from(\n      new Set(\n        csv\n          .split(\",\")\n          .map((x) => x.trim().toLowerCase())\n          .filter(Boolean)\n      )\n    );\n    return uniq.join(\", \");\n  };\n\n  const fixText = (s) =>\n    typeof s === \"string\"\n      ? s\n          .replace(/oak\\s*-+\\s*plank/gi, \"oak-plank\")\n          .replace(/\\bvlogger s\\b/gi, \"vlogger’s\")\n          .replace(/\\bBarcelona s\\b/g, \"Barcelona’s\")\n          .replace(/\\s{2,}/g, \" \")\n          .replace(/[ \\t]+(\\n)/g, \"$1\")\n      : s;\n\n  const STANDARD_NEG =\n    \"text, logo, watermark, overlays, lower thirds, readable signage, license plates, jarring fast motion, hyper-accelerated movement, strobing lights, blurry, low-res, ai artifacts, warped geometry, double subjects, people addressing camera directly, lip-synced presenter\";\n\n  // ---------- minor source fixes ----------\n  if (out.source?.duraionSec) {\n    out.source.durationSec = out.source.duraionSec;\n    delete out.source.duraionSec;\n  }\n\n  // ---------- meta (segment-level, with strict fallback) ----------\n  const segMeta = out.meta ?? {};\n  const planner = out.source?.planner ?? {};\n  const segNode = out.segment ?? out.source?.segment ?? {};\n\n  out.meta = {\n    driver: coalesce(segMeta.driver, out.driver, planner.driver, \"narrator\"),\n    wantsCutaways: coalesceBool(\n      segMeta.wantsCutaways,\n      out.wantsCutaways,\n      out.source?.wantsCutaways,\n      planner.wantsCutaways\n    ),\n    wantsMusic: coalesceBool(\n      segMeta.wantsMusic,\n      out.wantsMusic,\n      out.source?.wantsMusic,\n      planner.wantsMusic\n    ),\n    wantsCaptions: coalesceBool(\n      segMeta.wantsCaptions,\n      out.wantsCaptions,\n      out.source?.wantsCaptions,\n      planner.wantsCaptions\n    ),\n    durationSec: coalesce(\n      segMeta.durationSec,\n      out.durationSec,\n      segNode.durationSec,\n      out.source?.durationSec,\n      null\n    ),\n    videoType: coalesce(\n      segMeta.videoType,\n      out.videoType,\n      segNode.videoType,\n      out.source?.videoType,\n      null\n    ),\n  };\n\n  // ---------- normalize top-level beat/shot + shotKey ----------\n  const segId = out.segId ?? out.segment?.segId ?? out.source?.segment?.segId ?? out.source?.planner?.segId;\n  if (out.beatId) out.beatId = normBeat(out.beatId);\n  if (out.shotId) out.shotId = normShotId(out.shotId);\n  if (segId && out.beatId && out.shotId) {\n    out.shotKey = `${segId}-${out.beatId}-${out.shotId}`;\n  }\n\n  // ---------- clean text fields ----------\n  if (out.outputs) {\n    out.outputs.script = fixText(out.outputs.script);\n    out.outputs.character = fixText(out.outputs.character);\n    out.outputs.setting = fixText(out.outputs.setting);\n    out.outputs.direction = fixText(out.outputs.direction);\n  }\n\n  // ---------- prompts / negatives ----------\n  if (out.prompts) {\n    if (out.prompts.negative) {\n      out.prompts.negative = dedupeCSV(out.prompts.negative);\n    } else if (out.track === \"broll\") {\n      out.prompts.negative = STANDARD_NEG;\n    }\n  }\n\n  // ---------- shots (normalize + sort by beatId, shotId) ----------\n  const shotSort = (a, b) => {\n    const ba = onlyNum(a.beatId), bb = onlyNum(b.beatId);\n    if (ba !== bb) return ba - bb;\n    const sa = onlyNum(a.shotId), sb = onlyNum(b.shotId);\n    return sa - sb;\n  };\n\n  if (Array.isArray(out.shots)) {\n    out.shots = out.shots\n      .map((s) => {\n        const dupSuffix =\n          s.shotKey && /-DUP\\d+/i.test(s.shotKey) ? s.shotKey.match(/-DUP\\d+/i)[0] : \"\";\n        const shot = { ...s };\n        shot.beatId = normBeat(shot.beatId);\n        shot.shotId = normShotId(shot.shotId);\n        if (segId) {\n          shot.shotKey = `${segId}-${shot.beatId}-${shot.shotId}${dupSuffix}`;\n          shot.segId = segId;\n        }\n        return shot;\n      })\n      .sort(shotSort);\n  }\n\n  // ---------- shotPrompts (normalize + sort to match shots) ----------\n  if (Array.isArray(out.shotPrompts)) {\n    out.shotPrompts = out.shotPrompts\n      .map((sp) => {\n        const dupSuffix =\n          sp.shotKey && /-DUP\\d+/i.test(sp.shotKey) ? sp.shotKey.match(/-DUP\\d+/i)[0] : \"\";\n        const node = { ...sp };\n        node.beatId = normBeat(node.beatId);\n        node.shotId = normShotId(node.shotId);\n        if (segId) {\n          node.shotKey = `${segId}-${node.beatId}-${node.shotId}${dupSuffix}`;\n          if (!node.segId) node.segId = segId;\n        }\n        if (node.t2i?.negative) node.t2i.negative = dedupeCSV(node.t2i.negative);\n        if (node.i2v?.negative) node.i2v.negative = dedupeCSV(node.i2v.negative);\n        return node;\n      })\n      .sort(shotSort);\n  }\n\n  return out;\n}\n\n// ===== COMBO-AWARE SEGMENT REINDEX (final pass across all items) =====\nfunction isTrackEDL(x){ return x && x.kind === \"TrackEDL\" && Array.isArray(x.segments); }\nfunction pad2(n){ return String(n).padStart(2, \"0\"); }\nconst S = (v) => (v == null ? \"\" : String(v));\n\nfunction rewriteSegId(seg, newSegId){\n  const out = JSON.parse(JSON.stringify(seg));\n  const oldSegId =\n    out.segId || out.segment?.segId || out.source?.segment?.segId || out.source?.planner?.segId || null;\n\n  // Stamp at common locations\n  out.segId = newSegId;\n  out.segment = out.segment || {};\n  out.segment.segId = newSegId;\n  if (out.source) {\n    if (out.source.segment) out.source.segment.segId = newSegId;\n    if (out.source.planner) out.source.planner.segId = newSegId;\n  }\n\n  // Per-segment shotKey (if present)\n  if (out.shotKey && out.beatId && out.shotId) {\n    const dup = /-DUP\\d+$/i.test(out.shotKey) ? out.shotKey.match(/-DUP\\d+$/i)[0] : \"\";\n    out.shotKey = `${newSegId}-${out.beatId}-${out.shotId}${dup}`;\n  }\n\n  // shots[]\n  if (Array.isArray(out.shots)) {\n    out.shots = out.shots.map(s => {\n      const dup = s.shotKey && /-DUP\\d+$/i.test(s.shotKey) ? s.shotKey.match(/-DUP\\d+$/i)[0] : \"\";\n      return { ...s, shotKey: `${newSegId}-${s.beatId}-${s.shotId}${dup}`, segId: newSegId };\n    });\n  }\n\n  // shotPrompts[]\n  if (Array.isArray(out.shotPrompts)) {\n    out.shotPrompts = out.shotPrompts.map(sp => {\n      const dup = sp.shotKey && /-DUP\\d+$/i.test(sp.shotKey) ? sp.shotKey.match(/-DUP\\d+$/i)[0] : \"\";\n      const node = { ...sp, shotKey: `${newSegId}-${sp.beatId}-${sp.shotId}${dup}` };\n      if (!node.segId) node.segId = newSegId;\n      return node;\n    });\n  }\n\n  return { out, oldSegId };\n}\n\nfunction reindexSingleTrack(edl){\n  let counter = 1;\n  const remap = {};\n  const segs = edl.segments\n    .slice()\n    .sort((a,b) => (a.segment?.startSec ?? a.startSec ?? 0) - (b.segment?.startSec ?? b.startSec ?? 0));\n\n  const newSegs = segs.map(seg => {\n    const newId = `SEG-${pad2(counter++)}`;\n    const { out, oldSegId } = rewriteSegId(seg, newId);\n    if (oldSegId && oldSegId !== newId) remap[oldSegId] = newId;\n    return out;\n  });\n\n  return { ...edl, segments: newSegs, __remap: remap };\n}\n\nfunction reindexCombo(arollEDL, brollEDL){\n  const tag = (t)=> (S(t).toLowerCase()===\"aroll\" ? 0 : 1);\n  const take = (seg, track) => ({\n    track,\n    seg,\n    start: seg.segment?.startSec ?? seg.startSec ?? 0,\n  });\n\n  const pool = [\n    ...(arollEDL?.segments || []).map(s => take(s, \"aroll\")),\n    ...(brollEDL?.segments || []).map(s => take(s, \"broll\")),\n  ].sort((a,b) => (a.start - b.start) || (tag(a.track) - tag(b.track)));\n\n  let counter = 1;\n  const remap = {};\n  const newA = [];\n  const newB = [];\n\n  for (const row of pool){\n    const newId = `SEG-${pad2(counter++)}`;\n    const { out, oldSegId } = rewriteSegId(row.seg, newId);\n    if (oldSegId && oldSegId !== newId) remap[oldSegId] = newId;\n    if (row.track === \"aroll\") newA.push(out); else newB.push(out);\n  }\n\n  const arollOut = arollEDL ? { ...arollEDL, segments: newA, __remap: remap } : null;\n  const brollOut = brollEDL ? { ...brollEDL, segments: newB, __remap: remap } : null;\n  return { arollOut, brollOut };\n}\n\n// ----- n8n I/O glue -----\nconst incoming = $input.all();\nconst payload = incoming.map((i) => i.json);\n\n// Normalize: if an item is a TrackEDL, normalize its segments; else treat it as a segment node\nlet normalized = payload.map((obj) =>\n  obj?.kind === \"TrackEDL\" ? normalizeTrackEDL(obj) : normalizeSegment(obj)\n);\n\n// ===== FINAL: assign canonical segIds =====\n// Rules:\n// - Single-track (A-roll OR B-roll): assign SEG-01.. by that track's time order\n// - Combo (both present): sort by start time across both; A-roll first on ties; assign SEG-01.. across both\n// - Ensure all dependent shotKeys/segId refs updated; keep __remap for debug\nconst aroll = normalized.find(x => isTrackEDL(x) && S(x.track).toLowerCase() === \"aroll\");\nconst broll = normalized.find(x => isTrackEDL(x) && S(x.track).toLowerCase() === \"broll\");\n\nif (aroll && broll) {\n  const { arollOut, brollOut } = reindexCombo(aroll, broll);\n  normalized = normalized.map(x => {\n    if (x === aroll) return arollOut;\n    if (x === broll) return brollOut;\n    return x;\n  });\n} else if (aroll) {\n  const arollOut = reindexSingleTrack(aroll);\n  normalized = normalized.map(x => (x === aroll ? arollOut : x));\n} else if (broll) {\n  const brollOut = reindexSingleTrack(broll);\n  normalized = normalized.map(x => (x === broll ? brollOut : x));\n}\n\n// Return as n8n items\nreturn normalized.map((obj) => ({ json: obj }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        240
+      ],
+      "id": "23f8dde1-fadc-4e35-b2ff-9e3d7b22f001",
+      "name": "Normalizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Explode Blueprint (per-segment fanout)\n// Input: either the raw orchestrator object OR { ok, errors, warnings, checks, payload }\n// Output: one n8n item per segment with its matched testCase & context\n\n//// helpers ///////////////////////////////////////////////////////////////\nconst root = items[0]?.json ?? {};\nconst snap  = n => Math.round(Number(n) * 1000) / 1000;\nconst base36 = (n=6) => Math.random().toString(36).slice(2, 2+n);\nconst bySegId = (arr=[]) => arr.reduce((m, tc) => { if (tc && tc.segId) m[String(tc.segId)] = tc; return m; }, {});\nconst isWrapper = (obj) => obj && typeof obj === \"object\" && (\"ok\" in obj) && (\"payload\" in obj);\n\n// unwrap validator wrapper if present\nconst wrapper = isWrapper(root) ? root : null;\nif (wrapper && wrapper.ok === false) {\n  // fail fast so your IF node can branch back to the fixer\n  return [{\n    json: {\n      ok: false,\n      stage: \"explode\",\n      error: \"Upstream validation failed\",\n      errors: wrapper.errors || [],\n      warnings: wrapper.warnings || [],\n      checks: wrapper.checks || {}\n    }\n  }];\n}\n\nconst env = isWrapper(root) ? (root.payload || {}) : root;\n\n// guard: need a blueprint with at least one segment\nif (!env || !Array.isArray(env.blueprint) || env.blueprint.length === 0) {\n  return [{\n    json: {\n      ok: false,\n      stage: \"explode\",\n      error: \"Missing or empty blueprint\",\n      hint: \"Ensure previous node passes { payload: { blueprint: [...] } } or a raw orchestrator object.\"\n    }\n  }];\n}\n\n// pull any provided script text per seg (from normalized segments or beats)\nconst segTextById = (() => {\n  const src = Array.isArray(env.segments) ? env.segments\n           : Array.isArray(env.beats)     ? env.beats\n           : [];\n  const map = {};\n  for (const b of src) if (b?.segId) map[b.segId] = String(b.text || \"\");\n  return map;\n})();\n\n//// index fanout by segId /////////////////////////////////////////////////\nconst arollById = bySegId(env?.fanout?.aroll?.testCases);\nconst brollById = bySegId(env?.fanout?.broll?.testCases);\n\n// in-order fallback iterators (keep per-track order aligned)\nfunction makeInOrder(list=[]) {\n  let i = 0;\n  return () => (i < list.length ? list[i++] : null);\n}\nconst nextAroll = makeInOrder(env?.fanout?.aroll?.testCases || []);\nconst nextBroll = makeInOrder(env?.fanout?.broll?.testCases || []);\n\n// synth a minimal tc when none exists\nfunction synthTc(track, segId, dur, comboId){\n  const isA = track === \"aroll\";\n  return {\n    id: base36(6),\n    comboId,\n    segId,\n    durationSec: dur,\n    referenceText: \"\",\n    scene: \"\",\n    setting: \"\",\n    action: \"\",\n    directorsNotes: \"\",\n    wantsMusic: false,\n    musicDesc: \"\",\n    wantsCaptions: isA,\n    driver: isA ? \"character\" : \"narrator\",\n    wantsCutaways: !isA,\n    character: isA ? \"on-camera presenter\" : \"n/a\",\n    _synth: true\n  };\n}\n\n// choose tc by segId first; ALWAYS advance iterator once to avoid reuse\nfunction pickTc(track, segId, dur){\n  const orderNext = track === \"broll\" ? nextBroll : nextAroll;\n  const byId      = track === \"broll\" ? brollById : arollById;\n\n  // prefer segId match\n  let tc = byId[segId];\n\n  // consume iterator for this segment regardless (keeps order aligned)\n  const ordered = orderNext();\n\n  // if no segId match, fall back to the in-order tc\n  if (!tc) tc = ordered;\n\n  // enrich or synthesize\n  if (!tc) return synthTc(track, segId, dur, env.orchestratorId);\n\n  const bound = { ...tc };\n  if (!bound.segId)       bound.segId = segId;\n  if (!bound.durationSec) bound.durationSec = dur;\n  return bound;\n}\n\n// ---- derive character meta once (root-level fallbacks) -----------------\nconst rootCharacterName =\n  (env.characterName ??\n   env.echo?.meta?.characterName ??\n   env.meta?.characterName ??\n   env.fanout?.aroll?.testCases?.[0]?.characterName ??\n   env.fanout?.aroll?.testCases?.[0]?.providedCharacterName ??\n   \"Host\");\n\nconst rootCharacterGender =\n  (env.characterGender ??\n   env.echo?.meta?.characterGender ??\n   env.meta?.characterGender ??\n   env.fanout?.aroll?.testCases?.[0]?.characterGender ??\n   env.fanout?.aroll?.testCases?.[0]?.providedCharacterGender ??\n   \"unspecified\");\n\n//// explode blueprint /////////////////////////////////////////////////////\nconst out   = [];\nconst wpm   = Number(env.wpm)   || 150;\nconst voice = String(env.voice) || \"first-person anchor\";\nconst rails = env.echo?.rails ?? env.rails ?? [];\nconst meta  = env.echo?.meta  ?? env.meta  ?? {};\n\nfor (const rawSeg of env.blueprint) {\n  // clone + normalize timing\n  const s = { ...rawSeg };\n  s.track = (String(s.track).toLowerCase() === \"broll\") ? \"broll\" : \"aroll\"; // default to aroll\n  let start = snap(s.startSec ?? 0);\n  let end   = snap(s.endSec ?? (start + Number(s.durationSec || 0)));\n  if (!Number.isFinite(end) || end < start) end = start;\n  const duration = snap(end - start);\n\n  s.startSec    = start;\n  s.endSec      = end;\n  s.durationSec = duration;\n\n  // bind a testCase\n  const tc = pickTc(s.track, s.segId, s.durationSec);\n\n  // script selection: prefer tc.providedScript, else Composer text, else empty\n  const composerScript   = segTextById[s.segId] || \"\";\n  const providedScript   = (typeof tc.providedScript === \"string\" && tc.providedScript.trim())\n                         ? tc.providedScript\n                         : composerScript;\n  const scriptSource     = (typeof tc.providedScript === \"string\" && tc.providedScript.trim())\n                         ? \"provided\"\n                         : (composerScript ? \"composer\" : \"empty\");\n\n  // speech budget (approx words)\n  const wordsBudget = Math.max(0, Math.floor(s.durationSec * (wpm / 60)));\n\n  // Prepare meta payload (augment for A-roll only)\n  const segMeta = (s.track === \"aroll\")\n    ? { ...meta, characterName: tc.characterName ?? rootCharacterName, characterGender: tc.characterGender ?? rootCharacterGender }\n    : { ...meta };\n\n  // Ensure testCase carries name/gender for A-roll (without overwriting)\n  const tcOut = { ...tc };\n  if (s.track === \"aroll\") {\n    if (!tcOut.characterName)   tcOut.characterName   = rootCharacterName;\n    if (!tcOut.characterGender) tcOut.characterGender = rootCharacterGender;\n  }\n\n  out.push({\n    json: {\n      ok: true,                 // mark this segment item as valid\n      orchestratorId: env.orchestratorId,\n      videoType: env.videoType,\n      // normalized segment\n      ...s,\n      // context\n      packageId: s.track === \"broll\"\n        ? env?.fanout?.broll?.packageId\n        : env?.fanout?.aroll?.packageId,\n      meta: segMeta,\n      rails,\n      wpm,\n      voice,\n      wordsBudget,\n      // scripting\n      script: providedScript,\n      scriptSource,\n      // subworkflow payload\n      testCase: tcOut,\n      // A-roll-only passthroughs (top-level fields for convenience)\n      ...(s.track === \"aroll\" ? {\n        characterName: segMeta.characterName,\n        characterGender: segMeta.characterGender\n      } : {}),\n      // light warning only if the tc was synthesized\n      warning: tc?._synth ? `Synthesized minimal testCase for ${s.segId} (${s.track})` : undefined,\n    }\n  });\n}\n\n// If somehow nothing got pushed, emit a single error item so flow can branch.\nif (!out.length) {\n  return [{\n    json: {\n      ok: false,\n      stage: \"explode\",\n      error: \"No segments produced from blueprint\",\n      hint: \"Check that blueprint has segments and fanout is an object.\"\n    }\n  }];\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2608,
+        -112
+      ],
+      "id": "5dca3038-2e3f-4f9e-956f-a8dea0ad787a",
+      "name": "Explode Blueprint"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Tj6oWZCmBAvla6hl",
+          "mode": "list",
+          "cachedResultName": "A-Roll Script Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        128
+      ],
+      "id": "da24bb54-2d15-4a08-ab26-5dba8f302cf6",
+      "name": "Exec A-Roll Script Builder",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "482BZDMXNzBO21PF",
+          "mode": "list",
+          "cachedResultName": "B-Roll Script Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1824,
+        352
+      ],
+      "id": "65c336d4-4115-425f-a31f-40ec234ff93f",
+      "name": "Exec B-Roll Script Builder",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Orchestrator output:\n{{ JSON.stringify($json) }}\n\nInstructions:\n1) Use blueprint order and timing for the \"segments\" array.\n2) Write one cohesive first-person script that spans all segments.\n3) Pull substance only from fanout.*.testCases[].referenceText (both tracks).\n4) B-roll uses VO (same voice). Spoken words only — no stage directions, cues, or sound actions.\n5) Do NOT include any text inside brackets, parentheses, or asterisks (e.g. *pause*, (laughs), [beat]).\n6) Do NOT include emojis, camera moves, or music/sound effect mentions.\n7) Return ONLY the JSON defined in the schema — no extra commentary or metadata.",
+        "needsFallback": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the Combo Script Composer.\n\nInput: ONE Combo Orchestrator JSON (blueprint + fanout).  \nIf input is a string, parse it.\n\n---\n\n### 🎬 TASK\n- Write ONE cohesive, natural-sounding **first-person script** that flows smoothly across all segments.  \n- Maintain a consistent narrator voice for both **A-roll** and **B-roll** (B-roll = voiceover by default).  \n- Use information from `fanout.testCases[].referenceText`, but you may paraphrase, condense, or reorder for clarity and rhythm.  \n- If timing feels long relative to content, use **punctuation and natural sentence pacing** — **never insert filler or cues**.\n\n---\n\n### 🎙️ STYLE & TONE\n- Conversational, expressive, and human — never robotic or list-like.  \n- Natural rhythm, realistic emotion, and phrasing that feels spoken, not written.  \n- Maintain authenticity while adapting flexibly to the input’s subject or mood.  \n\n**TONE FLEX (Adaptive Genre Blending):**\nAdjust tone and pacing automatically based on the topic or genre mix:  \n\n- **Vlog / Lifestyle:** Relaxed, personal, occasionally witty.  \n- **Podcast / Explainer:** Thoughtful, confident, smooth progression.  \n- **Motivational / Coaching / Fitness:** Upbeat, focused, rhythmic — energetic but not shouting.  \n- **Educational / History / Science:** Clear, calm, and structured; make complex ideas simple.  \n- **Storytelling / Narrative:** Immersive pacing; use contrast between tension and release.  \n- **Art / Culture / Music:** Poetic or emotional phrasing with rhythm or mood.  \n- **Tech / AI / Innovation:** Smart, forward-looking, conversationally intelligent.  \n- **Wellness / Mindfulness:** Grounded, warm, and open — slow, mindful pacing.  \n\nEnsure **smooth tone transitions** between segments when genres differ.\n\n---\n\n### 🧠 OUTPUT FORMAT (JSON only)\nReturn only a single valid JSON object:\n\n{\n  \"composerId\": \"SC-xxxxxx\",\n  \"wpm\": 150,\n  \"voice\": \"first-person anchor\",\n  \"characterName\": \"{{ $('Init Envelope').item.json.source.characterName }}\",\n  \"characterGender\": \"{{ $('Init Envelope').item.json.source.characterGender }}\",\n  \"beats\": [\n    {\n      \"segId\": \"SEG-01\",\n      \"track\": \"aroll\" | \"broll\",\n      \"startSec\": number,\n      \"endSec\": number,\n      \"durationSec\": number,\n      \"text\": \"spoken words only (no cues, brackets, asterisks, or actions)\"\n    }\n  ],\n  \"fullText\": \"stitched spoken script (no cues or non-verbal markers)\"\n}\n\n---\n\n### 🚫 RULES (STRICT)\n- **Spoken words only.** No stage directions, sound cues, or emotional actions.  \n- **Do NOT include:**\n  - Asterisks (`*giggles*`, `*pause*`, etc.)\n  - Parentheses `(leans in)`  \n  - Brackets `[beat]` or `{laughs}`\n  - Sound or music tags like `SFX:`, `FX:`, `(music plays)`\n  - Emojis or emoticons  \n  - Camera, movement, or gesture references  \n  - Any non-spoken text (notes, directions, emotions)  \n\n- If a pause or emphasis is needed, use **punctuation**, not cues.  \n- Keep every line something a person would **actually say aloud**.  \n- No invented filler — pacing is achieved by sentence rhythm, not added text.  \n- All text must be **emotionally readable** by TTS without modification.\n\n---\n\n### ⚙️ VALIDATION REQUIREMENTS\n- `beats.length` must equal `blueprint.length`.  \n- Each beat must match the same `segId`, `track`, and timing as the input.  \n- Every B-roll beat must contain non-empty VO text.  \n- `fullText` must be the joined script of all beats.  \n- The result must be valid JSON with no extra keys or commentary.\n\n---\n\n### 🗣️ VOICE\nUse a **“first-person anchor”** tone — a consistent, natural narrator who speaks clearly, warmly, and with emotional intelligence.  \nThe voice should sound human and expressive, not synthetic."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1616,
+        -96
+      ],
+      "id": "e1e70190-9a99-4b3e-93dd-69b972e8fdcd",
+      "name": "Script Composer"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1616,
+        32
+      ],
+      "id": "bdeaa5e5-cda6-4d34-852e-8989b3f50706",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Script Distributor — attach per-segment text to testCases and skip LLM scripting\n// Inputs: Post-Compose Validator output (env with fanout + segments/beats)\n\n//// Helpers ///////////////////////////////////////////////////////////////\nconst stripThink  = s => String(s).replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\nconst stripFences = s => String(s).replace(/```(?:json)?\\s*([\\s\\S]*?)```/gi, \"$1\");\nfunction tryParse(v) {\n  if (typeof v === \"string\") {\n    try { return JSON.parse(v); } catch {}\n    try { return JSON.parse(stripFences(stripThink(v.trim()))); } catch {}\n    return {};\n  }\n  if (v && typeof v === \"object\") {\n    if (\"text\" in v && typeof v.text === \"string\") return tryParse(v.text);\n    return v;\n  }\n  return {};\n}\n\n//// Normalize env /////////////////////////////////////////////////////////\nconst env = tryParse($json) || {};\nconst wpm = Number(env.wpm) || 150;\nconst voice = env.voice || \"first-person anchor\";\n\n// Prefer normalized `segments`; fall back to `beats`\nconst segArr = Array.isArray(env.segments)\n  ? env.segments\n  : (Array.isArray(env.beats) ? env.beats : []);\n\n// Fast lookup + per-track pools for fallback\nconst bySegId  = Object.fromEntries(segArr.map(s => [s.segId, s]));\nconst byTrack  = segArr.reduce((m, s) => ((m[s.track] ||= []).push(s), m), {});\nconst usedById = new Set();\nconst TOL = 0.015; // ~15ms drift\n\nfunction fallbackMatch(tc, trackKey) {\n  const pool = byTrack[trackKey] || [];\n  const td = Number(tc.durationSec);\n  for (const s of pool) {\n    if (usedById.has(s.segId)) continue;\n    const sd = Number(s.durationSec);\n    if (Number.isFinite(sd) && Number.isFinite(td) && Math.abs(sd - td) <= TOL) {\n      usedById.add(s.segId);\n      return s;\n    }\n  }\n  return null;\n}\n\n//// Attach provided script to each track’s testCases //////////////////////\nfunction attachProvided(trackKey) {\n  const pkg = env?.fanout?.[trackKey];\n  if (!pkg || !Array.isArray(pkg.testCases)) return;\n\n  for (const tc of pkg.testCases) {\n    const sid = tc?.segId || tc?.segmentId || tc?.seg?.segId;\n    const s = (sid && bySegId[sid]) || fallbackMatch(tc, trackKey);\n\n    const text = s && typeof s.text === \"string\" ? s.text : \"\";\n    if (text.trim()) {\n      tc.providedScript = text;      // downstream builders voice this\n      tc.providedWpm    = wpm;\n      tc.providedVoice  = voice;\n      tc.scriptMode     = \"provided\"; // short-circuit LLM\n    } else {\n      // leave LLM path available if we don’t have text\n      delete tc.providedScript;\n      delete tc.providedWpm;\n      delete tc.providedVoice;\n      tc.scriptMode = tc.scriptMode || \"generate\";\n    }\n  }\n}\n\nattachProvided(\"aroll\");\nattachProvided(\"broll\");\n\n//// Audit echo (non-blocking) ////////////////////////////////////////////\nenv.comboScript = env.comboScript || {};\nif (!env.comboScript.segments && Array.isArray(segArr)) env.comboScript.segments = segArr;\nenv.comboScript.wpm   = env.comboScript.wpm   || wpm;\nenv.comboScript.voice = env.comboScript.voice || voice;\n\nreturn [{ json: env }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        -96
+      ],
+      "id": "d66c5fd1-7893-4482-8f58-c3a9c3a467b1",
+      "name": "Script Distributor"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: \"Parse Orchestrator Output\" (robust)\n\n// --- helpers ---\nconst compact = (v) => (v ?? \"\").toString().trim();\n\nfunction stripThink(s) {\n  return s.replace(/<think>[\\s\\S]*?<\\/think>/gi, \"\");\n}\n\nfunction stripFences(s) {\n  // remove ```json ... ``` or ``` ... ```\n  return s.replace(/```(?:json)?\\s*([\\s\\S]*?)```/gi, \"$1\");\n}\n\nfunction stripMDNoise(s) {\n  // remove BOM, normalize quotes, trim obvious prose\n  return s\n    .replace(/\\uFEFF/g, \"\") // BOM\n    .replace(/[“”]/g, '\"')\n    .replace(/[‘’]/g, \"'\")\n    .trim();\n}\n\n// find the first balanced {...} or [...] block\nfunction extractBalancedCore(s) {\n  const opens = [\"{\", \"[\"];\n  const closes = { \"{\": \"}\", \"[\": \"]\" };\n  let start = -1;\n  let openCh = null;\n  for (let i = 0; i < s.length; i++) {\n    const ch = s[i];\n    if (opens.includes(ch)) {\n      start = i;\n      openCh = ch;\n      break;\n    }\n  }\n  if (start === -1) return null;\n\n  const closeCh = closes[openCh];\n  let depth = 0;\n  let inStr = false;\n  let esc = false;\n\n  for (let i = start; i < s.length; i++) {\n    const ch = s[i];\n    if (inStr) {\n      if (esc) { esc = false; }\n      else if (ch === \"\\\\\") { esc = true; }\n      else if (ch === '\"') { inStr = false; }\n      continue;\n    }\n    if (ch === '\"') { inStr = true; continue; }\n    if (ch === openCh) depth++;\n    else if (ch === closeCh) {\n      depth--;\n      if (depth === 0) return s.slice(start, i + 1);\n    }\n  }\n  // not fully balanced; return substring from start (caller may heal)\n  return s.slice(start);\n}\n\nfunction tryParseJSON(s) {\n  try { return JSON.parse(s); } catch { return null; }\n}\n\n// --- healing passes for \"almost JSON\" ---\n// 1) remove trailing commas before ] or }\nfunction healTrailingCommas(s) {\n  return s.replace(/,\\s*([}\\]])/g, \"$1\");\n}\n\n// 2) close obvious dangling string values at line breaks\n//    e.g.  \"action\": \"Energy pulses synchronize with \\n  \"directorsNotes\":\n//    becomes \"action\": \"Energy pulses synchronize with \",\\n  \"directorsNotes\":\nfunction healDanglingStringValues(s) {\n  // work line-by-line to avoid over-replacing commas inside arrays\n  const lines = s.split(/\\r?\\n/);\n  for (let i = 0; i < lines.length; i++) {\n    const L = lines[i];\n\n    // if a line contains key: \"value   (no closing quote before newline)\n    // detect a quote opened after a colon that is not closed on this line\n    const m = L.match(/:\\s*\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\\s*$/);\n    if (m) {\n      // If next line looks like it starts a new key or a closing brace/bracket,\n      // add a closing quote and comma to this line.\n      const next = lines[i + 1] ?? \"\";\n      if (/^\\s*[\"}]\\s*[:,}]?/.test(next) || /^\\s*[a-zA-Z_]/.test(next) || /^\\s*$/.test(next)) {\n        lines[i] = L.replace(/\\s*$/, '\",'); // close the string and add comma\n      }\n    }\n  }\n  return lines.join(\"\\n\");\n}\n\n// 3) if overall double-quote balance is odd (ignoring escapes), append a quote\nfunction healUnbalancedDocQuote(s) {\n  let count = 0;\n  let esc = false;\n  for (let i = 0; i < s.length; i++) {\n    const ch = s[i];\n    if (esc) { esc = false; continue; }\n    if (ch === \"\\\\\") { esc = true; continue; }\n    if (ch === '\"') count++;\n  }\n  if (count % 2 === 1) return s + '\"';\n  return s;\n}\n\nfunction normalizeInput(jsonIn) {\n  // unwrap single-item arrays\n  let payload = Array.isArray(jsonIn) && jsonIn.length === 1 ? jsonIn[0] : jsonIn;\n\n  // if it's already an object with blueprint, accept it\n  if (payload && typeof payload === \"object\" && !payload.text && payload.blueprint) {\n    return payload;\n  }\n\n  // commonly we get { text: \"...\" }\n  let raw = payload && typeof payload === \"object\" && \"text\" in payload\n    ? compact(payload.text)\n    : typeof payload === \"string\"\n      ? payload\n      : JSON.stringify(payload ?? \"\");\n\n  // sanitation\n  raw = stripMDNoise(stripFences(stripThink(raw)));\n\n  // try direct parse\n  let parsed = tryParseJSON(raw);\n  if (parsed) return parsed;\n\n  // extract the first balanced JSON/array-ish core\n  let core = extractBalancedCore(raw) ?? raw;\n\n  // pass A: trailing commas\n  let healed = healTrailingCommas(core);\n  parsed = tryParseJSON(healed);\n  if (parsed) return parsed;\n\n  // pass B: heal dangling strings at line breaks, then trailing commas again\n  healed = healDanglingStringValues(healed);\n  healed = healTrailingCommas(healed);\n  parsed = tryParseJSON(healed);\n  if (parsed) return parsed;\n\n  // pass C: if quotes are unbalanced, close the doc-level string and retry\n  healed = healUnbalancedDocQuote(healed);\n  parsed = tryParseJSON(healed);\n  if (parsed) return parsed;\n\n  // pass D: if the core was an array with one object, try parsing and unwrapping\n  const maybeArr = tryParseJSON(healTrailingCommas(healDanglingStringValues(core)));\n  if (Array.isArray(maybeArr) && maybeArr.length === 1 && typeof maybeArr[0] === \"object\") {\n    return maybeArr[0];\n  }\n\n  throw new Error(\"Unable to parse orchestrator JSON\");\n}\n\nfunction validateOrchestrator(o) {\n  const errors = [];\n  const warnings = [];\n\n  if (!o || typeof o !== \"object\") errors.push(\"Root is not an object\");\n  if (!o.orchestratorId || typeof o.orchestratorId !== \"string\")\n    errors.push(\"Missing orchestratorId\");\n  if (!Array.isArray(o.blueprint) || o.blueprint.length === 0)\n    errors.push(\"Missing or empty blueprint\");\n  if (!o.videoType || typeof o.videoType !== \"string\")\n    errors.push(\"Missing videoType\");\n\n  if (!Array.isArray(o.blueprint)) return errors;\n\n  // ---- basic timing + structure checks ----\n  const seenSegIds = new Set();\n  let lastEnd = 0;\n  let maxEnd = 0;\n  o.blueprint.forEach((b, i) => {\n    if (!b || typeof b !== \"object\") {\n      errors.push(`blueprint[${i}] is not an object`);\n      return;\n    }\n    if (!b.segId) errors.push(`blueprint[${i}].segId missing`);\n    if (b.segId) {\n      if (seenSegIds.has(b.segId)) errors.push(`Duplicate segId: ${b.segId}`);\n      seenSegIds.add(b.segId);\n    }\n    if (!b.track || !/^(aroll|broll)$/i.test(String(b.track))) {\n      errors.push(`blueprint[${i}].track must be \"aroll\" or \"broll\"`);\n    }\n    const dur = Number(b.durationSec);\n    const start = Number(b.startSec);\n    const end = Number(b.endSec);\n    if (!Number.isFinite(dur) || !Number.isFinite(start) || !Number.isFinite(end)) {\n      errors.push(`blueprint[${i}] has non-numeric timing`);\n      return;\n    }\n    if (start < 0 || end < 0 || dur <= 0) errors.push(`blueprint[${i}] has non-positive timing`);\n    if (Math.abs((end - start) - dur) > 0.005)\n      errors.push(`blueprint[${i}] duration != end - start`);\n\n    // Non-overlap check (allow tiny float jitter)\n    if (i > 0 && start < lastEnd - 0.003)\n      errors.push(`blueprint[${i}] startSec overlaps previous segment (start=${start} < lastEnd=${lastEnd})`);\n\n    lastEnd = Math.max(lastEnd, end);\n    maxEnd = Math.max(maxEnd, end);\n  });\n\n  // ---- total duration source of truth ----\n  const totalD =\n    Number(o?.echo?.meta?.durationSec) && Number(o.echo.meta.durationSec) > 0\n      ? Number(o.echo.meta.durationSec)\n      : maxEnd; // fallback to blueprint max end\n  if (!Number.isFinite(totalD) || totalD <= 0) errors.push(\"Missing/invalid total duration (echo.meta.durationSec)\");\n\n  // ---- cutaway rules (only for combo) ----\n  if (String(o.videoType).toLowerCase() === \"combo\") {\n    const CUTAWAY_RATIO_MIN = 0.23;\n    const CUTAWAY_RATIO_MAX = 0.27;\n    const bSegments = o.blueprint.filter(b => String(b.track).toLowerCase() === \"broll\");\n    const aSegments = o.blueprint.filter(b => String(b.track).toLowerCase() === \"aroll\");\n    const bCount = bSegments.length;\n    const bTotal = bSegments.reduce((s, b) => s + Number(b.durationSec || 0), 0);\n    const ratio = totalD > 0 ? bTotal / totalD : 0;\n\n    // Count rule bucket\n    const allowedBCount = totalD < 6 ? 0 : Math.floor(totalD / 45) + 1;\n\n    if (bCount > allowedBCount) {\n      errors.push(\n        `Too many B-roll segments: got ${bCount}, allowed ${allowedBCount} for totalD=${totalD}s`\n      );\n    }\n    if (totalD < 6 && bCount > 0) {\n      errors.push(\"Videos under 6s should not contain cutaways (b-roll).\");\n    }\n    if (ratio < CUTAWAY_RATIO_MIN || ratio > CUTAWAY_RATIO_MAX) {\n      errors.push(\n        `B-roll duration ratio out of range: ${(ratio*100).toFixed(1)}% (allowed ≈25% in [${(CUTAWAY_RATIO_MIN*100).toFixed(0)}–${(CUTAWAY_RATIO_MAX*100).toFixed(0)}%])`\n      );\n    }\n\n    const aTotal = aSegments.reduce((s, b) => s + Number(b.durationSec || 0), 0);\n    if (aTotal <= 0) errors.push(\"A-roll total duration is zero in combo plan.\");\n    if (aTotal <= bTotal) (o.__warnings ??= []).push(\"A-roll is not the majority of time.\");\n  }\n\n  if (!o.fanout || typeof o.fanout !== \"object\") {\n    (o.__warnings ??= []).push(\"Missing fanout object (will be required downstream).\");\n  }\n\n  return errors;\n}\n\n// --- main ---\ntry {\n  const parsed = normalizeInput($json);\n  const errors = validateOrchestrator(parsed);\n\n  if (errors.length) {\n    return [{\n      json: {\n        error: \"Invalid orchestrator payload\",\n        details: errors,\n        orchestratorPreview: {\n          orchestratorId: parsed?.orchestratorId ?? null,\n          videoType: parsed?.videoType ?? null,\n          blueprintCount: Array.isArray(parsed?.blueprint) ? parsed.blueprint.length : 0\n        },\n        warnings: parsed?.__warnings ?? []\n      },\n      pairedItem: { item: 0 }\n    }];\n  }\n\n  // Success\n  return [{ json: parsed }];\n\n} catch (e) {\n  return [{\n    json: {\n      error: \"Parse failure\",\n      message: (e && e.message) || \"Unknown error\"\n    },\n    pairedItem: { item: 0 }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        -368
+      ],
+      "id": "b3863b21-1a72-4ff9-9642-5f7b3564e657",
+      "name": "Parse Orchestrator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Post-Compose Validator (beats → segments normalizer + alignment + orchestrator passthrough)\n// Inputs:\n//  - Input 1: Script Composer output (required) -> $json\n//  - Input 2: Parse Orchestrator output (optional) -> $items(1,0).json\n// Fallbacks: reach by node name if not wired.\n\n// ---------- config ----------\nconst NODE_CANDIDATES = [\n  'Parse Orchestrator',\n  'Parse-Orchestrator',\n  'Parse Orchestrator Output'\n];\n\nconst errs = [];\nconst warnings = [];\nconst to3 = v => Math.round(Number(v) * 1000) / 1000;\n\n// ---------- helpers ----------\nconst stripThink  = s => s.replace(/<think>[\\s\\S]*?<\\/think>/gi, '');\nconst stripFences = s => s.replace(/```(?:json)?\\s*([\\s\\S]*?)```/gi, '$1');\n\nfunction tryParse(v) {\n  if (typeof v === 'string') {\n    try { return JSON.parse(v); } catch {}\n    try { return JSON.parse(stripFences(stripThink(v.trim()))); } catch {}\n  }\n  if (v && typeof v === 'object') {\n    if ('text' in v && typeof v.text === 'string') return tryParse(v.text);\n    return v;\n  }\n  return null;\n}\n\nfunction safeGetBlueprint(obj) {\n  const bp = obj?.blueprint;\n  return (bp && Array.isArray(bp)) ? bp : null;\n}\n\nfunction pickOrchestratorContext(obj) {\n  if (!obj || typeof obj !== 'object') return null;\n  const out = {};\n  if (obj.orchestratorId) out.orchestratorId = obj.orchestratorId;\n  if (obj.videoType)      out.videoType      = obj.videoType;\n  if (obj.echo)           out.echo           = obj.echo;\n  if (obj.fanout)         out.fanout         = obj.fanout;\n  if (obj.blueprint)      out.blueprint      = obj.blueprint;\n\n  // convenience: packages from fanout\n  const arollPkg = obj?.fanout?.aroll?.packageId || null;\n  const brollPkg = obj?.fanout?.broll?.packageId || null;\n  out.packages = { aroll: arollPkg, broll: brollPkg };\n\n  return out;\n}\n\n// ---------- normalize composer output ----------\nlet out = tryParse($json);\nif (!out) {\n  errs.push('Unable to parse Script Composer output');\n  return [{ json: { error: 'Script validation failed', errs, warnings, raw: $json } }];\n}\n\n// ---------- fetch orchestrator payload (prefer wired input 2, else by name, else composer echo) ----------\nlet orch = null;\n\n// 1) Wired input-2 (index form)\ntry {\n  const wired = $items(1, 0);\n  if (wired?.json) orch = wired.json;\n} catch { /* not wired */ }\n\n// 2) Reach by node name (first match wins)\nif (!orch) {\n  for (const name of NODE_CANDIDATES) {\n    try {\n      const viaItems = $items(name, 0, 0);\n      if (viaItems?.json) { orch = viaItems.json; break; }\n    } catch {}\n    try {\n      const viaNode = $node[name]?.json;\n      if (viaNode) { orch = viaNode; break; }\n    } catch {}\n  }\n}\n\n// 3) Composer echo fallback (only if it actually includes those fields)\nif (!orch && out && (out.orchestratorId || out.blueprint || out.fanout || out.echo)) {\n  orch = out;\n}\n\n// Safely extract/confirm blueprint\nlet blueprint = safeGetBlueprint(orch) || safeGetBlueprint(out);\nif (!blueprint) warnings.push('No blueprint for alignment; using soft checks only.');\n\n// ---------- beats → segments ----------\nlet segments = Array.isArray(out.segments) ? out.segments : null;\nif (!segments && Array.isArray(out.beats)) {\n  segments = out.beats.map(b => ({\n    segId: b.segId,\n    track: b.track,\n    startSec: b.startSec,\n    endSec: b.endSec,\n    durationSec: b.durationSec,\n    text: b.text\n  }));\n}\nif (!Array.isArray(segments) || !segments.length) errs.push('Missing \"segments\" (and no beats to normalize)');\n\n// ---------- NEW: combo lane presence check (hard fail) ----------\nconst norm = x => String(x || '').toLowerCase();\nconst wantCombo =\n  norm(out.videoType || orch?.videoType) === 'combo' ||\n  Boolean(out?.planner?.lanes?.aroll && out?.planner?.lanes?.broll) ||\n  Boolean(orch?.fanout?.aroll || orch?.fanout?.broll);\n\nconst segTracks = new Set((segments || []).map(s => norm(s.track)));\nconst planTracks = new Set((blueprint || []).map(p => norm(p.track)));\nconst tracksSeen = new Set([...segTracks, ...planTracks]);\n\nconst hasAroll = tracksSeen.has('aroll');\nconst hasBroll = tracksSeen.has('broll');\n\nif (wantCombo) {\n  if (hasAroll && !hasBroll) errs.push('Combo validation failed: got A-roll but no B-roll.');\n  if (!hasAroll && hasBroll) errs.push('Combo validation failed: got B-roll but no A-roll.');\n  if (!hasAroll && !hasBroll) errs.push('Combo validation failed: found neither A-roll nor B-roll.');\n}\n\n// ---------- validation (soft if no blueprint) ----------\nconst TOL = 0.015;\nif (Array.isArray(blueprint) && Array.isArray(segments)) {\n  if (segments.length !== blueprint.length) {\n    warnings.push(`segments length (${segments.length}) != blueprint length (${blueprint.length})`);\n  }\n  const n = Math.min(segments.length, blueprint.length);\n  for (let i = 0; i < n; i++) {\n    const s = segments[i], p = blueprint[i];\n    if (!s || !p) continue;\n    if (s.segId !== p.segId) warnings.push(`segId mismatch @${i}: ${s.segId} != ${p.segId}`);\n    if (s.track !== p.track) warnings.push(`track mismatch ${s.segId}`);\n    for (const k of ['startSec','endSec','durationSec']) {\n      const sv = to3(s[k]), pv = to3(p[k]);\n      if (Number.isFinite(pv) && Number.isFinite(sv) && Math.abs(sv - pv) > TOL) {\n        warnings.push(`timing drift ${s.segId}.${k} (got ${sv}, want ${pv})`);\n      }\n    }\n    if (p.track === 'broll' && !(String(s.text || '').trim())) {\n      errs.push(`B-roll needs VO: ${s.segId}`);\n    }\n  }\n}\n\n// ---------- pacing hint (non-blocking) ----------\nconst WPM = Number(out?.wpm) || 150;\nconst wps = WPM / 60;\nconst pacingHint = Array.isArray(segments)\n  ? segments.map(s => {\n      const words = String(s.text || '').trim().split(/\\s+/).filter(Boolean).length;\n      const budget = Math.floor(Number(s.durationSec) * wps);\n      return { segId: s.segId, words, budget, diff: words - budget };\n    })\n  : [];\n\n// ---------- merge orchestrator context back in ----------\nconst orchCtx = pickOrchestratorContext(orch) || {};\nconst merged = {\n  ...out,\n  segments,             // normalized for downstream\n  blueprint: blueprint || out.blueprint || orchCtx.blueprint || [],\n  orchestratorId: out.orchestratorId || orchCtx.orchestratorId || null,\n  videoType:      out.videoType      || orchCtx.videoType      || null,\n  fanout:         out.fanout         || orchCtx.fanout         || null,\n  echo:           out.echo           || orchCtx.echo           || null,\n  packages:       out.packages       || orchCtx.packages       || { aroll: null, broll: null },\n  warnings,\n  pacingHint\n};\n\n// ---------- result ----------\nif (errs.length) {\n  return [{ json: { error: 'Script validation failed', errs, warnings, parsed: merged, pacingHint } }];\n}\n\nreturn [{ json: merged }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        -96
+      ],
+      "id": "ee97387f-0e5e-46e1-9f52-bf299b129521",
+      "name": "Post-Compose Validator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Sanitizer (Batch) — TrackEDL flattener + TTS + shot prompts + diagnostics\n// Input: array of TrackEDL items (each with .segments[])\n// Output: array of clean segment objects (one output per segment element)\n\nconst IN  = $input.all();\n\n// ---------- small utils ----------\nconst to3 = (v) => Math.round(Number(v || 0) * 1000) / 1000;\nconst collapse = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst isStr = (v) => typeof v === 'string' && v.length > 0;\nconst pad2 = (n) => String(Math.max(0, Number(n||0))).padStart(2, '0');\nconst asBool = (v, d=false) => (v === true ? true : (v === false ? false : d)); // <- default-to-false helper\n\nfunction numFromId(id) { const m = String(id || '').match(/(\\d+)/); return m ? Number(m[1]) : 0; }\n// IMPORTANT: do NOT normalize segId — use it exactly as provided\nfunction makeShotKey(rawSegId, beatId, shotId) {\n  const seg = String(rawSegId || 'SEG-01'); // pass-through\n  const b = `B${pad2(numFromId(beatId) || 1)}`;\n  const s = `S${pad2(numFromId(shotId) || 1)}`;\n  return `${seg}-${b}-${s}`;\n}\nfunction uniq(arr) { const seen = new Set(); const out=[]; for (const x of arr||[]) { const k = collapse(x); if (!k || seen.has(k)) continue; seen.add(k); out.push(x); } return out; }\nfunction dedupeCSV(csv) {\n  const seen = new Set(); const out = [];\n  for (const raw of String(csv || '').split(',')) {\n    const t = collapse(raw); if (!t) continue;\n    const key = t.toLowerCase(); if (seen.has(key)) continue;\n    seen.add(key); out.push(t);\n  }\n  return out.join(', ');\n}\n// punctuation normalizer\nfunction normalizePunctuation(s='') {\n  return collapse(\n    String(s)\n      .replace(/\\.\\s*\\./g, '.')\n      .replace(/,,+/g, ',')\n      .replace(/\\s+([,.;:!?])/g, '$1')\n      .replace(/([:;,.!?])([:;,.!?]+)/g, '$1')\n  );\n}\n// convert rails to negative tokens\nfunction railsToNegatives(rails = []) {\n  const deny = [];\n  for (const r of rails) {\n    const k = String(r || '').toLowerCase();\n    if (/no on-screen text|no logos|no watermarks|lettering/i.test(k)) {\n      deny.push('text','logo','watermark','lettering','overlays','lower thirds','readable signage','captions');\n    }\n    if (/avoid fast|whip/i.test(k)) deny.push('fast motion','whip pan','hyper-accelerated movement','camera shake');\n    if (/avoid clutter|keep composition clean/i.test(k)) deny.push('visual clutter','busy background','noisy composition');\n    if (/title-safe/i.test(k)) deny.push('edge cropping','cut-off faces');\n    if (/face fully visible|mouth|jawline/i.test(k)) deny.push('occluded face','blocked mouth','blocked jawline');\n  }\n  return uniq(deny);\n}\nfunction summarizeDirection(dir = '') {\n  const s = collapse(dir).toLowerCase();\n  const hints = new Set();\n  if (/smooth|unhurried|gentle/i.test(s)) hints.add('smooth, unhurried motion');\n  if (/environment|steam|leaves|light changes|traffic|people passing/i.test(s)) hints.add('subtle environmental movement');\n  if (/transition|match|continuity/i.test(s)) hints.add('gentle transitions');\n  if (/no fast|avoid fast|whip/i.test(s)) hints.add('no fast pans or whip moves');\n  const out = Array.from(hints);\n  return out.length ? out.slice(0,3).join('; ') : 'smooth natural motion; gentle transitions; no fast pans';\n}\n\n// ---------- TTS helpers ----------\nfunction stripStageDirections(t='') {\n  return collapse(\n    String(t)\n      .replace(/\\[[^\\]]*?\\]/g, ' ')\n      .replace(/\\((?:beat|sigh|pause|gently.*?|whisper|laughs|music)[^)]*?\\)/gi, ' ')\n      .replace(/-{2,}/g, '—')\n  );\n}\nfunction clampWords(text, cap) {\n  if (!(cap > 0)) return collapse(text);\n  const tokens = collapse(text).split(/\\s+/);\n  if (tokens.length <= cap) return tokens.join(' ');\n  return tokens.slice(0, cap).join(' ');\n}\nfunction splitForCaptions(text, maxLen = 55) {\n  const out = [];\n  const src = collapse(text);\n  if (!src) return out;\n  const chunks = src.split(/(?<=[\\.\\!\\?])\\s+|(?<=,)\\s+|\\s+\\/\\s+|\\n+/);\n  for (let ch of chunks) {\n    ch = collapse(ch);\n    if (!ch) continue;\n    if (ch.length <= maxLen) { out.push(ch); continue; }\n    let line = '';\n    for (const w of ch.split(/\\s+/)) {\n      if (!line.length) { line = w; continue; }\n      if ((line + ' ' + w).length <= maxLen) { line += ' ' + w; }\n      else { out.push(line); line = w; }\n    }\n    if (line) out.push(line);\n  }\n  return out;\n}\nfunction buildTTS(segmentItem, seg, outputs, metrics, videoType, wantsCaptionsFlag) {\n  const source = segmentItem.source || {};\n  const raw = outputs?.script || segmentItem.script || source.providedScript || '';\n  const sans = stripStageDirections(raw);\n  const captionMax = Number(metrics?._timing?.captionLineMax) || 55;\n\n  const wpmProvided = Number(source.providedWpm || segmentItem.providedWpm || 0);\n  const dur = Number(seg?.durationSec || 0);\n  const wpsProvided = (wpmProvided > 0) ? (wpmProvided / 60) : null;\n  const defaultWps = 2.7;\n  const wps = wpsProvided || defaultWps;\n  const computedCap = Math.max(1, Math.floor((dur || 0) * wps));\n  const cap = Number(metrics?._timing?.computedWordCap) || computedCap;\n\n  const textClamped = normalizePunctuation(clampWords(sans, cap));\n  const captionsWanted = wantsCaptionsFlag === true;\n  const capLines = captionsWanted ? splitForCaptions(textClamped, captionMax) : [];\n\n  const ttsMode = String(videoType).startsWith('aroll') ? 'aroll' : 'broll_vo';\n  const voice =\n    source?.providedVoice ||\n    segmentItem.outputs?.voice ||\n    (ttsMode === 'aroll' ? 'first-person anchor' : 'narrator-neutral');\n\n  return {\n    mode: ttsMode,\n    text: collapse(raw),\n    textSanitized: textClamped,\n    language: 'auto',\n    voice,\n    wpm: wpmProvided || Math.round(wps * 60),\n    wps,\n    durationSec: dur,\n    captions: {\n      enabled: captionsWanted,\n      maxLen: captionMax,\n      lines: capLines,\n      lineCount: capLines.length\n    }\n  };\n}\n\n// ---------- plan/diagnostics helpers ----------\nfunction calcPlanBounds(shList = []) {\n  const starts = [], ends = []; let sumDur = 0;\n  for (const s of shList) {\n    const st = Number(s?.startSec), en = Number(s?.endSec);\n    const du = Number(s?.durationSec ?? (en - st));\n    if (Number.isFinite(st)) starts.push(st);\n    if (Number.isFinite(en)) ends.push(en);\n    if (Number.isFinite(du)) sumDur += Math.max(0, du);\n  }\n  const has = starts.length && ends.length;\n  return {\n    hasShots: !!shList.length,\n    start: has ? Math.min(...starts) : null,\n    end:   has ? Math.max(...ends)   : null,\n    span:  has ? Math.max(0, Math.max(...ends) - Math.min(...starts)) : null,\n    totalShotDuration: sumDur\n  };\n}\nfunction analyzeContinuity(shList = [], tol = 1/30) {\n  const issues = [];\n  const sorted = [...shList].sort((a,b) => (a.startSec||0) - (b.startSec||0));\n  for (let i = 0; i < sorted.length; i++) {\n    const s = sorted[i];\n    const st = Number(s.startSec||0), en = Number(s.endSec||0);\n    const du = Number(s.durationSec ?? (en - st));\n    if (!(du > 0)) issues.push({type:'nonpositive_duration', shotKey:s.shotKey, start:st, end:en, duration:du});\n    if (en - st < -tol) issues.push({type:'inverted_times', shotKey:s.shotKey, start:st, end:en});\n    if (i > 0) {\n      const prev = sorted[i-1];\n      const gap = st - Number(prev.endSec||0);\n      if (gap > tol) issues.push({type:'gap', from:prev.shotKey, to:s.shotKey, gap:to3(gap)});\n      if (gap < -tol) issues.push({type:'overlap', a:prev.shotKey, b:s.shotKey, overlap:to3(Math.abs(gap))});\n    }\n  }\n  return issues;\n}\nfunction analyzeBoundsVsSegment(shList = [], seg, tol = 1/30) {\n  const issues = [];\n  const segStart = Number(seg?.startSec||0);\n  const segEnd   = Number(seg?.endSec||0);\n  for (const s of shList) {\n    const st = Number(s.startSec||0), en = Number(s.endSec||0);\n    if (st < segStart - tol) issues.push({type:'shot_before_segment', shotKey:s.shotKey, delta:to3(segStart - st)});\n    if (en > segEnd   + tol) issues.push({type:'shot_after_segment',  shotKey:s.shotKey, delta:to3(en - segEnd)});\n  }\n  return issues;\n}\nfunction within(x, eps) { return x == null || Math.abs(x) <= eps; }\n\n// ---------- flatten TrackEDL → per segment records ----------\nconst flattened = [];\nfor (const it of IN) {\n  const item = (it && it.json) ? it.json : it;\n  if (!item || item.kind !== 'TrackEDL' || !Array.isArray(item.segments)) continue;\n\n  const trackLevel = {\n    track: item.track,\n    videoType: item.videoType,\n    flags: item.flags || {},\n    settings: item.settings || {},\n    planner: item.planner || {},\n    planMeta: item.planMeta || {},\n    meta: item.meta || {}\n  };\n\n  for (const seg of item.segments) {\n    // prefer the embedded .segment block for timing/ids\n    const segBlock = seg.segment || {};\n    const segId    = segBlock.segId || seg.segId || 'SEG-01'; // pass-through; default only if missing\n    const startSec = to3(segBlock.startSec ?? seg.startSec ?? 0);\n    const endSec   = to3(segBlock.endSec   ?? seg.endSec   ?? 0);\n    const durationSec = to3(segBlock.durationSec ?? seg.durationSec ?? (endSec - startSec));\n\n    // resolve videoType at the segment level (segment meta > track > fallback by track name)\n    const segVideoType =\n      seg.meta?.videoType ||\n      item.videoType ||\n      (item.track === 'aroll' ? 'aroll' : 'broll');\n\n    // normalize source block we pass through\n    const source = {\n      scene:          seg.scene,\n      driver:         seg.meta?.driver,\n      wantsCutaways:  asBool(seg.meta?.wantsCutaways, false),\n      character:      seg.source?.character || seg.meta?.character || null,\n      setting:        seg.source?.setting || null,\n      action:         seg.source?.action || null,\n      directorsNotes: seg.source?.directorsNotes || null,\n      wantsMusic:     asBool(seg.meta?.wantsMusic, false),\n      musicDesc:      seg.source?.musicDesc || null,\n      wantsCaptions:  asBool(seg.meta?.wantsCaptions, false),\n      durationSec:    seg.meta?.durationSec ?? durationSec,\n      referenceText:  seg.source?.referenceText || null,\n      id:             seg.source?.id,\n      comboId:        seg.source?.comboId,\n      providedScript: seg.source?.providedScript,\n      providedWpm:    seg.source?.providedWpm,\n      providedVoice:  seg.source?.providedVoice,\n      segId:          segId,          // pass-through\n      videoType:      segVideoType,\n      segment: {\n        segId: segId,                 // pass-through\n        track: segBlock.track || item.track,\n        orchestratorId: segBlock.orchestratorId || seg.orchestratorId || item.meta?.orchestratorId,\n        packageId: segBlock.packageId || seg.packageId,\n        comboId: segBlock.comboId || seg.comboId,\n        startSec,\n        endSec,\n        durationSec\n      }\n    };\n\n    flattened.push({\n      // carry original fields the downstream builder expects\n      track: trackLevel.track,\n      videoType: source.videoType,         // ← resolved per-segment type\n      settings: trackLevel.settings,\n      flags: trackLevel.flags,\n      meta: trackLevel.meta,\n\n      // per-segment content\n      scene: seg.scene,\n      rails: Array.isArray(seg.rails) ? seg.rails : [],\n      prompts: seg.prompts || {},\n      outputs: seg.outputs || {},\n      shots: Array.isArray(seg.shots) ? seg.shots : [],\n\n      // computed/known timing\n      segment: source.segment,\n      source,\n\n      // allow TTS helper to use metrics if present\n      metrics: seg.metrics || {}\n    });\n  }\n}\n\n// ---------- main per-segment pass ----------\nconst OUT = [];\n\nfor (const item of flattened) {\n  const seg = { ...(item.segment || {}) };\n  seg.startSec    = to3(seg.startSec);\n  seg.endSec      = to3(seg.endSec);\n  seg.durationSec = to3(seg.durationSec != null ? seg.durationSec : (seg.endSec - seg.startSec));\n\n  // outputs (pass-through)\n  const outputs = {\n    script:    item.outputs?.script,\n    character: item.outputs?.character,\n    setting:   item.outputs?.setting,\n    direction: item.outputs?.direction\n  };\n\n  // shots\n  const shotsInput = Array.isArray(item.shots) ? item.shots : [];\n  const shots = shotsInput.map(sh => {\n    // prefer incoming segId and shotKey; only synthesize if missing\n    const segIdForShot = sh.segId || seg.segId;\n    const shotKey = sh.shotKey || makeShotKey(segIdForShot, sh.beatId, sh.shotId);\n    const dSec = Number(sh.durationSec ?? (Number(sh.endSec ?? 0) - Number(sh.startSec ?? 0))) || 0;\n    return {\n      shotKey,\n      segId: segIdForShot, // carry through\n      origShotId: sh.origShotId || sh.shotId,\n      origBeatId: sh.origBeatId || sh.beatId,\n      shotId:  sh.shotId,\n      beatId:  sh.beatId,\n      subject: collapse(sh.subject),\n      tags:    Array.isArray(sh.tags) ? sh.tags : [],\n      notes:   collapse(sh.notes),\n      setting: collapse(sh.setting),\n      startSec: Number(sh.startSec ?? 0),\n      endSec:   Number(sh.endSec   ?? 0),\n      durationSec: to3(dSec)\n    };\n  });\n\n  // negatives\n  const negFromRails = railsToNegatives(item.rails || []);\n  const negProvided  = collapse(item.prompts?.negative || '');\n  const negCommons   = [\n    'ai artifacts','warped geometry','double subjects','deformed hands',\n    'low-res','blurry','strobing','banding','overexposed highlights'\n  ];\n  const NEGATIVE_BASE_CSV = uniq([negProvided, ...negFromRails, ...negCommons]).join(', ');\n  const NEGATIVE_BASE = dedupeCSV(NEGATIVE_BASE_CSV);\n\n  const dirHint   = summarizeDirection(item.prompts?.direction);\n  const videoType = item.videoType || \"broll\";\n\n  // per-shot prompts\n  const shotPrompts = shots.map((sh) => {\n    const fallbackPositive = collapse([sh.subject, sh.setting].filter(Boolean).join('. '));\n    const positive = normalizePunctuation(collapse(fallbackPositive) || 'simple cinematic view');\n    let negativeCsv = NEGATIVE_BASE;\n    if (/logo|brand|signage|watermark/i.test(sh.notes || '')) {\n      negativeCsv = dedupeCSV(negativeCsv + ', logo, brand marks, readable signage, watermark');\n    }\n    return {\n      shotKey: sh.shotKey,\n      segId:   sh.segId, // carry through exact segId used by the shot\n      shotId:  sh.shotId,\n      beatId:  sh.beatId || null,\n      durationSec: sh.durationSec,\n      t2i: {\n        engine: 'sdxl',\n        positive,\n        negative: negativeCsv,\n        subject: sh.subject || null,\n        setting: sh.setting || null,\n        tags:    uniq(sh.tags || [])\n      },\n      i2v: {\n        engine: 'hunyuan',\n        positive,\n        negative: negativeCsv,\n        motionHint: dirHint,\n        fps: Number(item.settings?.fps || 30) || 30,\n        aspect: item.settings?.aspect || '16:9'\n      }\n    };\n  });\n\n  // plan/diagnostics\n  const shotCount      = shots.length;\n  const totalDuration  = Number(seg.durationSec || 0);\n  const targetDuration = Number(item.source?.durationSec || seg.durationSec || 0);\n\n  // segment-level TTS (wantsCaptions from segment meta)\n  const wantsCaptions = item.source?.wantsCaptions === true;\n  const tts = buildTTS(item, seg, outputs, item.metrics, videoType, wantsCaptions);\n\n  // diagnostics\n  const fps = Number(item.settings?.fps || 30) || 30;\n  const tol = 1 / fps;\n  const plan = calcPlanBounds(shots);\n  const contIssues  = analyzeContinuity(shots, tol);\n  const boundIssues = analyzeBoundsVsSegment(shots, seg, tol);\n  const deltas = plan.hasShots ? {\n    segVsPlanSpan:      (plan.span  != null) ? to3((seg.endSec - seg.startSec) - plan.span) : null,\n    segVsPlanStart:     (plan.start != null) ? to3(seg.startSec - plan.start) : null,\n    segVsPlanEnd:       (plan.end   != null) ? to3(seg.endSec   - plan.end)   : null,\n    segDurationMinusSumShots:       to3((seg.endSec - seg.startSec) - plan.totalShotDuration)\n  } : null;\n  const ok =\n    (!!shots.length || videoType === 'aroll') && // a-roll segments can be script-only\n    (plan.hasShots ? within(deltas?.segVsPlanStart, tol) && within(deltas?.segVsPlanEnd, tol) &&\n      within(deltas?.segDurationMinusSumShots, 0.1) && contIssues.length === 0 && boundIssues.length === 0 : true);\n\n  const diagnostics = {\n    ok,\n    tolerance: to3(tol),\n    expectedSegment: { start: seg.startSec, end: seg.endSec, duration: seg.durationSec },\n    observedPlan: {\n      start: plan.start, end: plan.end, span: plan.span,\n      totalShotDuration: to3(plan.totalShotDuration), shotCount: shots.length\n    },\n    deltas,\n    issues: [...contIssues, ...boundIssues],\n    summary: plan.hasShots\n      ? `seg ${to3(seg.startSec)}–${to3(seg.endSec)} (dur ${to3(seg.durationSec)}) vs plan ${to3(plan.start)}–${to3(plan.end)} (span ${to3(plan.span)}; sum ${to3(plan.totalShotDuration)}). Issues: ${contIssues.length + boundIssues.length}${ok ? ' [OK]' : ' [MISMATCH]'}`\n      : 'no shots to compare'\n  };\n\n  OUT.push({\n    json: {\n      // basic identity/timing\n      segId:          seg.segId,   // pass-through\n      track:          seg.track,\n      startSec:       seg.startSec,\n      endSec:         seg.endSec,\n      orchestratorId: seg.orchestratorId,\n      videoType,\n      packageId:      seg.packageId,\n\n      // segment context\n      scene:          item.source?.scene,\n      driver:         item.source?.driver,\n      wantsCutaways:  asBool(item.source?.wantsCutaways, false),\n      character:      item.source?.character,\n      setting:        item.source?.setting,\n      action:         item.source?.action,\n      directorsNotes: item.source?.directorsNotes,\n      script:         outputs.script,\n      wantsMusic:     asBool(item.source?.wantsMusic, false),\n      musicDesc:      item.source?.musicDesc,\n      wantsCaptions:  wantsCaptions,\n      durationSec:    item.source?.durationSec,\n      referenceText:  item.source?.referenceText,\n      id:             item.source?.id,\n      comboId:        item.source?.comboId,\n      providedScript: item.source?.providedScript,\n      providedWpm:    item.source?.providedWpm,\n      providedVoice:  item.source?.providedVoice,\n\n      // passthrough\n      source: item.source,\n      segment: seg,\n      prompts: item.prompts,\n      outputs,\n\n      // generation payloads\n      shotPrompts,\n      tts,\n\n      // shots & metrics\n      shots,\n      shotCount,\n      totalDuration,\n      targetDuration,\n\n      // diagnostics\n      diagnostics,\n\n      // mirrors for first shot (legacy)\n      shotId:  shots[0]?.shotId,\n      beatId:  shots[0]?.beatId,\n      subject: shots[0]?.subject,\n      tags:    shots[0]?.tags\n    }\n  });\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        240
+      ],
+      "id": "78a72218-5b2e-428e-8a46-9e9b2af979f1",
+      "name": "Final sanitizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Final Node → TrackEDL (FORCING track/videoType/driver)\n * - Forces each segment's track ('aroll' | 'broll')\n * - Forces each segment's videoType ('aroll' for A-roll, 'broll' for B-roll) and mirrors into source/segment blocks\n * - Forces driver: 'character' for A-roll, 'narrator' for B-roll\n * - Orders shots by beatId → shotId; rebuilds contiguous timings ONLY if needed\n * - Aligns shotPrompts to (re)ordered shots\n * - Segment timing: prefer explicit; else sum of shots; else fallback\n * - Header uses majority values, but segment fields are forced as above\n * - Header duration = overall timeline span; also exposes contentDurationSec (sum)\n * - Patches diagnostics: A-roll segments with zero shots are treated as OK (script-only)\n * - Adds speechByTrack: { aroll: {voiceId,wps,wpm}, broll: {...} }\n * - Sets routeUsed = \"combo\"\n * - ENSURES ESSENTIAL IDS:\n *   · EVERY SHOT: { shotKey, segId, beatId, shotId }\n *   · A-ROLL SEGMENTS WITH NO SHOTS: add { beatId:\"B01\", shotId:\"S01\", shotKey:`SEG-##-B01-S01` } on the segment object\n *   · shotKey uniqueness guaranteed within a TrackEDL (collisions renumber S##)\n */\n\nconst ROUND = (x) => Math.round(Number(x || 0) * 1000) / 1000;\nconst collapse = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst pickFirst = (...xs) => xs.find(v => v !== undefined && v !== null && v !== '') ?? null;\nconst asBool = (v, d=false) => (v === true ? true : (v === false ? false : d));\n\nconst pad2 = (n) => String(Math.max(0, Number(n||0))).padStart(2, '0');\nconst numFromId = (id) => { const m = String(id||'').match(/(\\d+)/); return m ? Number(m[1]) : 0; };\n\nconst cleanSegId  = (segId)  => `SEG-${pad2(numFromId(segId) || 1)}`;\nconst cleanBeatId = (beatId) => `B${pad2(numFromId(beatId) || 1)}`;\nconst cleanShotId = (shotId) => `S${pad2(numFromId(shotId) || 1)}`;\n\nconst parseShotKey = (shotKey) => {\n  const m = String(shotKey||'').match(/SEG-(\\d+)-B(\\d+)-S(\\d+)/i);\n  if (!m) return null;\n  return {\n    segId:  `SEG-${pad2(m[1])}`,\n    beatId: `B${pad2(m[2])}`,\n    shotId: `S${pad2(m[3])}`\n  };\n};\nconst makeShotKey = (segId, beatId, shotId) =>\n  `${cleanSegId(segId)}-${cleanBeatId(beatId)}-${cleanShotId(shotId)}`;\n\nconst sortBeatShot = (a, b) => {\n  const ba = numFromId(a.beatId), bb = numFromId(b.beatId);\n  if (ba !== bb) return ba - bb;\n  const sa = numFromId(a.shotId), sb = numFromId(b.shotId);\n  if (sa !== sb) return sa - sb;\n  const sta = Number(a.startSec||0), stb = Number(b.startSec||0);\n  if (sta !== stb) return sta - stb;\n  return String(a.shotId||'').localeCompare(String(b.shotId||''), undefined, { numeric:true, sensitivity:'base' });\n};\n\nfunction rebuildContiguous(shots, startAt = 0, totalTarget = null) {\n  if (!Array.isArray(shots) || !shots.length) return [];\n  const arr = shots.map(s => ({ ...s }));\n  const durs = arr.map(s => {\n    const d = Number(s.durationSec);\n    if (d > 0) return d;\n    const a = Number(s.startSec), b = Number(s.endSec);\n    if (Number.isFinite(a) && Number.isFinite(b) && b > a) return b - a;\n    return NaN;\n  });\n  const allGood = durs.every(d => Number.isFinite(d) && d > 0);\n  let useDur = durs;\n  if (!allGood) {\n    const fallbackTotal = Number(totalTarget) > 0 ? Number(totalTarget) : null;\n    const even = (fallbackTotal || shots.length * 3) / shots.length; // default 3s each\n    useDur = shots.map(() => even);\n  }\n  let t = Number(startAt) || 0;\n  const out = arr.map((s, i) => {\n    const start = t;\n    const end = start + Number(useDur[i] || 0);\n    t = end;\n    return { ...s, startSec: ROUND(start), endSec: ROUND(end), durationSec: ROUND(end - start) };\n  });\n  if (Number(totalTarget) > 0 && out.length) {\n    const firstStart = Number(startAt) || 0;\n    out[out.length - 1].endSec = ROUND(firstStart + Number(totalTarget));\n    out[out.length - 1].durationSec = ROUND(out[out.length - 1].endSec - out[out.length - 1].startSec);\n  }\n  return out;\n}\n\nfunction alignPromptsToShots(shots, shotPrompts) {\n  if (!Array.isArray(shotPrompts)) return [];\n  const byShotKey = new Map(shotPrompts.map(p => [String(p.shotKey||''), p]));\n  const byComposite = new Map(shotPrompts.map(p => [`${String(p.beatId||'')}::${String(p.shotId||'')}`, p]));\n  const out = [];\n  shots.forEach((s, i) => {\n    const k1 = String(s.shotKey || '');\n    const k2 = `${String(s.beatId||'')}::${String(s.shotId||'')}`;\n    const hit = (k1 && byShotKey.get(k1)) || byComposite.get(k2) || shotPrompts[i] || null;\n    if (hit) {\n      out.push({\n        ...hit,\n        // mirror normalized essential IDs from the normalized shot\n        shotKey: s.shotKey,\n        segId:   s.segId,\n        beatId:  s.beatId,\n        shotId:  s.shotId,\n        durationSec: ROUND(Number(s.durationSec || hit.durationSec || 0))\n      });\n    }\n  });\n  return out;\n}\n\n// --- 0) Gather inbound (n8n passes multiple items) ---\nconst raw = $input.all();\n\n// If exactly one TrackEDL → passthrough\nif (raw.length === 1 && raw[0]?.json?.kind === 'TrackEDL') {\n  return [{ json: raw[0].json }];\n}\n\n// --- 1) Flatten to segment-like entries ---\nlet IN = [];\nfor (const it of raw) {\n  const v = it?.json;\n  if (!v) continue;\n  if (Array.isArray(v)) {\n    IN.push(...v);\n  } else if (v.kind === 'TrackEDL' && Array.isArray(v.segments)) {\n    IN.push(...v.segments);\n  } else {\n    IN.push(v);\n  }\n}\nif (!IN.length) {\n  return [{\n    json: {\n      kind: 'TrackEDL',\n      track: null,\n      videoType: null,\n      segments: [],\n      totalDurationSec: 0,\n      contentDurationSec: 0,\n      flags: { captions: false, music: false },\n      speech: { voiceId: null, wps: null, wpm: null },\n      speechByTrack: { aroll: { voiceId: null, wps: null, wpm: null }, broll: { voiceId: null, wps: null, wpm: null } },\n      title: null,\n      routeUsed: 'combo',\n      requestId: null,\n      _meta: { builtAt: new Date().toISOString(), segCount: 0, warnings: ['empty input'] }\n    }\n  }];\n}\n\n// --- 2) Normalize each segment (FORCE track/videoType/driver; then timing/order/prompts) ---\nconst warnings = [];\nconst seenShotKeys = new Set(); // GLOBAL uniqueness across all segments\n\nconst segs = IN.map((it) => {\n  const s = { ...it };\n\n  // --- Force track & derived videoType/driver\n  const declaredTrack = String(s.segment?.track ?? s.track ?? '').toLowerCase();\n  const forcedTrack   = declaredTrack === 'broll' ? 'broll' : 'aroll'; // default to aroll if ambiguous\n  const forcedVideoType = forcedTrack === 'aroll' ? 'aroll' : 'broll';\n  const forcedDriver    = forcedTrack === 'aroll' ? 'character' : 'narrator';\n\n  // segment timing (prefer explicit, else compute from shots)\n  const segIn = s.segment || {};\n  const segStart = Number(segIn.startSec ?? s.startSec ?? 0) || 0;\n  let segEnd = Number(segIn.endSec ?? s.endSec);\n  let segDur = Number(segIn.durationSec ?? s.durationSec);\n\n  const shotsIn = Array.isArray(s.shots) ? s.shots.slice() : [];\n  const shotSum = shotsIn.reduce((acc, sh) => {\n    const d = Number(sh.durationSec);\n    if (d > 0) return acc + d;\n    const a = Number(sh.startSec), b = Number(sh.endSec);\n    return acc + (Number.isFinite(a) && Number.isFinite(b) && b > a ? (b - a) : 0);\n  }, 0);\n\n  if (!(segDur > 0) && !(Number.isFinite(segEnd) && segEnd > segStart)) {\n    if (shotSum > 0) {\n      segDur = shotSum;\n      segEnd = segStart + segDur;\n    } else {\n      segDur = Number(s.source?.segment?.durationSec) || Number(s.meta?.durationSec) || 30; // fallback\n      segEnd = segStart + segDur;\n      warnings.push(`defaulted segment duration for ${segIn.segId || s.segId || 'unknown'}`);\n    }\n  } else if (!(segDur > 0)) {\n    segDur = segEnd - segStart;\n  } else if (!(Number.isFinite(segEnd) && segEnd > segStart)) {\n    segEnd = segStart + segDur;\n  }\n\n  // Compose the canonical segment object (mirror videoType)\n  const seg = {\n    ...segIn,\n    segId: segIn.segId || s.segId || 'SEG-01',\n    track: forcedTrack,               // FORCED\n    videoType: forcedVideoType,       // MIRRORED on segment block\n    startSec: ROUND(segStart),\n    endSec: ROUND(segEnd),\n    durationSec: ROUND(segDur),\n    orchestratorId: segIn.orchestratorId || s.orchestratorId || s.source?.segment?.orchestratorId || s.source?.planMeta?.ids?.orchestratorId || null\n  };\n\n  // ---- SHOTS: order by beat → shot; rebuild contiguous ONLY if any shot lacks a valid duration ----\n  let shots = shotsIn.slice().sort(sortBeatShot);\n  const missingDur = shots.some(sh => !(Number(sh.durationSec) > 0) && !(Number(sh.endSec) > Number(sh.startSec)));\n  if (missingDur) {\n    shots = rebuildContiguous(shots, seg.startSec, seg.durationSec);\n  } else {\n    shots = shots.map(sh => {\n      const d = Number(sh.durationSec ?? (Number(sh.endSec) - Number(sh.startSec)));\n      const start = Number(sh.startSec);\n      const end = Number(sh.endSec);\n      return {\n        ...sh,\n        startSec: ROUND(start),\n        endSec: ROUND(end),\n        durationSec: ROUND(d)\n      };\n    });\n  }\n\n  // ---- Ensure essential IDs on EVERY SHOT; ensure shotKey uniqueness\n  // Build next S## counter per beat inside this segment for collision repair\n  const nextSByBeat = new Map(); // beatId -> next number to try\n\n  shots = shots.map((rawShot) => {\n    const sh = { ...rawShot };\n    // Prefer shotKey as source of truth when parseable\n    const fromKey = sh.shotKey ? parseShotKey(sh.shotKey) : null;\n\n    let segId  = cleanSegId(fromKey?.segId || sh.segId || seg.segId);\n    let beatId = cleanBeatId(fromKey?.beatId || sh.beatId || 'B01');\n    let shotId = cleanShotId(fromKey?.shotId || sh.shotId || 'S01');\n\n    // propose key\n    let shotKey = makeShotKey(segId, beatId, shotId);\n\n    // guarantee uniqueness globally; if collision, bump S## within this beat\n    while (seenShotKeys.has(shotKey)) {\n      const curN = nextSByBeat.get(beatId) ?? (numFromId(shotId) + 1);\n      shotId = cleanShotId(`S${pad2(curN)}`);\n      shotKey = makeShotKey(segId, beatId, shotId);\n      nextSByBeat.set(beatId, curN + 1);\n    }\n    seenShotKeys.add(shotKey);\n\n    return {\n      ...sh,\n      segId,\n      beatId,\n      shotId,\n      shotKey\n    };\n  });\n\n  // ---- PROMPTS: align to normalized shots ----\n  const promptsIn = Array.isArray(s.shotPrompts) ? s.shotPrompts.slice() : [];\n  const shotPrompts = alignPromptsToShots(shots, promptsIn);\n\n  // ---- Patch diagnostics after forcing (A-roll script-only is OK) ----\n  let diagnostics = s.diagnostics;\n  if (forcedVideoType === 'aroll' && (!Array.isArray(shots) || shots.length === 0)) {\n    diagnostics = {\n      ...(diagnostics || {}),\n      ok: true,\n      summary: 'script-only A-roll segment; no shots required',\n      issues: Array.isArray(diagnostics?.issues) ? diagnostics.issues : []\n    };\n  }\n\n  // ---- Mirror videoType into source blocks to avoid ambiguity ----\n  const source = {\n    ...(s.source || {}),\n    videoType: forcedVideoType,\n    segment: {\n      ...(s.source?.segment || {}),\n      videoType: forcedVideoType\n    }\n  };\n\n  // ---- Segment-level essential IDs:\n  // If the segment has shots, reflect the first shot's IDs on the segment for convenience.\n  // If NO shots (e.g., A-roll by design), default to B01/S01 and synthesize shotKey.\n  let segBeatId = null, segShotId = null, segShotKey = null;\n  if (shots.length > 0) {\n    const first = shots[0];\n    segBeatId = cleanBeatId(first.beatId || 'B01');\n    segShotId = cleanShotId(first.shotId || 'S01');\n    segShotKey = makeShotKey(seg.segId, segBeatId, segShotId);\n    // ensure uniqueness if not seen (harmless if already seen via shot)\n    if (!seenShotKeys.has(segShotKey)) seenShotKeys.add(segShotKey);\n  } else {\n    segBeatId = 'B01';\n    segShotId = 'S01';\n    segShotKey = makeShotKey(seg.segId, segBeatId, segShotId);\n    // uniqueness for segment-level key (no actual shot object)\n    if (seenShotKeys.has(segShotKey)) {\n      // bump S## until unique\n      let n = 1;\n      do { n += 1; segShotId = cleanShotId(`S${pad2(n)}`); segShotKey = makeShotKey(seg.segId, segBeatId, segShotId); }\n      while (seenShotKeys.has(segShotKey));\n    }\n    seenShotKeys.add(segShotKey);\n  }\n\n  // apply forced fields on the segment object used downstream\n  return {\n    ...s,\n    source,\n    segment: { ...seg },\n    // Forced per-segment fields:\n    track: forcedTrack,\n    videoType: forcedVideoType,\n    driver: forcedDriver,\n    // keep existing character for aroll if present; null for broll\n    character: forcedTrack === 'aroll' ? (s.character ?? s.source?.character ?? null) : null,\n    // normalized artifacts\n    shots,\n    shotPrompts,\n    diagnostics,\n    // *** Essential IDs at the segment \"top row\" for downstream convenience ***\n    beatId: segBeatId,\n    shotId: segShotId,\n    shotKey: segShotKey\n  };\n});\n\n// --- 3) Sort segments by start ---\nsegs.sort((a,b) => (a.segment.startSec - b.segment.startSec));\n\n// Compute program SPAN (timeline) and SUM (content)\nconst minStart = Math.min(...segs.map(s => Number(s.segment?.startSec || 0)));\nconst maxEnd   = Math.max(...segs.map(s => Number(s.segment?.endSec   || 0)));\nconst totalDurationSec   = ROUND(maxEnd - minStart);\nconst contentDurationSec = ROUND(segs.reduce((acc, s) => acc + Number(s.segment?.durationSec || 0), 0));\n\n// --- 4) Header fields (majority after forcing) ---\nconst trackCounts = {};\nconst vtCounts = {};\nfor (const s of segs) {\n  const t = s.track; // already forced\n  if (t) trackCounts[String(t)] = (trackCounts[String(t)] || 0) + 1;\n  const vt = s.videoType; // already forced\n  if (vt) vtCounts[String(vt)] = (vtCounts[String(vt)] || 0) + 1;\n}\nconst pickMajority = (m) => {\n  const ent = Object.entries(m).sort((a,b)=>b[1]-a[1]);\n  return ent.length ? ent[0][0] : null;\n};\nconst trackHeader     = pickMajority(trackCounts);\nconst videoTypeHeader = pickMajority(vtCounts);\n\nif (Object.keys(trackCounts).length > 1) warnings.push(`mixed tracks: ${Object.keys(trackCounts).join(', ')}`);\nif (Object.keys(vtCounts).length > 1)   warnings.push(`mixed videoTypes: ${Object.keys(vtCounts).join(', ')}`);\n\n// Flags: prefer explicit segment flags; then planner/meta fallbacks\nconst captionsList = segs.map(s =>\n  asBool(s.wantsCaptions, null) ??\n  asBool(s.source?.wantsCaptions, null) ??\n  asBool(s.meta?.wantsCaptions, null) ??\n  asBool(s.source?.planner?.wantsCaptions, null)\n);\n\nconst musicList = segs.map(s =>\n  asBool(s.wantsMusic, null) ??\n  asBool(s.source?.wantsMusic, null) ??\n  asBool(s.meta?.wantsMusic, null) ??\n  asBool(s.source?.planner?.wantsMusic, null)\n);\n\n// Speech: prefer TTS info per segment; else fallback\nconst voiceList = segs.map(s => s.tts?.voice || s.speech?.voiceId || s.source?.planMeta?.speech?.voiceId).filter(Boolean);\nconst wpsList   = segs.map(s => Number(s.tts?.wps ?? s.speech?.wps ?? s.source?.planMeta?.speech?.wps)).filter(x => !Number.isNaN(x));\nconst wpmList   = segs.map(s => Number(s.tts?.wpm ?? s.speech?.wpm ?? s.source?.planMeta?.speech?.wpm)).filter(x => !Number.isNaN(x));\n\n// NEW: Build speechByTrack for clarity\nfunction firstSpeechForTrack(trackName) {\n  const hit = segs.find(s => s.track === trackName && (s.tts?.voice || s.speech?.voiceId || s.source?.planMeta?.speech?.voiceId));\n  if (!hit) return { voiceId: null, wps: null, wpm: null };\n  return {\n    voiceId: hit.tts?.voice || hit.speech?.voiceId || hit.source?.planMeta?.speech?.voiceId || null,\n    wps: Number(hit.tts?.wps ?? hit.speech?.wps ?? hit.source?.planMeta?.speech?.wps) || null,\n    wpm: Number(hit.tts?.wpm ?? hit.speech?.wpm ?? hit.source?.planMeta?.speech?.wpm) || null\n  };\n}\nconst speechByTrack = {\n  aroll: firstSpeechForTrack('aroll'),\n  broll: firstSpeechForTrack('broll')\n};\n\nconst requestId = pickFirst(...segs.map(s => s.requestId || s.source?.requestId || s.segment?.orchestratorId));\nconst title     = pickFirst(...segs.map(s => s.title || s.source?.title || s.scene || s.source?.planner?.scene));\nconst routeUsed = 'combo';\n\n// --- 5) Emit TrackEDL (segments already forced) ---\nconst out = {\n  kind: 'TrackEDL',\n  track: trackHeader,\n  videoType: videoTypeHeader,\n  segments: segs,\n  totalDurationSec,      // overall timeline span (maxEnd - minStart)\n  contentDurationSec,    // sum of segment durations\n  flags: {\n    captions: captionsList.filter(v => v === true).length >= Math.ceil(captionsList.length/2),\n    music:    musicList.filter(v => v === true).length    >= Math.ceil(musicList.length/2)\n  },\n  speech: {\n    voiceId: voiceList[0] || null,\n    wps:     wpsList[0]   || null,\n    wpm:     wpmList[0]   || null\n  },\n  speechByTrack,\n  title,\n  routeUsed,\n  requestId,\n  _meta: {\n    builtAt: new Date().toISOString(),\n    segCount: segs.length,\n    warnings\n  }\n};\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2608,
+        240
+      ],
+      "id": "acb336f7-83c8-4877-8205-2117fdb40d71",
+      "name": "Segments → EDL"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "904d95d0-de96-4f65-8890-c040bdcf9159",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2416,
+        -368
+      ],
+      "id": "6a6205de-1b9f-4d7a-8390-c03f2a38a0d7",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2608,
+        -384
+      ],
+      "id": "2928659a-7d0f-46f1-bcc1-f3af9e2963ec",
+      "name": "Wait",
+      "webhookId": "7df958be-51bb-4a62-9665-735aff502bc0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a5b3412e-72f1-488f-b3e4-39e6a306d04c",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2416,
+        -96
+      ],
+      "id": "8679c53d-34dc-480b-a2cc-3aaa29b462d3",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        32
+      ],
+      "id": "167a61f5-9b2a-4aad-afd3-a370a583b6d2",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        -240
+      ],
+      "id": "11fa5def-b44a-49c8-83f4-825f80a5bcf1",
+      "name": "OpenRouter Chat Model3",
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrQ45bIDzZpzrWr",
+          "name": "OpenRouter account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "testCases": [
+            {
+              "scene": "A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day",
+              "driver": "character",
+              "wantsCutaways": true,
+              "character": "Mark Zuckerberg as a cute cherubic infant with cute chubby cheeks and expressive eyes, sitting in an evening news anchor table and dressed in an anchor host",
+              "setting": "Infant Mark Zuckerberg sits at an evening news anchor desk, studio lit room as he discusses breaking AI news topics of the day.",
+              "action": "the infant Mark Zuckerberg is sitting at the evening news anchor desk, moving naturally as if in a live conversation as he breaks news. ",
+              "directorsNotes": "",
+              "wantsMusic": true,
+              "musicDesc": "",
+              "wantsCaptions": true,
+              "durationSec": 45,
+              "referenceText": "\nRecent AI News:\n\n- Meta hires key engineers from OpenAI and Thinking Machines Lab, securing a $2 billion seed round with a valuation of $10 billion\n- Google DeepMind introduces Alpha Genome, advancing genomic research with a model comparable to Alpha Fold\n- NVIDIA launches Rubin platform, a new AI supercomputer",
+              "characterGender": "male",
+              "characterName": "Baby Zuck",
+              "style": "Pixar-style"
+            }
+          ],
+          "guardrails": {
+            "global": [
+              "no on-screen text, no logos, no watermarks",
+              "avoid readable signage or UI overlays",
+              "respect title-safe margins; avoid edge-cropping critical subjects",
+              "avoid extreme motion blur, low-res, heavy artifacts"
+            ],
+            "aroll": [
+              "allow natural conversational motion: natural head turns, natural torso shifts, relaxed hand gestures (kept below mouth line)",
+              "allow background life and parallax; gentle camera drift or slow push/pan is okay",
+              "avoid whip pans, rapid reframes, or aggressive moves"
+            ],
+            "broll": [
+              "no subjects speaking to camera (visual context only)",
+              "natural environmental movement; avoid chaotic handheld/rapid zooms",
+              "no overlays, lower-thirds, or captions burned into picture"
+            ],
+            "negative": [
+              "text",
+              "logo",
+              "watermark",
+              "subtitles",
+              "lower thirds",
+              "hands covering face",
+              "occluded mouth",
+              "face off-frame",
+              "double face",
+              "extra limbs",
+              "distorted anatomy",
+              "extreme motion blur",
+              "over-sharpened",
+              "over-smoothed"
+            ]
+          },
+          "characterGender": "male",
+          "characterName": "Baby Zuck",
+          "style": "Pixar-style"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set → Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set → Test Cases": {
+      "main": [
+        []
+      ]
+    },
+    "Code → Prompt Test Harness": {
+      "main": [
+        [
+          {
+            "node": "Init Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Envelope": {
+      "main": [
+        [
+          {
+            "node": "Combo Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code → Prompt Test Harness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Combo Orchestrator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combo Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Parse Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "Exec A-Roll Script Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec B-Roll Script Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Blueprint Validator": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Final sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explode Blueprint": {
+      "main": [
+        [
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec A-Roll Script Builder": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec B-Roll Script Builder": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Script Composer": {
+      "main": [
+        [
+          {
+            "node": "Post-Compose Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Script Composer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Script Distributor": {
+      "main": [
+        [
+          {
+            "node": "Blueprint Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post-Compose Validator": {
+      "main": [
+        [
+          {
+            "node": "Script Distributor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Segments → EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Script Composer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Combo Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Explode Blueprint",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Script Composer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Script Composer",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Combo Orchestrator",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "334af0d4-4509-4764-9643-eecf27819026",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "QdSaeRM26moTcEd5",
+  "tags": []
+}

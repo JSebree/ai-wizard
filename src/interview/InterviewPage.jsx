@@ -8,6 +8,7 @@ import AdvancedSettingsStep from "./steps/AdvancedSettingsStep.jsx";
 import VodCard from "./VodCard.jsx";
 import ExpressVideoCard from "./components/ExpressVideoCard.jsx";
 import ExpressAccordionView from "./components/ExpressAccordionView.jsx";
+import { useJobPoller } from "../hooks/useJobPoller";
 
 // Simple Error Boundary for Mobile Debugging
 class DebugErrorBoundary extends React.Component {
@@ -471,8 +472,7 @@ export default function InterviewPage({ onComplete }) {
   const N8N_WEBHOOK_URL =
     (typeof import.meta !== "undefined" ? import.meta.env?.VITE_N8N_WEBHOOK_URL : undefined) ||
     (typeof window !== "undefined" ? window.N8N_WEBHOOK_URL : undefined) ||
-    "https://n8n.simplifies.click/webhook/sceneme" ||
-    "/api/interview"; // final local dev/proxy fallback
+    "/api/generate"; // Default to local backend
 
   const N8N_AUTH_TOKEN =
     (typeof window !== "undefined" ? window.N8N_TOKEN : undefined) ||
@@ -708,6 +708,7 @@ export default function InterviewPage({ onComplete }) {
         }
 
         url.searchParams.set("order", "created_at.desc");
+        url.searchParams.set("limit", "50");
 
         // Use session token if available for RLS, otherwise fallback to Anon (likely fails RLS)
         const token = session?.access_token || SUPABASE_ANON;
@@ -733,8 +734,55 @@ export default function InterviewPage({ onComplete }) {
       }
     }
 
+
     loadVods();
   }, [user, session, SUPABASE_URL, SUPABASE_ANON, isAdmin]);
+
+  // PROGRESS POLLER: If any VOD is processing, poll every 5s for updates
+  useEffect(() => {
+    // Only poll if we have pending items
+    const hasProcessing = vods.some(v => v.status === 'processing' || v.status === 'queued');
+    if (!hasProcessing) return;
+
+    if (!SUPABASE_URL || !SUPABASE_ANON) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const url = new URL("/rest/v1/express_vods", SUPABASE_URL);
+        url.searchParams.set("select", "*");
+        // url.searchParams.set("status", "eq.processing"); // REMOVED: Fetch all to preserve history 
+        // Actually, we want to see if they completed too. 
+        // Let's just re-fetch the list, or cleaner: update only active ones.
+        // For simplicity/robustness: re-fetch all for now.
+
+        if (!isAdmin) {
+          url.searchParams.set("or", `(user_id.eq.${user?.id},is_global.eq.true)`);
+        }
+        url.searchParams.set("order", "created_at.desc");
+        url.searchParams.set("limit", "50");
+
+        const token = session?.access_token || SUPABASE_ANON;
+        const res = await fetch(url.toString(), {
+          headers: {
+            apikey: SUPABASE_ANON,
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (res.ok) {
+          const freshVods = await res.json();
+          // Merge updates into Vods to avoid UI jumps if list order changed? 
+          // Since we order by created_at.desc, it should be stable.
+          // Just replacing is easiest, React handles diffing.
+          setVods(freshVods);
+        }
+      } catch (e) {
+        console.warn("Polling failed:", e);
+      }
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [vods, SUPABASE_URL, SUPABASE_ANON, session, isAdmin, user]);
 
   // Listen for app-level request to jump to first step without clearing answers
   useEffect(() => {
@@ -875,7 +923,7 @@ export default function InterviewPage({ onComplete }) {
       characterName: req(characterName) ? characterName : undefined,
       userEmail: userEmail || undefined,
       userFirstName: userFirstName || undefined,
-      userFirstName: userFirstName || undefined,
+
       userLastName: userLastName || undefined,
       // Visual References
       characterImage: answers.characterImage || undefined,
@@ -1349,6 +1397,9 @@ export default function InterviewPage({ onComplete }) {
       render: () => (
         <ReviewStep
           ui={uiPayload}
+          // Blocking props removed for concurrency
+          // jobStatus={activeJobStatus}
+          // currentJobId={activeJobId}
           onJobComplete={handleJobComplete}
           onEditStep={(target) => {
             let idx = -1;
@@ -1502,105 +1553,128 @@ export default function InterviewPage({ onComplete }) {
   // Submit state (for footer submit on Review step)
   const [submitting, setSubmitting] = useState(false);
 
-  // Legacy-compatible submit handler (for Review step footer button)
-  async function submitNowLegacy() {
-    if (submitting) return;
-    setSubmitting(true);
+  // --- New Polling Submission ---
+  const { startJob, jobId: activeJobId, status: activeJobStatus, progress: activeJobProgress, data: activeJobData, error: activeJobError } = useJobPoller();
 
-    // Signal submit immediately so ReviewStep can show the banner
-    try { sessionStorage.setItem('just_submitted', '1'); } catch { }
-    try { window.dispatchEvent(new Event('interview:submit')); } catch { }
-
-    // Build the payload (wrap under { ui } for intake; adjust here if your n8n expects a different shape)
-    const payload = { ui: uiPayload, user_id: user?.id };
-
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (N8N_AUTH_TOKEN) headers['Authorization'] = `Bearer ${N8N_AUTH_TOKEN}`;
-
-      const res = await fetch(N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-        credentials: 'omit',
-        mode: 'cors',
-      });
-
-      if (!res.ok) {
-        const t = await res.text().catch(() => '');
-        alert(`Submit failed (${res.status}): ${t}`);
-        setSubmitting(false);
-        return;
+  // Watch for completion
+  useEffect(() => {
+    if (activeJobStatus === 'completed' && activeJobId && activeJobData?.output) {
+      // Assuming output is array of segments, take first videoUrl or stich result
+      // The backend example returns segments with videoUrl.
+      // Let's assume the first segment's video for MVP or stitching url if backend provided it.
+      const vidUrl = activeJobData.output[0]?.videoUrl;
+      if (vidUrl) {
+        handleJobComplete({ jobId: activeJobId, finalVideoUrl: vidUrl });
       }
+    }
+  }, [activeJobStatus, activeJobId, activeJobData]);
 
-      const data = await res.json().catch(() => ({}));
-      const returnedJobId = data.jobId || data.jobID || data.id || '';
-
-      const statusUrl = data.statusUrl || undefined;
-
-      // Persist jobId for the Review step auto-poller (existing code follows)
-      try { localStorage.setItem('last_job_id', String(returnedJobId || '')); } catch { }
+  // Sync Job ID to URL/Storage (Legacy / Single-Job Persistence)
+  // We keep this for the 'active' job if needed, but for concurrency we rely on the list.
+  useEffect(() => {
+    if (activeJobId) {
       try {
         const url = new URL(window.location.href);
-        if (returnedJobId) url.searchParams.set('jobId', String(returnedJobId));
-        window.history.replaceState({}, '', url);
-      } catch { }
+        if (url.searchParams.get('jobId') !== String(activeJobId)) {
+          url.searchParams.set('jobId', String(activeJobId));
+          window.history.replaceState({}, '', url);
+        }
+        localStorage.setItem('last_job_id', String(activeJobId));
+      } catch (e) {
+        console.error("Failed to sync job ID:", e);
+      }
+    }
+  }, [activeJobId]);
 
-      // Notify listeners (ReviewStep) that a new job has been created
-      try {
-        window.dispatchEvent(new CustomEvent('interview:submitted', {
-          detail: { jobId: String(returnedJobId || ''), statusUrl }
-        }));
-      } catch { }
-      try {
-        window.dispatchEvent(new CustomEvent('interview:newJobId', {
-          detail: { jobId: String(returnedJobId || ''), statusUrl }
-        }));
-      } catch { }
+  async function submitNow() {
+    if (submitting) return;
 
-      // --- PERSIST TO SUPABASE (Express VODs) ---
-      if (SUPABASE_URL && SUPABASE_ANON && user) {
-        try {
-          const vodPayload = {
-            user_id: user.id,
-            status: 'pending',
-            settings: payload, // Save full payload including 'ui' wrapper
-            job_id: String(returnedJobId || ''),
-            title: uiPayload.title || "Untitled Video",
-            thumbnail_url: null, // Could add if you generate one immediately
-            created_at: new Date().toISOString()
-          };
+    setSubmitting(true);
+    // Signal UI
+    window.dispatchEvent(new Event('interview:submit'));
 
-          const token = session?.access_token || SUPABASE_ANON;
+    // Map UI Payload to Backend Payload
+    const payload = {
+      userId: user?.id || 'anon',
+      title: uiPayload.title || "Untitled Project",
+      driver: uiPayload.driver || 'narrator',
+      // Explicitly set route based on driver + cutaways preference
+      route: (uiPayload.driver === 'character' && uiPayload.wantsCutaways)
+        ? 'combo'
+        : (uiPayload.driver === 'character' ? 'aroll' : 'broll'),
 
-          const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/express_vods`, {
-            method: 'POST',
-            headers: {
-              apikey: SUPABASE_ANON,
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify(vodPayload)
-          });
+      sceneDescription: uiPayload.scene,
+      actionDescription: uiPayload.action,
+      durationSec: Number(uiPayload.durationSec) || 30,
 
-          if (dbRes.ok) {
-            const newRows = await dbRes.json();
-            if (newRows && newRows.length > 0) {
-              setVods(prev => [newRows[0], ...prev]);
-            }
-          }
-        } catch (dbErr) {
-          console.error("Failed to save VOD record:", dbErr);
+      // Optional / Advanced
+      characterDescription: uiPayload.character,
+      characterImage: uiPayload.characterImage, // Pass selected reference
+      settingDescription: uiPayload.setting,
+      settingImage: uiPayload.settingImage, // Pass selected reference
+      voiceId: uiPayload.voiceId, // Explicitly pass voice selection
+      voiceUrl: uiPayload.voiceUrl, // Pass cloned voice URL if present
+      wantsMusic: uiPayload.wantsMusic,
+      wantsCaptions: uiPayload.wantsCaptions,
+      stylePreset: uiPayload.advanced?.style,
+      doUpscale: uiPayload.advanced?.resolution === 'HD',
+    };
+
+    console.log("Submitting to Backend (Concurrent):", payload);
+
+    try {
+      // 1. Optimistic Insert into Supabase (Front-load)
+      // Note: For Anon users, this might fail due to RLS if not configured. 
+      // We assume logged-in or public table for now.
+      let vodId = null;
+      if (user || !user) { // Try insert for everyone (anon support depends on DB policies)
+        const { data, error } = await supabase
+          .from('express_vods')
+          .insert({
+            user_id: user?.id || null, // Allow null for anon if DB permits
+            title: payload.title,
+            status: 'processing',
+            settings: JSON.stringify({ ui: uiPayload, ...payload }),
+            // progress: 0 // if column exists
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          vodId = data.id;
+          // Update Local State Immediately
+          setVods(prev => [data, ...prev]);
+        } else {
+          console.warn("Optimistic insert failed (RLS?):", error);
+          // Fallback: Continue without vodId, but backend won't update DB status
         }
       }
 
-      // Stay on Review step (we're already there); ensure top-of-page
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { }
-    } catch (err) {
-      console.error(err);
-      alert('Network error while submitting.');
-    } finally {
+      // 2. Trigger Backend Job
+      // Fire and forget - don't await full completion, just start
+      fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, vodId })
+      }).then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          console.log("Backend Job Started:", json.jobId);
+          // Optional: Sync URL with most recent job
+          if (vodId && json.jobId) {
+            // Maybe update local vod with job_id mapping if needed
+          }
+        } else {
+          console.error("Backend refused job:", res.statusText);
+          // Todo: Mark vod as failed in UI if possible
+        }
+      }).catch(e => console.error("Network error starting job:", e));
+
+      // 3. Unlock UI Immediately
+      setTimeout(() => setSubmitting(false), 500); // Small delay to prevent accidental double-click
+
+    } catch (e) {
+      console.error("Critical Submit Error:", e);
       setSubmitting(false);
     }
   }
@@ -1768,8 +1842,12 @@ export default function InterviewPage({ onComplete }) {
             voices={voices}
             savedCharacters={savedCharacters}
             savedSettings={savedSettings}
-            onSubmit={submitNowLegacy}
-            isSubmitting={submitting}
+
+            onSubmit={submitNow}
+            isSubmitting={submitting || activeJobStatus === 'queuing' || activeJobStatus === 'processing'}
+            jobProgress={activeJobProgress}
+            jobStatus={activeJobStatus}
+            jobError={activeJobError}
             characterGender={characterGender}
             onReset={resetAll}
           />
@@ -1796,7 +1874,7 @@ export default function InterviewPage({ onComplete }) {
               {stepIndex === total - 1 ? (
                 <button
                   type="button"
-                  onClick={submitNowLegacy}
+                  onClick={submitNow}
                   disabled={submitting}
                   className="btn btn-primary"
                   title="Submit"

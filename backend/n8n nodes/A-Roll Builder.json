@@ -1,0 +1,871 @@
+{
+  "name": "A-Roll Builder",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33344dd9-529c-4682-89d7-a74d1ed44020",
+              "leftValue": "={{\n  (() => {\n    const s   = ($json.status || '').toUpperCase();\n    const url = $json.output?.output_video_url;\n    const err = String($json.error || $json.output?.error || '');\n    const faceFail = /face\\s*not\\s*detected/i.test(err);\n\n    // TRUE => stop polling (done). FALSE => Wait and poll again.\n    return (\n      !!url ||                          // got a video\n      s === 'COMPLETED' ||              // explicit success\n      ['FAILED','CANCELLED','CANCELED','TIMEOUT'].includes(s) || // terminal failure\n      faceFail                          // trigger fallback path\n    );\n  })()\n}}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        0
+      ],
+      "id": "3a6a06c3-68a5-434e-8c57-b0b24772f9eb",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        16
+      ],
+      "id": "03c0e6c3-e0cf-437d-aa07-6063c2b02ee1",
+      "name": "Wait",
+      "webhookId": "41c84715-4f75-47e8-a125-6e96676a6a67"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9ed8573a-254c-4100-810e-83fa8385e1d7",
+              "name": "jobId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "0a117abb-ab53-4089-ac48-ac00d46e1193",
+              "name": "shotId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.shotId}}",
+              "type": "string"
+            },
+            {
+              "id": "83e158bf-546d-4892-9c9a-403b2b8991a1",
+              "name": "sceneId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.sceneId}}",
+              "type": "string"
+            },
+            {
+              "id": "9d0985f8-a8b3-4682-a524-20bc2b24a782",
+              "name": "type",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.type}}",
+              "type": "string"
+            },
+            {
+              "id": "58c757e6-6dea-4c1c-9446-05d09852cb47",
+              "name": "characterId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.characterId}}",
+              "type": "string"
+            },
+            {
+              "id": "e599c8d6-5b02-4fa5-afc0-adf74cb56b9d",
+              "name": "voiceId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.voiceId}}",
+              "type": "string"
+            },
+            {
+              "id": "c06d397c-3a40-45d6-82a0-f0c1630e29e4",
+              "name": "voiceDurationSec",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.voiceDurationSec}}",
+              "type": "string"
+            },
+            {
+              "id": "a550a1a9-e592-4ffd-904d-cf61d90f6225",
+              "name": "base_video_url",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.base_video_url}}",
+              "type": "string"
+            },
+            {
+              "id": "6874ad00-6cd4-44f3-9a9c-9a343c8493d0",
+              "name": "promptText",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.promptText}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        864,
+        0
+      ],
+      "id": "8bbe2382-9320-42a6-a4c6-0ca5ef79a12c",
+      "name": "Set Image ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// pretend your planner gave us two A-roll clips to lip-sync\nreturn [{\n  json: {\n    clips: [\n      {\n        id:        \"s0\",\n        video_url: \"https://video-generations.nyc3.digitaloceanspaces.com/250730_174444_407_9911.mp4\",\n        audio_url: \"https://voice-generations.nyc3.digitaloceanspaces.com/tts_outputs/a981e006-699f-4953-bb4b-a58c7ebfe87f-u2.wav\",\n        prompt:    \"Please speak in a warm, engaging tone.\"\n      },\n      {\n        id:        \"s1\",\n        video_url: \"https://video-generations.nyc3.digitaloceanspaces.com/250730_195104_151_2397.mp4\",\n        audio_url: \"https://voice-generations.nyc3.digitaloceanspaces.com/tts_outputs/5a113264-6441-4838-a017-b962067b1ea4-u1.wav\",\n        prompt:    \"Please speak clearly and at a moderate pace.\"\n      }\n    ]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        256
+      ],
+      "id": "8079c312-e26f-459e-8fb9-4eacefb9a562",
+      "name": "Mock Prompts"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        256
+      ],
+      "id": "8eebf8be-e622-4fb2-8b04-bb78233dde73",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse A-Roll /v1/lipsync response -> enriched rows for EDL builders\n// Emits: { ...original fields..., id, clipId, shotId, track, video_url, duration_sec, source, ... }\n\nfunction num(x, d = 0) {\n  const n = Number(x);\n  return Number.isFinite(n) ? n : d;\n}\n\n// Convert a Gradio tmp path to DO Spaces if needed (for fallbacks)\nfunction toDOSpaces(url) {\n  if (!url) return null;\n  if (url.includes('digitaloceanspaces.com')) return url;\n  const m = String(url).match(/(\\d{6,}_\\d{6}_\\d{3}_\\d{4}\\.(?:mp4|mov|webm))/i);\n  return m ? `https://video-generations.nyc3.digitaloceanspaces.com/${m[1]}` : url;\n}\n\nreturn items.map(item => {\n  const j   = item.json || {};\n  const out = j.output || {};\n\n  const id     = j.id ?? j.clipId ?? j.shotId ?? null;\n  const shotId = j.shotId ?? j.meta?.shotId ?? j.label ?? null;   // resolve hard\n  const stat   = String(j.status || out.status || '').toUpperCase();\n  const err    = String(j.error || out.error || out.error_message || '');\n\n  // ---------- 1) SUCCESS: lipsync produced a video (A-roll) ----------\n  const okUrl = out.output_video_url || j.output_video_url || j.video_url || null;\n\n  if (okUrl) {\n    const dur = num(out.duration ?? out.duration_sec ?? j.duration_sec ?? j.out, 0);\n    return {\n      json: {\n        ...j,                          // <- keep everything that arrived (preserves shotId if present)\n        id,\n        clipId: id,\n        shotId,\n        track: 'aroll',\n        video_url: okUrl,\n        duration_sec: dur,\n        source: 'lipsync',\n        status: stat || 'COMPLETED',\n        in: 0, out: dur,\n      }\n    };\n  }\n\n  // ---------- 2) FALLBACK: model failed / no face → use base video (B-roll) ----------\n  const faceErr = /face\\s*not\\s*detected/i.test(err);\n  const failed  = stat === 'FAILED' || faceErr || !!err;\n  const baseUrlRaw = j.base_video_url || j.meta?.base_video_url || null;\n\n  if (failed && baseUrlRaw) {\n    const baseUrl = toDOSpaces(baseUrlRaw);\n    const dur = num(j.voiceDurationSec ?? j.meta?.voiceDurationSec ?? j.out, 0);\n    return {\n      json: {\n        ...j,\n        id,\n        clipId: id,\n        shotId,\n        track: 'broll',\n        video_url: baseUrl,\n        duration_sec: dur,\n        source: 'fallback_base',\n        fallbackFrom: 'aroll',\n        base_src: baseUrlRaw,\n        status: stat || 'FAILED',\n        in: 0, out: dur,\n      }\n    };\n  }\n\n  // ---------- 3) Diagnostic row (no output + no fallback) ----------\n  return {\n    json: {\n      ...j,\n      id,\n      clipId: id,\n      shotId,\n      error: true,\n      status: stat || 'UNKNOWN',\n      message: (err || 'no output & no fallback').slice(0, 300),\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -224
+      ],
+      "id": "6ec83166-c333-4b4c-ba02-6196cea33c9a",
+      "name": "Parse A-Roll Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build A-Roll EDL (image+audio lipsync results → EDL)\n// - Success when a video URL exists in output (artifacts/video_url or output.video_url)\n// - IDs pulled from _expect first, then top-level\n// - Duration = _expect.seconds OR input.num_frames / fps\n// - Forces fps=30 and resolution=960x544\n\nconst rows = $items().map(i => i.json || {});\n\n// ---------- utils ----------\nconst S = v => (v == null ? \"\" : String(v));\nconst N = (v, d=0) => {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n};\nconst first = (...xs) => xs.find(v => v !== undefined && v !== null && v !== \"\") ?? undefined;\n\n// Force project settings\nconst FORCED_FPS = 30;\nconst RES = { width: 960, height: 544 };\n\n// fetch final video url from various shapes\nfunction getVideoUrl(r) {\n  return first(\n    r.video_url,\n    r.output?.artifacts?.video_url,\n    r.output?.video_url,\n    r.output?.url\n  ) || null;\n}\n\nfunction secFrom(r, fps) {\n  // prefer _expect.seconds → input.num_frames/fps → durationSec/out-in\n  const eSec = N(r._expect?.seconds, NaN);\n  if (Number.isFinite(eSec) && eSec > 0) return eSec;\n\n  const nf = N(r.input?.num_frames, NaN);\n  if (Number.isFinite(nf) && nf > 0) return nf / fps;\n\n  const dTop = N(r.durationSec, NaN);\n  if (Number.isFinite(dTop) && dTop > 0) return dTop;\n\n  const inn = N(r.in, 0);\n  const out = Number.isFinite(Number(r.out)) ? Number(r.out) : NaN;\n  if (Number.isFinite(out) && out >= inn) return out - inn;\n\n  return 0;\n}\n\n// ---------- collect valid results ----------\nconst keep = rows.filter(r => {\n  const url = getVideoUrl(r);\n  if (!url) return false;\n\n  // Optional: gate by status, but be permissive as providers vary\n  const top = String(r.status || \"\").toLowerCase();\n  const out = String(r.output?.status || \"\").toLowerCase();\n  const ok  = (top === \"completed\") || (out === \"succeeded\") || (out === \"success\") || (top === \"success\");\n  // If we have a URL, accept even if status flags look noisy\n  return !!url || ok;\n});\n\nif (!keep.length) return [];\n\n// ---------- normalize to clips ----------\nconst clips = keep.map(r => {\n  const fps = FORCED_FPS;\n\n  // IDs (prefer _expect → top-level)\n  const sceneId = first(r._expect?.jobId?.split(\"__\")?.[0], r.sceneId, null);\n  const shotKey = first(r._expect?.shotKey, r.shotKey, null);\n  const segId   = first(r._expect?.segId,   r.segId,   null);\n  const beatId  = first(r._expect?.beatId,  r.beatId,  null);\n  const shotId  = first(r._expect?.id,      r.shotId,  null);\n\n  // media + timing\n  const src = getVideoUrl(r);\n  const durationSecRaw = secFrom(r, fps);\n  const frames = Math.max(0, Math.round(durationSecRaw * fps));\n  const durationSec = frames / fps;\n\n  // audit sources\n  const voice_url = first(r.input?.audio_url, r.meta?.voice_url, r.voiceUrl, null);\n  const poster    = first(r.input?.image, r.keyframe_url, r.poster, null);\n\n  return {\n    id: r.clipId || r.id || shotId || shotKey || null,\n\n    // required IDs at top-level per clip\n    shotKey, segId, beatId, shotId,\n\n    // context\n    sceneId: sceneId || null,\n    requestId: r._expect?.jobId || r.jobId || null,\n\n    // normalized fields for EDL\n    type: \"aroll\",\n    src,\n    poster,\n    in: 0,\n    out: durationSec,\n    durationSec,\n\n    // passthroughs helpful downstream\n    route: \"aroll\",\n    firstShotId: shotId || null,\n    jobId: r._expect?.jobId || r.jobId || null,\n\n    // audit\n    voice_url,\n    _meta: {\n      fps,\n      num_frames: frames,\n      provider_status: r.output?.status || r.status || null,\n      model: r.output?.model || null,\n      workerId: r.workerId || null,\n      debug: r.output?.debug || null\n    }\n  };\n});\n\n// ---------- EDL envelope ----------\nconst totalDurationSec = clips.reduce((sum, c) => sum + (Number(c.durationSec) || 0), 0);\n\nreturn [{\n  json: {\n    edl: {\n      kind: \"ARollEDL1\",\n      version: 1,\n      generatedAt: new Date().toISOString(),\n      resolution: { ...RES },\n      fps: FORCED_FPS,\n      length_sec: totalDurationSec,\n      tracks: {\n        video: [\n          {\n            name: \"aroll\",\n            clips\n          }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -224
+      ],
+      "id": "ccacf95a-73fc-45d3-b6a4-283c59ffefd3",
+      "name": "Build A-Roll EDL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runpod.ai/v2/tklzus2cinih6d/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"input\": {\n    \"input_type\": \"image\",\n    \"person_count\": \"single\",\n    \"prompt\": \"A person is talking in a natural way.\",\n    \"image_url\": \"{{ $json.input.image }}\",\n    \"wav_url\": \"{{ $json.input.audio_url }}\",\n    \"width\": 960,\n    \"height\": 544\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        688,
+        0
+      ],
+      "id": "b701c060-6060-4b30-84b6-14d3905152a7",
+      "name": "Request A-Roll Video",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runpod.ai/v2/tklzus2cinih6d/status/{{ $json.jobId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "1007648c-c8c7-4795-b358-50d4e78fefdf",
+      "name": "Get A-Roll Video",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build A-Roll Jobs → Image+Audio → i2v LipSync API mapper\n// INPUT: rows shaped like A-Roll Prompt Composer output (w/ keyframe_url + voiceUrl)\n// OUTPUT: one item per A-roll shot:\n//\n// { json: {\n//     jobId,\n//     input: {\n//       image,           // keyframe image URL\n//       audio_url,       // voice audio URL\n//       fps: 30,\n//       num_frames,      // snapped to voice frames\n//       filename,        // <jobId>.mp4\n//       return_base64: false,\n//       teacache: true,\n//       resolution: { width: 960, height: 544 }\n//     },\n//     _expect: {...},\n//     // passthrough context\n//     shotKey, segId, beatId, shotId, sceneId, route, fps, durationSec, resolution\n//   } }\n\nconst rows = $items().map(i => i.json || {});\n\n// ---------- utils ----------\nconst S = v => (v == null ? \"\" : String(v));\nconst N = (v, d=0) => {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n};\nconst cleanFile = s => S(s)\n  .replace(/[^\\w.\\- ]+/g, \"-\")\n  .replace(/\\s+/g, \"_\")\n  .slice(0, 160);\n\nfunction first(...xs) {\n  for (const v of xs) if (v !== undefined && v !== null && v !== \"\") return v;\n  return undefined;\n}\n\n// Always force these for A-roll i2v\nconst FORCED_FPS = 30;\nconst RESOLUTION = { width: 960, height: 544 };\n\n// Build a stable job id\nfunction buildJobId(r) {\n  const scene = S(r.sceneId || \"SCN1\");\n  const key   = S(r.shotKey || r.shotId || r.id || \"SHOT\");\n  return `${scene}__${key}`;\n}\n\n// Resolve the image (keyframe)\nfunction pickKeyframeURL(r) {\n  return first(\n    r.keyframe_url,\n    r.seed_image_url,\n    r.image_url,\n    r.poster,\n    r.src\n  ) || null;\n}\n\n// Resolve the audio\nfunction pickAudioURL(r) {\n  return first(\n    r.voiceUrl,\n    r.audio_url,\n    r.output?.audio_url\n  ) || null;\n}\n\nconst out = rows\n  .filter(r => String(r.type || r.route || \"aroll\").toLowerCase() === \"aroll\")\n  .map(r => {\n    const image = pickKeyframeURL(r);\n    const audio_url = pickAudioURL(r);\n\n    // compute duration priority: voiceDurationSec → (out - in) → durationSec → 6\n    const voiceDur = N(r.voiceDurationSec, NaN);\n    const edlDur   = (Number.isFinite(Number(r.out)) && Number.isFinite(Number(r.in)))\n      ? Math.max(0, Number(r.out) - Number(r.in))\n      : NaN;\n    const shotDur  = N(r.durationSec, NaN);\n\n    const chosenDur =\n      (Number.isFinite(voiceDur) ? voiceDur :\n      (Number.isFinite(edlDur)   ? edlDur   :\n      (Number.isFinite(shotDur)  ? shotDur  : 6)));\n\n    // snap to frames at forced FPS\n    const fps = FORCED_FPS;\n    const frames = Math.max(1, Math.round(chosenDur * fps));\n    const secondsSnapped = frames / fps;\n\n    // filename uses <jobId>.mp4\n    const jobId = buildJobId(r);\n    const filename = `${cleanFile(jobId)}.mp4`;\n\n    // Build request payload expected by your i2v lip-sync service\n    const input = {\n      image,                 // keyframe image URL\n      audio_url,             // voice WAV/MP3 URL\n      fps,                   // forced 30\n      num_frames: frames,    // from voice\n      filename,              // <jobId>.mp4\n      return_base64: false,\n      teacache: true,\n      resolution: { ...RESOLUTION }, // forced 960x544\n    };\n\n    // Helpful expectations & passthrough\n    const _expect = {\n      id: S(r.shotId || r.id || \"\"),\n      jobId,\n      shotKey: S(r.shotKey || \"\"),\n      segId:   S(r.segId || \"\"),\n      beatId:  S(r.beatId || \"\"),\n      route:   S(r.route || \"aroll\"),\n      title:   S(r.title || \"\"),\n      seconds: secondsSnapped,\n      fps,\n      width: RESOLUTION.width,\n      height: RESOLUTION.height\n    };\n\n    return {\n      json: {\n        jobId,\n        input,\n        _expect,\n\n        // lift essential IDs + context for downstream mux/EDL\n        shotKey: S(r.shotKey || \"\"),\n        segId:   S(r.segId || \"\"),\n        beatId:  S(r.beatId || \"\"),\n        shotId:  S(r.shotId || r.id || \"\"),\n        sceneId: S(r.sceneId || \"\"),\n        route:   S(r.route || \"aroll\"),\n\n        durationSec: secondsSnapped,\n        fps,\n        resolution: { ...RESOLUTION },\n\n        // extra passthroughs for tracing/QA\n        voiceUrl: audio_url,\n        keyframe_url: image,\n        piggybank: r.piggybank || {},\n        promptText: r.promptText || \"\",\n        voiceMeta: r.voiceMeta || null\n      }\n    };\n  })\n  // require both keyframe image and voice audio\n  .filter(j => j.json?.input?.image && j.json?.input?.audio_url);\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        -240
+      ],
+      "id": "96915644-0b11-4c8c-9474-69b7a1fc0fc9",
+      "name": "Build A-Roll Jobs"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        320,
+        -176
+      ],
+      "id": "547afde3-8457-4604-91b7-521b39383a76",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        16,
+        -240
+      ],
+      "id": "db912154-0a78-409c-a021-95c31bd6f569",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9ed8573a-254c-4100-810e-83fa8385e1d7",
+              "name": "jobId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "0a117abb-ab53-4089-ac48-ac00d46e1193",
+              "name": "shotId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.shotId}}",
+              "type": "string"
+            },
+            {
+              "id": "83e158bf-546d-4892-9c9a-403b2b8991a1",
+              "name": "sceneId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.sceneId}}",
+              "type": "string"
+            },
+            {
+              "id": "9d0985f8-a8b3-4682-a524-20bc2b24a782",
+              "name": "type",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.type}}",
+              "type": "string"
+            },
+            {
+              "id": "58c757e6-6dea-4c1c-9446-05d09852cb47",
+              "name": "characterId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.characterId}}",
+              "type": "string"
+            },
+            {
+              "id": "e599c8d6-5b02-4fa5-afc0-adf74cb56b9d",
+              "name": "voiceId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.voiceId}}",
+              "type": "string"
+            },
+            {
+              "id": "c06d397c-3a40-45d6-82a0-f0c1630e29e4",
+              "name": "voiceDurationSec",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.voiceDurationSec}}",
+              "type": "string"
+            },
+            {
+              "id": "a550a1a9-e592-4ffd-904d-cf61d90f6225",
+              "name": "base_video_url",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.base_video_url}}",
+              "type": "string"
+            },
+            {
+              "id": "6874ad00-6cd4-44f3-9a9c-9a343c8493d0",
+              "name": "promptText",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json.meta.promptText}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "3255f485-149b-445c-8568-a528d342c2d3",
+      "name": "Set Image ID2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();   // <-- the 2 items from Merge\n\n// check for an a-roll track with at least one clip\nconst hasAroll = items.some(it => {\n  const edl = it.json?.edl;\n  const track = ( edl?.tracks?.video?.[0]?.name || '' ).toLowerCase();\n  const clips = edl?.tracks?.video?.[0]?.clips ?? [];\n  return track === 'aroll' && clips.length > 0;\n});\n\nif (!hasAroll) {\n  throw new Error('No A-roll EDL present (track missing or empty).');\n}\n\n// IMPORTANT: pass the original items through\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -224
+      ],
+      "id": "a9b6dc8e-2d6c-4dc3-bcdc-a1453862db4b",
+      "name": "Assert A-Roll Present"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine any EDLs that actually arrived on the inputs.\n// - Merges ALL aroll tracks (instead of keeping only the last)\n// - Optionally carries broll if present\n// - Dedupes clips by (shotKey || id || src)\n// - Recomputes length_sec\n// - Keeps only type:'aroll' in the aroll track\n\nconst inputs = $input.all();\n\nconst arollClips = [];\nconst brollClips = [];\nlet arollFps = null;\nlet arollRes = null;\nlet brollFps = null;\nlet brollRes = null;\n\nfor (const it of inputs) {\n  const edl = it.json?.edl ?? it.json ?? null;\n  const tracks = edl?.tracks?.video ?? [];\n  if (!tracks.length) continue;\n\n  const name = (tracks[0]?.name || \"\").toLowerCase();\n  const clips = tracks[0]?.clips ?? [];\n\n  if (name === \"aroll\") {\n    // capture fps/res once (prefer first seen)\n    if (arollFps == null) arollFps = Number(edl?.fps) || 30;\n    if (arollRes == null)  arollRes = edl?.resolution || { width: 1024, height: 576 /* prefer 16:9 */ };\n    for (const c of clips) {\n      if ((c.type || \"\").toLowerCase() !== \"aroll\") continue;\n      arollClips.push(c);\n    }\n  } else if (name === \"broll\") {\n    if (brollFps == null) brollFps = Number(edl?.fps) || 30;\n    if (brollRes == null)  brollRes = edl?.resolution || { width: 1024, height: 576 };\n    for (const c of clips) brollClips.push(c);\n  }\n}\n\n// hard-require A-roll for this workflow\nif (!arollClips.length) {\n  throw new Error(\"No A-roll EDL present (track missing or empty).\");\n}\n\n// --- dedupe by stable identity ---\nconst seen = new Set();\nconst uniqAroll = [];\nfor (const c of arollClips) {\n  const key = String(c.shotKey ?? c.id ?? c.src);\n  if (seen.has(key)) continue;\n  seen.add(key);\n  uniqAroll.push(c);\n}\n\n// sort (stable) by seg/shotKey if present, else keep arrival order\nuniqAroll.sort((a, b) => {\n  const ak = String(a.shotKey ?? a.segId ?? a.id ?? \"\");\n  const bk = String(b.shotKey ?? b.segId ?? b.id ?? \"\");\n  return ak.localeCompare(bk, undefined, { numeric: true, sensitivity: \"base\" });\n});\n\n// recompute total length\nconst totalArollSec = uniqAroll.reduce((s, c) => s + Math.max(0, (Number(c.out)||0) - (Number(c.in)||0)), 0);\n\n// build output EDLs\nconst aroll_edl = {\n  tracks: { video: [{ name: \"aroll\", clips: uniqAroll }] },\n  resolution: arollRes ?? { width: 1024, height: 576 },\n  fps: arollFps ?? 30,\n  length_sec: totalArollSec\n};\n\nlet broll_edl = null;\nif (brollClips.length) {\n  const totalBrollSec = brollClips.reduce((s, c) => s + Math.max(0, (Number(c.out)||0) - (Number(c.in)||0)), 0);\n  broll_edl = {\n    tracks: { video: [{ name: \"broll\", clips: brollClips }] },\n    resolution: brollRes ?? { width: 1024, height: 576 },\n    fps: brollFps ?? 30,\n    length_sec: totalBrollSec\n  };\n}\n\nreturn [{ json: { aroll_edl, broll_edl } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -224
+      ],
+      "id": "0fdb91bc-1bef-4467-972c-6a70e1fb6a32",
+      "name": "Set EDL Tracks"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split EDL Tracks (lip-sync A-roll → validated, audio-enabled; B-roll passthrough)\n\nconst input = $json || {};\nconst a = input.aroll_edl ?? null;\nconst b = input.broll_edl ?? null;\n\nfunction getVideoTrack(edl) {\n    const tracks = edl?.tracks?.video;\n    if (!Array.isArray(tracks) || tracks.length === 0) return null;\n    return tracks[0]; // upstream builds a single video track per EDL\n}\n\n// --- validation helpers (sceneId is OPTIONAL for lip-sync output) ---\nfunction requireIds(clip) {\n    const need = [\"segId\", \"beatId\", \"shotId\", \"shotKey\", \"src\"];\n    const missing = need.filter(k => clip[k] == null || clip[k] === \"\");\n    if (missing.length) {\n        throw new Error(`Clip ${clip.id ?? \"(no-id)\"} missing required fields: ${missing.join(\", \")}`);\n    }\n}\n\nconst toNum = (x, d = 0) => {\n    const n = Number(x);\n    return Number.isFinite(n) ? n : d;\n};\nconst to3 = (x) => (toNum(x) || 0).toFixed(3);\n\n// --- A-ROLL (lip-sync) ---\nlet arollOut = null;\nconst aTrack = getVideoTrack(a);\n\nif (aTrack) {\n    // keep only type:'aroll' (defensive)\n    const rawAroll = (aTrack.clips || []).filter(\n        c => String(c?.type || \"\").toLowerCase() === \"aroll\"\n    );\n\n    // validate and normalize each clip\n    const arollClips = rawAroll.map((c) => {\n        // --- [PATCH START] Infer beatId if missing ---\n        if ((!c.beatId || c.beatId === \"\") && c.shotKey) {\n            // Expected format: \"SEG-01-B01-SEG-01\" or similar\n            // We look for a pattern \"-Bxx-\" where xx are digits\n            const match = c.shotKey.match(/-([B]\\d+)(?:-|$)/);\n            if (match && match[1]) {\n                c.beatId = match[1];\n            } else {\n                // Fallback: simple check if shotKey IS the beatId or similar logic?\n                // For now, rely on regex. If check fails, requireIds will throw below.\n            }\n        }\n        // --- [PATCH END] ---\n\n        requireIds(c);\n\n        // prefer lip-sync aligned duration if available\n        const meta = c._meta || {};\n        const aligned = toNum(meta.aligned_out_sec);\n        const lipsyncOut = toNum(meta.lipsync_out_sec);\n        const voiceDur = toNum(meta.voice_duration_sec);\n\n        const inn = toNum(c.in, 0);\n        // choose 'out' in priority order: explicit out → aligned_out_sec → lipsync_out_sec → in + voice_duration\n        let out = (Number.isFinite(toNum(c.out)) && toNum(c.out) >= inn)\n            ? toNum(c.out)\n            : (aligned > 0 ? aligned\n                : (lipsyncOut > 0 ? lipsyncOut\n                    : (voiceDur > 0 ? inn + voiceDur : inn)));\n\n        // Ensure out >= in\n        if (out < inn) out = inn;\n\n        // mark that embedded audio is present/safe to use downstream\n        const withAudioFlags = {\n            hasAudio: true,\n            audio: true,\n            _meta: { ...(c._meta || {}), hasAudio: true }\n        };\n\n        // keep lip-sync video src exactly (DO NOT swap to base_video_url)\n        const normalized = {\n            ...c,\n            in: inn,\n            out,\n            type: \"aroll\",\n            ...withAudioFlags\n        };\n\n        // best-effort poster fallback\n        if (!normalized.poster && meta.poster) normalized.poster = meta.poster;\n\n        return normalized;\n    });\n\n    if (arollClips.length === 0) {\n        throw new Error(\"A-roll track present but contains no type:'aroll' clips.\");\n    }\n\n    // recompute total length from in/out (non-negative)\n    const totalLen = arollClips.reduce((s, c) => {\n        const d = Math.max(0, toNum(c.out) - toNum(c.in, 0));\n        return s + d;\n    }, 0);\n\n    // write back filtered + normalized A-roll\n    const arollEDL = {\n        ...a,\n        tracks: {\n            ...a?.tracks,\n            video: [\n                { ...aTrack, name: \"aroll\", clips: arollClips }\n            ]\n        },\n        fps: a?.fps ?? aTrack?._meta?.fps ?? 30,\n        length_sec: Number(totalLen.toFixed(3)),\n    };\n\n    arollOut = { json: { track: \"aroll\", source: \"combo\", edl: arollEDL } };\n}\n\n// --- B-ROLL (pass-through if present; you can filter to type:'broll' if desired) ---\nlet brollOut = null;\nconst bTrack = getVideoTrack(b);\n\nif (bTrack) {\n    // Optionally: const brollClips = (bTrack.clips||[]).filter(c => String(c.type).toLowerCase()===\"broll\");\n    brollOut = { json: { track: \"broll\", source: \"broll-subflow\", edl: b } };\n}\n\n// Hard-require A-roll for this workflow\nif (!arollOut) {\n    throw new Error(\"No A-roll EDL present (track missing or empty).\");\n}\n\nreturn brollOut ? [arollOut, brollOut] : [arollOut];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -224
+      ],
+      "id": "39e02e8e-ba82-4a2d-be78-1194a91de777",
+      "name": "Split EDL Tracks"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        496,
+        -224
+      ],
+      "id": "30081264-54ca-437b-a7d5-a4fb987bbfd2",
+      "name": "Merge1"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "title": "Demarco poetry",
+          "route": "combo",
+          "sceneId": "SCN1",
+          "shotKey": "SEG-01-B01-SEG-01",
+          "segId": "SEG-01",
+          "beatId": null,
+          "shotId": "SEG-01",
+          "type": "aroll",
+          "characterId": "char1",
+          "characterName": "Demarco",
+          "seed_image_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "keyframe_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "poster": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "voiceUrl": "https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/88402749b6544edba41c5168a3a13f1f.wav",
+          "voiceDurationSec": 44.84,
+          "in": 0,
+          "out": 44.84,
+          "durationSec": 44.84,
+          "resolution": {
+            "width": 1024,
+            "height": 576
+          },
+          "fps": 30,
+          "piggybank": {
+            "render": {
+              "width": 1024,
+              "height": 576,
+              "fps": 30,
+              "aspect": "16:9",
+              "respectKeyframes": false,
+              "strictness": 0.6,
+              "seedLock": false
+            },
+            "layout": {
+              "safeZones": false
+            },
+            "features": {
+              "captions": true,
+              "music": true,
+              "podcastStill": false
+            },
+            "meta": {
+              "route": "combo",
+              "styleTone": null,
+              "templates": [],
+              "accents": []
+            },
+            "prefs": {
+              "lipSyncStrict": false,
+              "lockCharacter": false,
+              "eyeContact": true,
+              "gesture": 0.5,
+              "energy": 0.5,
+              "cameraMovement": 0.5,
+              "shotType": null,
+              "subjectPos": null,
+              "pitchSemitones": 0,
+              "speed": 1,
+              "emotion": "neutral",
+              "voiceAccent": "auto",
+              "voicePreset": null,
+              "wordsPerSecond": null
+            }
+          },
+          "promptText": "African American male in his mid twenties. Athletic with expressive tattoos and hair.. Stage of a concert venue",
+          "voiceMeta": {
+            "piggyVoiceId": null,
+            "piggyVoiceName": null,
+            "characterVoiceId": "recording",
+            "characterVoiceName": null
+          },
+          "__trace": {
+            "synthesizedPlan": true,
+            "hasKeyframe": true,
+            "hasVoice": true,
+            "userCharApplied": true,
+            "wps": null
+          }
+        }
+      },
+      {
+        "json": {
+          "title": "Demarco poetry",
+          "route": "combo",
+          "sceneId": "SCN1",
+          "shotKey": "SEG-03-B01-SEG-03",
+          "segId": "SEG-03",
+          "beatId": null,
+          "shotId": "SEG-03",
+          "type": "aroll",
+          "characterId": "char1",
+          "characterName": "Demarco",
+          "seed_image_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "keyframe_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "poster": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "voiceUrl": "https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/88402749b6544edba41c5168a3a13f1f.wav",
+          "voiceDurationSec": 11.56,
+          "in": 0,
+          "out": 11.56,
+          "durationSec": 11.56,
+          "resolution": {
+            "width": 1024,
+            "height": 576
+          },
+          "fps": 30,
+          "piggybank": {
+            "render": {
+              "width": 1024,
+              "height": 576,
+              "fps": 30,
+              "aspect": "16:9",
+              "respectKeyframes": false,
+              "strictness": 0.6,
+              "seedLock": false
+            },
+            "layout": {
+              "safeZones": false
+            },
+            "features": {
+              "captions": true,
+              "music": true,
+              "podcastStill": false
+            },
+            "meta": {
+              "route": "combo",
+              "styleTone": null,
+              "templates": [],
+              "accents": []
+            },
+            "prefs": {
+              "lipSyncStrict": false,
+              "lockCharacter": false,
+              "eyeContact": true,
+              "gesture": 0.5,
+              "energy": 0.5,
+              "cameraMovement": 0.5,
+              "shotType": null,
+              "subjectPos": null,
+              "pitchSemitones": 0,
+              "speed": 1,
+              "emotion": "neutral",
+              "voiceAccent": "auto",
+              "voicePreset": null,
+              "wordsPerSecond": null
+            }
+          },
+          "promptText": "African American male in his mid twenties. Athletic with expressive tattoos and hair.. Stage of a concert venue",
+          "voiceMeta": {
+            "piggyVoiceId": null,
+            "piggyVoiceName": null,
+            "characterVoiceId": "recording",
+            "characterVoiceName": null
+          },
+          "__trace": {
+            "synthesizedPlan": true,
+            "hasKeyframe": true,
+            "hasVoice": true,
+            "userCharApplied": true,
+            "wps": null
+          }
+        }
+      },
+      {
+        "json": {
+          "title": "Demarco poetry",
+          "route": "combo",
+          "sceneId": "SCN1",
+          "shotKey": "SEG-03-B01-S01",
+          "segId": "SEG-03",
+          "beatId": "B01",
+          "shotId": "S01",
+          "type": "aroll",
+          "characterId": "char1",
+          "characterName": "Demarco",
+          "seed_image_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "keyframe_url": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "poster": "https://media-catalog.nyc3.digitaloceanspaces.com/scenes/Demarco_poetry/Demarco_poetry_1768162437877.png",
+          "voiceUrl": null,
+          "voiceDurationSec": 0,
+          "in": 0,
+          "out": 30,
+          "durationSec": 30,
+          "resolution": {
+            "width": 1024,
+            "height": 576
+          },
+          "fps": 30,
+          "piggybank": {
+            "render": {
+              "width": 1024,
+              "height": 576,
+              "fps": 30,
+              "aspect": "16:9",
+              "respectKeyframes": false,
+              "strictness": 0.6,
+              "seedLock": false
+            },
+            "layout": {
+              "safeZones": false
+            },
+            "features": {
+              "captions": true,
+              "music": true,
+              "podcastStill": false
+            },
+            "meta": {
+              "route": "combo",
+              "styleTone": null,
+              "templates": [],
+              "accents": []
+            },
+            "prefs": {
+              "lipSyncStrict": false,
+              "lockCharacter": false,
+              "eyeContact": true,
+              "gesture": 0.5,
+              "energy": 0.5,
+              "cameraMovement": 0.5,
+              "shotType": null,
+              "subjectPos": null,
+              "pitchSemitones": 0,
+              "speed": 1,
+              "emotion": "neutral",
+              "voiceAccent": "auto",
+              "voicePreset": null,
+              "wordsPerSecond": null
+            }
+          },
+          "promptText": "African American male in his mid twenties. Athletic with expressive tattoos and hair.. Stage of a concert venue",
+          "voiceMeta": {
+            "piggyVoiceId": null,
+            "piggyVoiceName": null,
+            "characterVoiceId": "recording",
+            "characterVoiceName": null
+          },
+          "__trace": {
+            "synthesizedPlan": true,
+            "hasKeyframe": true,
+            "hasVoice": false,
+            "userCharApplied": true,
+            "wps": null
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Set Image ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Image ID": {
+      "main": [
+        [
+          {
+            "node": "Get A-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Prompts": {
+      "main": [
+        []
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Mock Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse A-Roll Result": {
+      "main": [
+        [
+          {
+            "node": "Build A-Roll EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build A-Roll EDL": {
+      "main": [
+        [
+          {
+            "node": "Assert A-Roll Present",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request A-Roll Video": {
+      "main": [
+        [
+          {
+            "node": "Set Image ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get A-Roll Video": {
+      "main": [
+        [
+          {
+            "node": "Set Image ID2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build A-Roll Jobs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Request A-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build A-Roll Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Image ID2": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert A-Roll Present": {
+      "main": [
+        [
+          {
+            "node": "Set EDL Tracks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set EDL Tracks": {
+      "main": [
+        [
+          {
+            "node": "Split EDL Tracks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Parse A-Roll Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "1386bad5-3571-4583-9f50-39788ff7da0c",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "S2UK7Oc3DJL7xEoZ",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:47:34.330Z",
+      "updatedAt": "2025-08-06T22:47:34.330Z",
+      "id": "5W4ptl8eNWuki2da",
+      "name": "Base_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:49:19.870Z",
+      "updatedAt": "2025-08-06T22:49:19.870Z",
+      "id": "7BgaVxTNl6wr5BOb",
+      "name": "A_Roll"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:27.709Z",
+      "updatedAt": "2025-08-06T22:47:27.709Z",
+      "id": "RDt1fEwBS590LEn1",
+      "name": "Builder"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:15.867Z",
+      "updatedAt": "2025-08-06T22:48:15.867Z",
+      "id": "lRzQwQcNU2q4zzyp",
+      "name": "Video"
+    }
+  ]
+}

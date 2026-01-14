@@ -1,0 +1,1667 @@
+{
+  "name": "SceneMe Orchestrator copy",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Build Final EDL (shotKey-chronological, narration aligned to B-roll windows)\n// Requirements:\n//  - Keep ALL video clips (A-roll + B-roll) — nothing filtered\n//  - Sort video by shotKey; rewrite cumulative in/out\n//  - For each segId, compute B-roll window = min(in) .. max(out) over B-roll clips (post-rewrite)\n//  - Align narration (from narration EDL) to its segId's B-roll window:\n//        narration.in  = window.start\n//        narration.out = window.end\n//    If no B-roll for that seg: use union of all clips for the seg; if still none, keep original timing\n//  - Images pass-through; geometry from plan → edl → defaults\n//  - NEW: include music & captions settings (incl. prompt) in edl._meta.settings\n\nconst upstream = $input.all().map(i => i.json || {});\n\n// ---------- helpers ----------\nconst lower = s => String(s ?? '').toLowerCase();\nconst n = v => (Number.isFinite(+v) ? +v : 0);\nconst dur = c => {\n  const i = n(c.in), o = n(c.out);\n  const d = Math.max(0, o - (i || 0)) || o || n(c.durationSec) || n(c.duration);\n  return Math.max(0, d);\n};\n\nconst shotKeyOf = c => c.shotKey || c._meta?.shotKey || c.label || '';\nconst segIdOf   = c => c.segId   || c._meta?.segId   || c.meta?.segId || '';\nconst beatIdOf  = c => c.beatId  || c._meta?.beatId  || c.meta?.beatId || '';\nconst shotIdOf  = c => c.shotId  || c.id || c.clipId || '';\nconst segIdx    = c => n(c.segIndex || c._meta?.segIndex || 1) || 1;\nconst orderInSeg= c => n(c.order ?? c._meta?.order ?? c.meta?.order ?? segIdx(c));\n\n// natural order: shotKey → (seg, beat, shot) → order → segIndex; aroll first as tiny tie-break\nconst segNum = c => {\n  const s = segIdOf(c);\n  const m = String(s).match(/seg[-_\\s]?(\\d+)/i);\n  if (m) return parseInt(m[1],10);\n  const sk = shotKeyOf(c);\n  const mk = String(sk).match(/seg[-_\\s]?(\\d+)/i);\n  return mk ? parseInt(mk[1],10) : 1e9;\n};\nconst beatNum = c => {\n  const b = beatIdOf(c);\n  const m = String(b).match(/b[-_\\s]?(\\d+)/i);\n  return m ? parseInt(m[1],10) : 1e9;\n};\nconst byShotKeyChrono = (a,b) => {\n  const aKey = String(shotKeyOf(a));\n  const bKey = String(shotKeyOf(b));\n  const k = aKey.localeCompare(bKey, undefined, { numeric: true, sensitivity: 'base' });\n  if (k !== 0) return k;\n\n  const s = segNum(a) - segNum(b);\n  if (s !== 0) return s;\n  const bb = beatNum(a) - beatNum(b);\n  if (bb !== 0) return bb;\n  const sh = String(shotIdOf(a)).localeCompare(String(shotIdOf(b)), undefined, { numeric: true, sensitivity: 'base' });\n  if (sh !== 0) return sh;\n  const o = orderInSeg(a) - orderInSeg(b);\n  if (o !== 0) return o;\n  const si = segIdx(a) - segIdx(b);\n  if (si !== 0) return si;\n  const ta = a.type === 'aroll' ? 0 : 1;\n  const tb = b.type === 'aroll' ? 0 : 1;\n  return ta - tb;\n};\n\n// track getters\nconst tracksOf   = edlLike => edlLike?.edl?.tracks || {};\nconst videoTrack = edlLike => (tracksOf(edlLike).video || [])[0] || null; // assume merged \"video\" track\nconst imagesTrack= edlLike => (tracksOf(edlLike).images || [])[0] || null;\nconst getAudioTrack = (edlLike, name='narration') =>\n  (tracksOf(edlLike).audio || []).find(t => lower(t?.name) === lower(name));\n\n// plan + geometry\nconst plan = upstream.find(x => x?.kind === 'RenderPlanV2' || x?.kind === 'RenderPlanV1') || {};\nconst anyEdl = upstream.find(x => x?.edl?.tracks?.video || x?.edl?.tracks?.audio || x?.edl?.tracks?.images) || {};\nconst pickGeometry = () => {\n  const rPlan = plan?.settings?.resolution || {};\n  const fpsPlan = plan?.settings?.fps;\n  const rAny = anyEdl?.edl?.resolution || {};\n  const width  = n(rPlan.width)  || n(rAny.width)  || 1024;\n  const height = n(rPlan.height) || n(rAny.height) || 576;\n  const fps    = n(fpsPlan)      || n(anyEdl?.edl?.fps) || 30;\n  return { resolution: { width, height }, fps };\n};\nconst { resolution, fps } = pickGeometry();\n\n// ---------- pull UI/flags for music & captions (non-disruptive pass-through) ----------\nconst uiFromPlan   = plan?.source?.ui || {};\nconst uiFromAny    = (upstream.find(x => x?.source?.ui)?.source?.ui) || {};\nconst flagsFromPlan= plan?.flags || {};\n\nconst wantsMusic    = (uiFromPlan.wantsMusic ?? uiFromAny.wantsMusic ?? flagsFromPlan.music ?? false) ? true : false;\nconst wantsCaptions = (uiFromPlan.wantsCaptions ?? uiFromAny.wantsCaptions ?? flagsFromPlan.captions ?? false) ? true : false;\n\n// prefer explicit music prompt/desc if present\nconst musicPrompt = uiFromPlan.musicPrompt ?? uiFromPlan.musicDesc ?? uiFromAny.musicPrompt ?? uiFromAny.musicDesc ?? null;\n\n// --- Captions passthrough (unchanged) ---\nconst captionSettingsLoose = {\n  enabled: wantsCaptions,\n  style: uiFromPlan.captionStyle ?? uiFromAny.captionStyle ?? null,\n  language: uiFromPlan.captionLanguage ?? uiFromAny.captionLanguage ?? null,\n  format: uiFromPlan.captionFormat ?? uiFromAny.captionFormat ?? null\n};\n\n// --- MUSIC SETTINGS (updated to carry volumes) ---\nconst musicCategoryLabel =\n  uiFromPlan.musicCategoryLabel ?? uiFromAny.musicCategoryLabel ?? null;\n\nconst musicSeedRaw =\n  (uiFromPlan.advanced?.seed ?? uiFromAny.advanced?.seed ?? null);\nconst musicSeed =\n  Number.isFinite(+musicSeedRaw) ? Math.trunc(+musicSeedRaw) : null;\n\n// NEW: carry volumes + includeVocals from Advanced\nconst musicVolume =\n  (uiFromPlan.advanced?.musicVolume ?? uiFromAny.advanced?.musicVolume ?? null);\nconst voiceVolume =\n  (uiFromPlan.advanced?.voiceVolume ?? uiFromAny.advanced?.voiceVolume ?? null);\nconst includeVocals =\n  (uiFromPlan.advanced?.includeVocals ?? uiFromAny.advanced?.includeVocals ?? null);\n\n// NEW: resolution mode from Advanced (e.g. \"SD\" | \"HD\")\nconst uiResolutionMode =\n  uiFromPlan.advanced?.resolution ??\n  uiFromAny.advanced?.resolution ??\n  null;\n\nconst musicSettingsLoose = {\n  enabled: wantsMusic,\n  prompt: musicPrompt,\n  // fields for downstream prompt building\n  categoryLabel: musicCategoryLabel,\n  seed: musicSeed,\n  // passthroughs if present (kept as-is)\n  genre: uiFromPlan.musicGenre ?? uiFromAny.musicGenre ?? null,\n  mood: uiFromPlan.musicMood ?? uiFromAny.musicMood ?? null,\n  bpm: uiFromPlan.musicBpm ?? uiFromAny.musicBpm ?? null,\n  // NEW: volumes and vocals carried into music settings\n  volume: (Number.isFinite(+musicVolume) ? +musicVolume : null),\n  voiceVolume: (Number.isFinite(+voiceVolume) ? +voiceVolume : null),\n  vocals: (typeof includeVocals === 'boolean' ? includeVocals : null)\n};\n\n// ---------- 1) Collect *the* merged video track (keep ALL clips) ----------\nconst mergedVideo = videoTrack(anyEdl) ? JSON.parse(JSON.stringify(videoTrack(anyEdl))) : { name: 'video', clips: [] };\nlet videoClips = Array.isArray(mergedVideo.clips) ? mergedVideo.clips.slice() : [];\n\n// ---------- 2) Sort by shotKey & rewrite cumulative in/out ----------\nvideoClips.sort(byShotKeyChrono);\n{\n  let t = 0;\n  for (const c of videoClips) {\n    const d = dur(c);\n    c.in  = t;\n    c.out = t + d;\n    t += d;\n  }\n}\n\n// ---------- 3) Build B-roll windows per segId on the rewritten timeline ----------\nconst brollWindowBySeg = new Map(); // segId -> {start,end}\nconst unionWindowBySeg = new Map(); // segId -> {start,end} (any type)\nfunction accWin(map, seg, s, e) {\n  if (!seg) return;\n  const w = map.get(seg) || { start: Infinity, end: -Infinity };\n  if (Number.isFinite(s)) w.start = Math.min(w.start, s);\n  if (Number.isFinite(e)) w.end   = Math.max(w.end,   e);\n  map.set(seg, w);\n}\n\nfor (const c of videoClips) {\n  const seg = segIdOf(c);\n  const s = n(c.in), e = n(c.out);\n  accWin(unionWindowBySeg, seg, s, e);\n  if (lower(c.type) === 'broll') accWin(brollWindowBySeg, seg, s, e);\n}\n\n// ---------- 4) Pull narration EDL and align each clip to its seg’s B-roll window ----------\nconst narrSource = getAudioTrack(anyEdl, 'narration');\nlet alignedNarr = null;\n\nif (narrSource && Array.isArray(narrSource.clips)) {\n  const clips = [];\n  for (const nc of narrSource.clips) {\n    const seg = segIdOf(nc) || nc.id || nc.shotId || '';\n    let win = brollWindowBySeg.get(seg);\n\n    // Fallback: if no B-roll for this seg, use union of all clips for the seg\n    if ((!win || !isFinite(win.start) || !isFinite(win.end) || win.end <= win.start) && unionWindowBySeg.has(seg)) {\n      win = unionWindowBySeg.get(seg);\n    }\n\n    // If we still have no usable window, keep original timing (do NOT drop)\n    if (!win || !isFinite(win.start) || !isFinite(win.end) || win.end <= win.start) {\n      clips.push({\n        id: seg || (nc.id || nc.shotId || 'narr'),\n        segId: seg || null,\n        shotId: seg || (nc.shotId || nc.id || null),\n        type: 'narration',\n        src: nc.src,\n        in: n(nc.in) || 0,\n        out: n(nc.out) || n(nc.durationSec) || n(nc.duration) || 0,\n        _meta: { voiceId: nc._meta?.voiceId || null, alignedTo: 'original' }\n      });\n      continue;\n    }\n\n    clips.push({\n      id: seg || (nc.id || nc.shotId || 'narr'),\n      segId: seg || null,\n      shotId: seg || (nc.shotId || nc.id || null),\n      type: 'narration',\n      src: nc.src,\n      in: n(win.start),\n      out: n(win.end),\n      _meta: { voiceId: nc._meta?.voiceId || null, alignedTo: 'broll_segment_window' }\n    });\n  }\n\n  alignedNarr = { name: 'narration', clips };\n}\n\n// ---------- 5) Images pass-through (optional) ----------\nconst images = imagesTrack(anyEdl);\nconst imagesOut = (images && Array.isArray(images.clips) && images.clips.length)\n  ? [{ name: images.name || 'kf', clips: images.clips }]\n  : undefined;\n\n// ---------- 6) Assemble unified tracks ----------\nconst tracks = {\n  video: [{ name: 'video', clips: videoClips }],\n  ...(imagesOut ? { images: imagesOut } : {}),\n  ...(alignedNarr ? { audio: [alignedNarr] } : {})\n};\n\n// ---------- 7) Lengths ----------\nconst videoLen = videoClips.reduce((s,c)=>s+dur(c),0);\nconst narrLen  = (alignedNarr?.clips || []).reduce((s,c)=>s+dur(c),0);\nconst length_sec = Math.max(videoLen, narrLen) || n(anyEdl?.edl?.length_sec) || 0;\n\n// ---------- 8) Final EDL ----------\nreturn [{\n  json: {\n    edl: {\n      tracks,\n      resolution,\n      fps,\n      length_sec,\n      _meta: {\n        timeline_master: narrLen > videoLen ? 'audio' : 'video',\n        durations: { video: videoLen, narration: narrLen },\n        sort_order: 'shotKey → (seg, beat, shot) → order → segIndex',\n        aligned_narration: true,\n        broll_windows: Array.from(brollWindowBySeg.entries())\n          .map(([seg, w]) => ({ segId: seg, start: n(w.start), end: n(w.end) })),\n        // ---- NEW: pass-through of UI prefs and settings ----\n        ui_prefs: {\n          wantsCutaways: !!(uiFromPlan.wantsCutaways ?? uiFromAny.wantsCutaways),\n          wantsMusic: wantsMusic,\n          wantsCaptions: wantsCaptions\n        },\n        settings: {\n          music: musicSettingsLoose,\n          captions: captionSettingsLoose,\n          video: {\n            // SD / HD from UI (can be null for older requests)\n            resolutionMode: uiResolutionMode,\n            // actual geometry used for this EDL\n            width: resolution.width,\n            height: resolution.height,\n            fps\n          }\n        }\n      }\n    }\n  }\n}];"
+      },
+      "name": "Build Final EDL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        -272
+      ],
+      "id": "47471f27-0aec-4004-8e24-2dfcd54cf672"
+    },
+    {
+      "parameters": {
+        "numberInputs": 6
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1392,
+        48
+      ],
+      "id": "35fec496-ddd5-468c-926f-0c33918b4e22",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 5,
+        "output": "={{ $json.dispatch.index -1 }}"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        64
+      ],
+      "id": "c562f56e-c5dc-4433-be81-17932dbf23e7",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "HukvW9A0Qev2aCnv",
+          "mode": "list",
+          "cachedResultName": "Captions Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1904,
+        -160
+      ],
+      "id": "e51aeccf-8526-40e1-97a5-45f13e52a447",
+      "name": "Execute Caption Builder",
+      "alwaysOutputData": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "GGOn96cLHKKZnveZ",
+          "mode": "list",
+          "cachedResultName": "Music Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1904,
+        64
+      ],
+      "id": "84d1f901-6fd6-4e4e-b42e-fa767e794d52",
+      "name": "Execute Music Builder",
+      "alwaysOutputData": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "LATCNShyF0OKZXPc",
+          "mode": "list",
+          "cachedResultName": "A-Roll Video"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        -176
+      ],
+      "id": "c3515b26-8991-4aef-b812-899d62c11beb",
+      "name": "Exec A-Roll Video",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Fxrr6B1zz2XdhCWu",
+          "mode": "list",
+          "cachedResultName": "Podcast Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        112
+      ],
+      "id": "5aecf84c-cc12-4c58-85de-e5355e339006",
+      "name": "Exec Podcast Builder",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "6PCtfc2FkVHzFJhs",
+          "mode": "list",
+          "cachedResultName": "Combination Video"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        256
+      ],
+      "id": "84b752ee-7ec2-4db4-a2d5-f079709b9073",
+      "name": "Exec Combination Video",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "J63xSJ6WHR0lREIg",
+          "mode": "list",
+          "cachedResultName": "Music Video"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        400
+      ],
+      "id": "222fd1fe-b027-473f-a18b-a7fea1677273",
+      "name": "Exec Music Video",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compose Final Video — route-agnostic (A-roll / B-roll / Combo / Podcast)\n// Invariants:\n// - A-roll clips carry embedded audio; do NOT overlay narration for A-roll-only outputs.\n// - B-roll clips have no audio; we synthesize silence and can overlay narration.\n// - Podcast/still: build a looping still spanning the audio length (or fallback).\n\nconst root = $input.item?.json || $input.all()?.[0]?.json || {};\nconst edl = root?.edl || {};\nconst settings = root?.settings || {}; // define before use\n\n// ---------- helpers ----------\nconst lower = (s) => String(s ?? \"\").toLowerCase();\nconst n = (v, d = 0) => (Number.isFinite(+v) ? +v : d);\nconst fps = n(settings.fps, n(edl.fps, 30));\nconst res = settings.resolution || edl.resolution || { width: 1024, height: 576 };\nconst lenSec = n(settings.length_sec, n(edl.length_sec, 0));\n\n// pull-through: music/captions/video settings from previous node\nconst musicSettings    = edl?._meta?.settings?.music    ?? null;\nconst captionsSettings = edl?._meta?.settings?.captions ?? null;\nconst videoSettingsRaw = edl?._meta?.settings?.video    ?? null;\n\n// Normalize video settings so they always reflect the actual geometry & fps\nconst videoSettings = {\n  ...(videoSettingsRaw || {}),  // e.g. { resolutionMode: \"HD\" | \"SD\", width, height, fps }\n  width:  res.width,\n  height: res.height,\n  fps,\n};\n\n// numeric safety + deterministic rounding\nconst EPS = 0.0005; // prevent zero-length trims\nconst roundN = (x, p = 6) =>\n  Number.isFinite(+x) ? +(Math.max(0, +x).toFixed(p)) : 0; // round then coerce to number\nconst safeDur = (d) => Math.max(EPS, roundN(d)); // ensure > 0, rounded\nconst safeStart = (s) => roundN(Math.max(0, s)); // non-negative, rounded\nconst TOL = 1 / Math.max(24, fps || 30); // ~1 frame tolerance\nconst FADE = 0.05; // 50ms fades for narration\n\nconst dur = (c) => {\n  const i = n(c.in, 0);\n  let o = c.out;\n  if (o == null || !Number.isFinite(+o)) o = n(c.durationSec, n(c.duration, 0));\n  o = n(o, 0);\n  const d = Math.max(0, o - (i ? i : 0)) || o;\n  return n(d, 0);\n};\n\nconst sumDur = (clips = []) => clips.reduce((s, c) => s + dur(c), 0);\n\n// Optional upstream per-shot offsets to align narration (fallback only)\nconst startMap = new Map();\nfor (const t of edl._meta?.timeline || []) {\n  const sid = t?.shotId;\n  if (sid != null && !startMap.has(sid)) startMap.set(sid, n(t.start, 0));\n}\n\n// ---------- gather tracks ----------\nconst vTracks = edl.tracks?.video || [];\nconst aTracks = edl.tracks?.audio || [];\nconst iTracks = edl.tracks?.images || [];\n\nconst videos = [];\nfor (const tr of vTracks) {\n  for (const c of tr.clips || []) {\n    if (c?.src) {\n      videos.push({\n        ...c,\n        _type: lower(c.type || tr.name || \"video\"),\n        _in: n(c.in, 0), // absolute timeline position (used only for validation & narration alignment)\n        _dur: dur(c), // segment duration\n      });\n    }\n  }\n}\n\n// narration (optional) — use absolute in/out from the narration EDL\nconst narr = aTracks.find((t) => lower(t.name) === \"narration\");\nlet narrClips = (narr?.clips || [])\n  .filter((c) => c?.src)\n  .map((c) => {\n    const hasIn = Number.isFinite(+c.in);\n    const startFromMeta =\n      c.shotId != null && startMap.has(c.shotId) ? startMap.get(c.shotId) : 0;\n    const start = hasIn ? n(c.in, 0) : startFromMeta; // prefer clip.in from aligned EDL; fallback to timeline map\n    const length = dur(c); // trims to (out - in) if out present, else falls back to duration*\n    return {\n      ...c,\n      shotId: c.shotId || c.id || null,\n      _inAbs: safeStart(start),\n      _dur: safeDur(length),\n    };\n  });\n\n// If it's A-roll only, do NOT overlay narration\nconst hasVideo = videos.length > 0;\nconst onlyAroll = hasVideo && videos.every((v) => v._type === \"aroll\");\nif (onlyAroll) narrClips = [];\n\n// image cover (for podcast/still)\nconst kf = iTracks.find((t) => lower(t.name) === \"kf\");\nconst cover = kf?.clips?.[0] || null;\n\n// ---------- light validations (non-fatal; warnings only) ----------\nconst warnings = [];\n// uniqueness & chronological order\n{\n  const keys = new Set();\n  let lastOut = 0;\n  for (const c of videos) {\n    if (c.shotKey != null) {\n      if (keys.has(c.shotKey))\n        warnings.push(`Duplicate shotKey detected: ${c.shotKey}`);\n      keys.add(c.shotKey);\n    }\n    const start = n(c.in, 0);\n    if (start + TOL < lastOut) {\n      warnings.push(\n        `Overlap detected: clip ${\n          c.shotKey || c.id || \"?\"\n        } starts at ${start} before previous end ${lastOut}`\n      );\n    }\n    lastOut = Math.max(lastOut, n(c.out, start + c._dur));\n  }\n}\n// narration should cover all b-roll windows and not overlap a-roll\n{\n  const brollWins = videos\n    .filter((v) => v._type === \"broll\")\n    .map((v) => [v._in, v._in + v._dur]);\n  const arollWins = videos\n    .filter((v) => v._type === \"aroll\")\n    .map((v) => [v._in, v._in + v._dur]);\n  if (brollWins.length > 0 && narrClips.length > 0) {\n    for (const [bs, be] of brollWins) {\n      let covered = 0;\n      for (const nc of narrClips) {\n        const ns = nc._inAbs,\n          ne = ns + nc._dur;\n        const ov = Math.max(\n          0,\n          Math.min(be, ne) - Math.max(bs, ns)\n        );\n        covered += ov;\n      }\n      if (be - bs - covered > TOL) {\n        warnings.push(\n          `Narration does not fully cover b-roll window ${bs.toFixed(\n            3\n          )}–${be.toFixed(3)} (gap ~${(be - bs - covered).toFixed(3)}s)`\n        );\n      }\n    }\n  }\n  // narration overlapping a-roll (warn)\n  for (const [as, ae] of arollWins) {\n    for (const nc of narrClips) {\n      const ns = nc._inAbs,\n        ne = ns + nc._dur;\n      const ov = Math.max(\n        0,\n        Math.min(ae, ne) - Math.max(as, ns)\n      );\n      if (ov > TOL) {\n        warnings.push(\n          `Narration overlaps A-roll window ${as.toFixed(\n            3\n          )}–${ae.toFixed(3)} (~${ov.toFixed(3)}s)`\n        );\n      }\n    }\n  }\n}\n\n// ---------- Branch 1: have video clips ----------\nif (hasVideo) {\n  // Inputs: all video files + narration files (if any)\n  const inputs = [\n    ...videos.map((v) => ({ file_url: v.src })),\n    ...narrClips.map((a) => ({ file_url: a.src })),\n  ];\n\n  const parts = [];\n\n  // Per-clip video processing → [v{i}]\n  // IMPORTANT: Use MEDIA-RELATIVE trims. Each input file is already the segment.\n  for (let i = 0; i < videos.length; i++) {\n    const v = videos[i];\n    const d = safeDur(v._dur);\n    parts.push(\n      `[${i}:v]trim=start=0:duration=${d},setpts=PTS-STARTPTS,` +\n        `scale=${res.width}:${res.height}:force_original_aspect_ratio=decrease,` +\n        `pad=${res.width}:${res.height}:(ow-iw)/2:(oh-ih)/2,` +\n        `fps=${fps}[v${i}]`\n    );\n  }\n\n  // Concatenate video segments → [outv]\n  if (videos.length === 1) {\n    parts.push(`[v0]null[outv]`);\n  } else {\n    const vin = videos.map((_, i) => `[v${i}]`).join(\"\");\n    parts.push(`${vin}concat=n=${videos.length}:v=1:a=0[outv]`);\n  }\n\n  // Build base audio per segment (normalized)\n  // - A-roll pulls embedded audio (media-relative)\n  // - B-roll synthesizes silence\n  for (let i = 0; i < videos.length; i++) {\n    const v = videos[i];\n    const d = safeDur(v._dur);\n    if (v._type === \"aroll\") {\n      parts.push(\n        `[${i}:a]atrim=start=0:duration=${d},asetpts=PTS-STARTPTS,` +\n          `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[ba${i}]`\n      );\n    } else {\n      parts.push(\n        `anullsrc=r=48000:cl=stereo,atrim=duration=${d},` +\n          `aformat=sample_fmts=fltp:channel_layouts=stereo[ba${i}]`\n      );\n    }\n  }\n\n  // Concatenate base audio → [basea]\n  if (videos.length === 1) {\n    parts.push(`[ba0]anull[basea]`);\n  } else {\n    const ain = videos.map((_, i) => `[ba${i}]`).join(\"\");\n    parts.push(`${ain}concat=n=${videos.length}:v=0:a=1[basea]`);\n  }\n\n  // Narration alignment/mix (supports multiple clips) + short fades\n  if (narrClips.length > 0) {\n    const baseIdx = videos.length; // narration inputs start after last video input\n    const delayed = [];\n    for (let i = 0; i < narrClips.length; i++) {\n      const c = narrClips[i];\n      const msDelay = Math.max(0, Math.round(c._inAbs * 1000)); // delay by absolute 'in'\n      const d = safeDur(c._dur); // trim to its duration\n      const inL = `${baseIdx + i}:a`;\n      const outL = `nd${i}`;\n      const fadeIn = Math.min(\n        FADE,\n        Math.max(0, roundN(d / 4, 3))\n      ); // guard very short clips\n      const fadeOutStart = Math.max(0, roundN(d - fadeIn, 3));\n      parts.push(\n        `[${inL}]adelay=${msDelay}|${msDelay},atrim=duration=${d},asetpts=PTS-STARTPTS,` +\n          `afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeIn},` +\n          `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[${outL}]`\n      );\n      delayed.push(`[${outL}]`);\n    }\n    // Mix all narration clips together in one amix (normalized)\n    if (delayed.length === 1) {\n      parts.push(`${delayed[0]}anull[narr]`);\n    } else {\n      const narrIn = delayed.join(\"\");\n      parts.push(\n        `${narrIn}amix=inputs=${delayed.length}:duration=longest:normalize=1[narr]`\n      );\n    }\n    // Mix base + narration (narration slightly reduced)\n    parts.push(`[basea]anull[a0]`);\n    parts.push(`[narr]volume=0.85[nv]`);\n    parts.push(\n      `[a0][nv]amix=inputs=2:duration=longest:normalize=1[outa]`\n    );\n  } else {\n    parts.push(`[basea]anull[outa]`);\n  }\n\n  // Compute final length cap — prefer audio when narration exists\n  const videoLen = sumDur(videos);\n  const narrLen = narrClips.reduce(\n    (s, c) => s + n(c._dur, 0),\n    0\n  );\n  const preferAudio = narrClips.length > 0;\n  const targetLen = preferAudio\n    ? n(lenSec, n(edl.length_sec, Math.max(videoLen, narrLen)))\n    : n(lenSec, n(edl.length_sec, videoLen));\n  const tArg =\n    targetLen > 0 ? roundN(targetLen, 3).toFixed(3) : null; // deterministic\n\n  const outputs = [\n    {\n      options: [\n        { option: \"-map\", argument: \"[outv]\" },\n        { option: \"-map\", argument: \"[outa]\" },\n        { option: \"-c:v\", argument: \"libx264\" },\n        { option: \"-crf\", argument: \"23\" },\n        { option: \"-preset\", argument: \"medium\" },\n        { option: \"-pix_fmt\", argument: \"yuv420p\" },\n        { option: \"-r\", argument: String(fps) },\n        { option: \"-s\", argument: `${res.width}x${res.height}` },\n        { option: \"-movflags\", argument: \"+faststart\" },\n        { option: \"-c:a\", argument: \"aac\" },\n        { option: \"-b:a\", argument: \"160k\" },\n        { option: \"-shortest\", argument: \"\" },\n        ...(tArg ? [{ option: \"-t\", argument: tArg }] : []),\n      ],\n    },\n  ];\n\n  const metadata = {\n    thumbnail: true,\n    filesize: true,\n    duration: true,\n    bitrate: true,\n    encoder: true,\n    warnings,\n    // pass-through bundle for downstream stages\n    settings: {\n      music: musicSettings,\n      captions: captionsSettings,\n      video: videoSettings,\n    },\n  };\n\n  return [\n    {\n      json: {\n        edl,\n        settings,\n        compose_request: {\n          id: \"final_compose\",\n          inputs,\n          filters: [{ filter: parts.join(\";\") }],\n          outputs,\n          metadata,\n        },\n      },\n    },\n  ];\n}\n\n// ---------- Branch 2: NO video clips → synthesize from still image (podcast/still) ----------\nif (!cover) {\n  throw new Error(\n    \"Compose: no video clips and no cover image (images.kf) found.\"\n  );\n}\n\nconst Lraw = n(lenSec, n(edl.length_sec, sumDur(narrClips)));\nconst L = Math.max(5, roundN(Lraw)); // final fallback (>=5s) and deterministic rounding\n\nconst imgInputs = [\n  { file_url: cover.src || cover.image_url },\n  ...narrClips.map((a) => ({ file_url: a.src })),\n];\n\nconst parts = [];\n\n// Build looping still video to length L → [outv]\nparts.push(\n  `[0:v]loop=999999:size=1:start=0,` +\n    `scale=${res.width}:${res.height}:force_original_aspect_ratio=decrease,` +\n    `pad=${res.width}:${res.height}:(ow-iw)/2:(oh-ih)/2,` +\n    `fps=${fps},trim=duration=${roundN(\n      L,\n      6\n    )},setpts=PTS-STARTPTS[outv]`\n);\n\n// Build [outa] from narration or silence (normalized)\nif (narrClips.length > 0) {\n  const delayed = [];\n  for (let i = 0; i < narrClips.length; i++) {\n    const c = narrClips[i];\n    const msDelay = Math.max(0, Math.round(c._inAbs * 1000)); // delay by absolute 'in'\n    const d = safeDur(c._dur);\n    const inL = `${1 + i}:a`; // index 0 is the image, narration begins at 1\n    const outL = `nd${i}`;\n    const fadeIn = Math.min(\n      FADE,\n      Math.max(0, roundN(d / 4, 3))\n    );\n    const fadeOutStart = Math.max(0, roundN(d - fadeIn, 3));\n    parts.push(\n      `[${inL}]adelay=${msDelay}|${msDelay},atrim=duration=${d},asetpts=PTS-STARTPTS,` +\n        `afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeIn},` +\n        `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[${outL}]`\n    );\n    delayed.push(`[${outL}]`);\n  }\n  if (delayed.length === 1) {\n    parts.push(`${delayed[0]}anull[outa]`);\n  } else {\n    const narrIn = delayed.join(\"\");\n    parts.push(\n      `${narrIn}amix=inputs=${delayed.length}:duration=longest:normalize=1[outa]`\n    );\n  }\n} else {\n  parts.push(\n    `anullsrc=r=48000:cl=stereo,atrim=duration=${roundN(\n      L,\n      6\n    )},aformat=sample_fmts=fltp:channel_layouts=stereo[outa]`\n  );\n}\n\nconst tArg = L > 0 ? roundN(L, 3).toFixed(3) : null;\n\nconst outputs = [\n  {\n    options: [\n      { option: \"-map\", argument: \"[outv]\" },\n      { option: \"-map\", argument: \"[outa]\" },\n      { option: \"-c:v\", argument: \"libx264\" },\n      { option: \"-crf\", argument: \"23\" },\n      { option: \"-preset\", argument: \"medium\" },\n      { option: \"-pix_fmt\", argument: \"yuv420p\" },\n      { option: \"-r\", argument: String(fps) },\n      { option: \"-s\", argument: `${res.width}x${res.height}` },\n      { option: \"-movflags\", argument: \"+faststart\" },\n      { option: \"-c:a\", argument: \"aac\" },\n      { option: \"-b:a\", argument: \"160k\" },\n      { option: \"-shortest\", argument: \"\" },\n      ...(tArg ? [{ option: \"-t\", argument: tArg }] : []),\n    ],\n  },\n];\n\nconst metadata = {\n  thumbnail: true,\n  filesize: true,\n  duration: true,\n  bitrate: true,\n  encoder: true,\n  warnings,\n  // pass-through bundle for downstream stages\n  settings: {\n    music: musicSettings,\n    captions: captionsSettings,\n    video: videoSettings,\n  },\n};\n\nreturn [\n  {\n    json: {\n      edl,\n      settings,\n      compose_request: {\n        id: \"final_compose\",\n        inputs: imgInputs,\n        filters: [{ filter: parts.join(\";\") }],\n        outputs,\n        metadata,\n      },\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -272
+      ],
+      "id": "5c2379e2-e896-4cc0-b451-cde087f89276",
+      "name": "Composer Builder"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2048,
+        -288
+      ],
+      "id": "f3745dbf-8be6-4676-8f87-3ec9d1f1ad89",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Settings Handoff — normalize flags & fan-out URLs for captions + music\n// Mode: Run once for ALL items\n\n// ---------- Small helpers ----------\nconst get = (o, paths, d = null) => {\n  for (const p of paths) {\n    try {\n      const v = p.split('.').reduce((x, k) => (x == null ? x : x[k]), o);\n      if (v !== undefined && v !== null) return v;\n    } catch {}\n  }\n  return d;\n};\nconst num = (v, d = 0) => {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n};\nconst bool = (v, d = false) => (\n  typeof v === 'boolean' ? v :\n  v === '1' || v === 1 || String(v).toLowerCase() === 'true' ? true :\n  v === '0' || v === 0 || String(v).toLowerCase() === 'false' ? false : d\n);\n\n// ---------- Inputs ----------\nconst j   = $json || {};\nconst edl = j.edl || {};\nconst s   = j.settings || j._settings || {};\nconst pb  = s.piggybank || {};\n\n// Pull UI prefs + meta.settings from the EDL (source of truth for this handoff)\nconst uiPrefs       = edl._meta?.ui_prefs || {};\nconst metaSettings  = edl._meta?.settings || {};\nconst metaMusic     = metaSettings.music || {};\nconst metaCaptions  = metaSettings.captions || {};\nconst metaVideo     = metaSettings.video || {};  // <--- NEW\nconst resolutionMode = (metaVideo.resolutionMode || '').toUpperCase(); // <--- NEW\nconst doHD = resolutionMode === 'HD';                                    // <--- NEW\n\n// ---------- 1) Canonical final URL ----------\nconst finalUrl = get(j, [\n  'final-url',\n  'finalUrl',\n  'finalVideoUrl',\n  'captionedVideoUrl',\n  'originalVideoUrl',\n  'meta.finalVideoUrl',\n  'response.0.file_url'\n], null);\n\n// ---------- 2) Geometry / timing ----------\nconst pbRender = pb.render || {};\nconst resolution = {\n  width : num(get(s, ['resolution.width']) ?? pbRender.width ?? get(edl, ['resolution.width']), 1024),\n  height: num(get(s, ['resolution.height']) ?? pbRender.height ?? get(edl, ['resolution.height']), 576),\n};\nconst fps = num(get(s, ['fps']) ?? pbRender.fps ?? edl.fps, 30);\nconst durationSec = num(\n  get(j, ['duration', 'durationSec']) ??\n  get(s, ['length_sec']) ??\n  get(edl, ['length_sec']),\n  0\n);\n\n// ---------- 3) Route + feature flags ----------\nconst routeUsed = String(get(s, ['routeUsed']) ?? get(pb, ['meta.route']) ?? '').toLowerCase();\n\nconst pbFeatures = pb.features || {};\nconst doCaptions = bool(\n  metaCaptions.enabled ??\n  uiPrefs.wantsCaptions ??\n  get(s, ['captions.enabled']) ??\n  get(s, ['doCaptions']) ??\n  pbFeatures.captions,\n  false\n);\nconst doMusic = bool(\n  metaMusic.enabled ??\n  uiPrefs.wantsMusic ??\n  get(s, ['music.enabled']) ??\n  get(s, ['doMusic']) ??\n  pbFeatures.music,\n  false\n);\n\n// Mirror flags & blocks into settings\ns.doCaptions = doCaptions;\ns.doMusic    = doMusic;\ns.captions   = { ...(metaCaptions || {}), ...(s.captions || {}) };\ns.music      = { ...(metaMusic || {}), ...(s.music || {}) };\n\n// ---------- 4) Music config ----------\nconst musicPack = get(s, ['musicPack']) ?? get(pb, ['meta.packs.musicPack']) ?? null;\nconst musicPrompt =\n  s.music?.prompt ??\n  get(s, ['musicPrompt', 'musicDescription']) ??\n  metaMusic.prompt ??\n  (musicPack ? String(musicPack).replace(/^pack_music_/, '').replace(/_/g, ' ') : null);\n\nconst pbMusic = pb.music || {};\nconst musicHints = {\n  tempoVal: get(pbMusic, ['tempoVal'], null),\n  vocals  : typeof pbMusic.vocals === 'boolean' ? pbMusic.vocals : null,\n  ducking : typeof get(pb, ['meta.ducking']) === 'boolean' ? get(pb, ['meta.ducking']) : null,\n};\n\n// ---- NEW: capture volumes + includeVocals (from UI first, with fallbacks) ----\nconst musicVolume = num(\n  get(j, ['ui.advanced.musicVolume']) ??\n  get(j, ['advanced.musicVolume']) ??\n  get(s, ['music.volume']) ??\n  get(pb, ['audio.musicVolume']),\n  0.25\n);\n\nconst voiceVolume = num(\n  get(j, ['ui.advanced.voiceVolume']) ??\n  get(j, ['advanced.voiceVolume']) ??\n  get(s, ['voice.volume']) ??\n  get(pb, ['audio.voiceVolume']),\n  1.0\n);\n\nconst includeVocals = bool(\n  get(j, ['ui.advanced.includeVocals']) ??\n  get(j, ['advanced.includeVocals']) ??\n  get(s, ['music.vocals']) ??\n  get(j, ['musicHints.vocals']) ??\n  get(pbMusic, ['vocals']),\n  false\n);\n\n// keep settings in sync for downstream readers\ns.music = { ...(s.music || {}), volume: musicVolume, vocals: includeVocals };\ns.voice = { ...(s.voice || {}), volume: voiceVolume };\n\n// ---------- 5) Captions hints ----------\nconst captionsHints = {\n  safeZones       : typeof get(pb, ['layout.safeZones']) === 'boolean' ? get(pb, ['layout.safeZones']) : null,\n  aspect          : pbRender.aspect ?? null,\n  respectKeyframes: typeof pbRender.respectKeyframes === 'boolean' ? pbRender.respectKeyframes : null,\n  transitionAfter : get(pb, ['transitionAfter'], null),\n};\n\n// ---------- 6) Flattened piggybank subset ----------\nconst piggybank_flat = {\n  // render\n  render_width           : pbRender.width ?? null,\n  render_height          : pbRender.height ?? null,\n  render_fps             : pbRender.fps ?? null,\n  render_aspect          : pbRender.aspect ?? null,\n  render_respectKeyframes: typeof pbRender.respectKeyframes === 'boolean' ? pbRender.respectKeyframes : null,\n  render_strictness      : pbRender.strictness ?? null,\n  render_seedLock        : typeof pbRender.seedLock === 'boolean' ? pbRender.seedLock : null,\n\n  // features & layout\n  features_captions     : typeof pbFeatures.captions === 'boolean' ? pbFeatures.captions : null,\n  features_music        : typeof pbFeatures.music === 'boolean' ? pbFeatures.music : null,\n  features_podcastStill : typeof pbFeatures.podcastStill === 'boolean' ? pbFeatures.podcastStill : null,\n  layout_safeZones      : typeof get(pb, ['layout.safeZones']) === 'boolean' ? get(pb, ['layout.safeZones']) : null,\n\n  // glue\n  transitionAfter: get(pb, ['transitionAfter'], null),\n\n  // voice & music\n  voice_id         : get(pb, ['voice.id'], null),\n  voice_displayName: get(pb, ['voice.displayName'], null),\n  music_tempoVal   : get(pbMusic, ['tempoVal'], null),\n  music_vocals     : typeof pbMusic.vocals === 'boolean' ? pbMusic.vocals : null,\n\n  // meta / packs / style\n  meta_route           : get(pb, ['meta.route'], null),\n  meta_style           : get(pb, ['meta.styleTone.style'], null),\n  meta_tone            : get(pb, ['meta.styleTone.tone'], null),\n  meta_templates       : Array.isArray(get(pb, ['meta.templates'])) ? get(pb, ['meta.templates']) : null,\n  meta_templateSelected: get(pb, ['meta.templateSelected'], null),\n\n  pack_musicPack : get(pb, ['meta.packs.musicPack'], null),\n  pack_lookPack  : get(pb, ['meta.packs.lookPack'], null),\n  pack_stylePack : get(pb, ['meta.packs.stylePack'], null),\n  pack_motionPack: get(pb, ['meta.packs.motionPack'], null),\n  pack_propsPack : get(pb, ['meta.packs.propsPack'], null),\n  pack_mouthPack : get(pb, ['meta.packs.mouthPack'], null),\n  pack_basePack  : get(pb, ['meta.packs.basePack'], null),\n\n  // prompts\n  negPromptTail: get(pb, ['negPromptTail'], null),\n};\n\n// ---------- 7) Branch input URLs ----------\nconst captionsInputUrl =\n  get(s, ['captionsInputUrl']) ??\n  get(j, ['captionsInputUrl']) ??\n  finalUrl ?? null;\n\nconst musicInputUrl =\n  get(s, ['musicInputUrl']) ??\n  get(j, ['musicInputUrl']) ??\n  finalUrl ?? null;\n\ns.captionsInputUrl = captionsInputUrl;\ns.musicInputUrl    = musicInputUrl;\n\n// ---------- 8) Useful pass-throughs ----------\nconst voice = pb.voice || null;\nconst strictness = pbRender.strictness ?? null;\n\n// ---------- 9) Assemble handoff payload ----------\nconst out = {\n  // canonical link\n  finalUrl,\n\n  // what to run\n  doCaptions,\n  doMusic,\n  doHD,                 // <--- NEW FLAG\n\n  // inputs for each branch\n  captionsInputUrl,\n  musicInputUrl,\n\n  // media tech context\n  durationSec,\n  fps,\n  resolution,\n  routeUsed,\n\n  // expose full settings blocks (from EDL meta.settings, merged into settings)\n  music:    { enabled: doMusic,    prompt: musicPrompt,    ...metaMusic },\n  captions: { enabled: doCaptions,                        ...metaCaptions },\n\n  // music config helpers\n  musicPack,\n  musicPrompt,\n  musicHints,\n\n  // explicit fields expected by the music sub-workflow\n  musicVolume,\n  voiceVolume,\n  includeVocals,\n  vocals: includeVocals, // alias for backward-compat consumers\n\n  // captions config helpers\n  captionsHints,\n\n  // piggybank (full + flattened subset)\n  piggybank: pb,\n  piggybank_flat,\n\n  // extras commonly needed downstream\n  voice,\n  strictness,\n\n  // keep raw settings/meta if anyone downstream needs them\n  settings: s,\n  edl_meta: edl?._meta || {},\n  _meta   : j._meta || {}\n};\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        -80
+      ],
+      "id": "300d3410-cea2-4eb8-ac26-fcd012106fb6",
+      "name": "Settings Handoff"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4e2222a-4496-4df6-ba6a-0c813c976f3b",
+              "leftValue": "={{ $json.doCaptions }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        -80
+      ],
+      "id": "7011e757-ea0c-46dd-ad0b-f6f4c5f71b5f",
+      "name": "If Captions"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2b385af5-ca1d-411a-b25c-47c29ec3b3e8",
+              "leftValue": "={{ $json.settings.doMusic }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        160
+      ],
+      "id": "46e5a358-44f7-43ea-9159-d117b80c0707",
+      "name": "If Music"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "49621c94-fc94-48a1-9163-bf361020f8c1",
+              "name": "finalVideoUrl",
+              "value": "={{ $json.finalVideoUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "aba5bb01-77bc-41ba-81e0-2e9e5ac6d882",
+              "name": "requestId",
+              "value": "={{$item(0).$node['Set requestId'].json.requestId}}",
+              "type": "string"
+            },
+            {
+              "id": "27619b8d-0917-4441-ae43-a0e4f7bd56d7",
+              "name": "userEmail",
+              "value": "={{$item(0).$node['Set requestId'].json.body.ui.userEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "4f70c6e8-37f7-4972-9a94-616afaa2f9c7",
+              "name": "userFirstName",
+              "value": "={{$item(0).$node['Set requestId'].json.body.ui.userFirstName }}",
+              "type": "string"
+            },
+            {
+              "id": "b291d387-3aa7-40ef-8f39-0f524dabbbfb",
+              "name": "userLastName",
+              "value": "={{$item(0).$node['Set requestId'].json.body.ui.userLastName }}",
+              "type": "string"
+            },
+            {
+              "id": "c7023b1d-6ed8-4eba-89c2-feeddf08f9c1",
+              "name": "title",
+              "value": "={{ $('Set requestId').first().json.body.ui.title }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1840,
+        560
+      ],
+      "id": "94306c43-d78b-4845-a6a3-70576e7f24d4",
+      "name": "Final Video URL"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Video Output — choose the delivery URL and attach metadata\n// Priority: HD → music → captions → original\n\nconst j = $json;\nconst s = j.settings || {};\n\n// -------- helpers --------\nconst first = (arr) => Array.isArray(arr) && arr.length ? arr[0] : null;\nconst safe  = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);\n\nconst normBool = (v) => {\n  if (typeof v === 'boolean') return v;\n  if (typeof v === 'string') return v.toLowerCase() === 'true';\n  return false;\n};\n\n// -------- URLs from new schema + fallbacks --------\n\n// HD / upscaled\nconst hdUrl =\n  safe(j.hd_url) ||\n  safe(j.upscaled_video_url) ||\n  null;\n\n// Music\nlet musicUrl =\n  safe(j.music_url) ||\n  safe(j['music-url']) ||\n  safe(s.musicInputUrl) ||\n  safe(first(j?.edl?.tracks?.music)?.clips?.[0]?.src) ||\n  null;\n\n// Captions\nlet captionsUrl =\n  safe(j.captions_url) ||\n  safe(j['captions-url']) ||\n  safe(j.caption_url) ||\n  safe(j['captioned-url']) ||\n  safe(j.captioned_url) ||\n  safe(s.captionsInputUrl) ||\n  safe(first(j?.edl?.tracks?.captions)?.clips?.[0]?.src) ||\n  null;\n\n// Original/base video\nconst originalUrl =\n  safe(j.original_file_url) ||\n  safe(j.file_url) ||\n  safe(j.response?.[0]?.file_url) ||\n  safe(j.finalUrl) ||\n  safe(j['final-url']) ||\n  safe(j.finalVideoUrl) ||\n  safe(j.originalVideoUrl) ||\n  null;\n\n// -------- Flags --------\nconst doHD        = normBool(j.doHD ?? s.doHD);\nconst doMusic     = normBool(j.doMusic ?? s.doMusic);\nconst doCaptions  = normBool(j.doCaptions ?? s.doCaptions);\n\n// -------- Selection: HD → music → captions → original --------\nlet finalVideoUrl = originalUrl;\nlet source = 'original';\n\nif (doHD && hdUrl) {\n  finalVideoUrl = hdUrl;\n  source = 'hd';\n} else if (doMusic && musicUrl) {\n  finalVideoUrl = musicUrl;\n  source = 'music';\n} else if (doCaptions && captionsUrl) {\n  finalVideoUrl = captionsUrl;\n  source = 'captions';\n}\n\n// Extra resilience: if flags lie but we still have URLs, pick best available.\nif (!finalVideoUrl) {\n  finalVideoUrl =\n    hdUrl ||\n    musicUrl ||\n    captionsUrl ||\n    originalUrl ||\n    null;\n\n  if (finalVideoUrl === hdUrl) source = 'hd';\n  else if (finalVideoUrl === musicUrl) source = 'music';\n  else if (finalVideoUrl === captionsUrl) source = 'captions';\n  else source = 'original';\n}\n\n// -------- Meta block for downstream nodes --------\nconst meta = {\n  source,\n  doHD: !!doHD,\n  doMusic: !!doMusic,\n  doCaptions: !!doCaptions,\n  urls: {\n    hd: hdUrl,\n    music: musicUrl,\n    captions: captionsUrl,\n    original: originalUrl,\n  },\n  fps: j.fps ?? s.fps ?? null,\n  resolution: j.resolution ?? s.resolution ?? null,\n  durationSec: j.durationSec ?? s.length_sec ?? j.length_sec ?? null,\n  routeUsed: j.routeUsed ?? s.routeUsed ?? null,\n  musicPack: j.musicPack ?? s.musicPack ?? null,\n  musicPrompt: j.musicPrompt ?? s.musicPrompt ?? null,\n  inputs: {\n    captionsInputUrl: s.captionsInputUrl ?? null,\n    musicInputUrl:    s.musicInputUrl ?? null,\n  },\n};\n\nreturn [{\n  json: {\n    finalVideoUrl: finalVideoUrl || null,\n    meta,\n    requestId: j.requestId ?? s.requestId ?? null,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        560
+      ],
+      "id": "17e1368f-3141-4adf-9a52-80a958bb22e9",
+      "name": "User Picked URL"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "SeRiGT3xn6jlPaJL",
+          "mode": "list",
+          "cachedResultName": "B-Roll Video"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        -32
+      ],
+      "id": "c3c86523-2204-4f6f-b6bd-75dd9c6bce4b",
+      "name": "Exec B-Roll Video",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sceneme",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        80
+      ],
+      "id": "936cf766-2b33-4fde-a975-0b0f8104ab2a",
+      "name": "Webhook",
+      "webhookId": "777de57b-2344-4e85-8c1a-76d4b12c617a"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"jobId\": {{ $json.requestId }},\n  \"statusUrl\": \"https://n8n.simplifies.click/webhook/status?jobId={{ $json.requestId }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -416,
+        -112
+      ],
+      "id": "fc616bd2-3a71-4a9a-ab02-a24a896a025b",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simplifies.click/webhook/status/update",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jobId\": \"{{$json.requestId}}\",\n  \"status\": \"PROCESSING\",\n  \"meta\": { \"stage\": \"processing\" }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -144,
+        -112
+      ],
+      "id": "75ed8f39-2476-43bf-ba39-288bd21b874a",
+      "name": "Status: queued/processing",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simplifies.click/webhook/status/update",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jobId\": \"{{$item(0).$node['Set requestId'].json.requestId}}\",\n  \"status\": \"DONE\",\n  \"finalVideoUrl\": \"{{$json.finalVideoUrl || $json.url || $json.videoUrl}}\",\n  \"meta\": { \"stage\": \"completed\" }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1984,
+        560
+      ],
+      "id": "023d1e46-4068-4f15-843a-166de38ea476",
+      "name": "Status: Done"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0b1f7f92-6fc8-4224-96a5-d5d197e9fb95",
+              "name": "requestId",
+              "value": "={{ $executionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        80
+      ],
+      "id": "11510440-5fcb-40b9-bc66-ec934e8ac3d4",
+      "name": "Set requestId"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n    \"headers\": {\n      \"host\": \"n8n.simplifies.click\",\n      \"user-agent\": \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36\",\n      \"content-length\": \"717\",\n      \"accept\": \"*/*\",\n      \"accept-encoding\": \"gzip, deflate, br, zstd\",\n      \"accept-language\": \"en-US,en;q=0.9\",\n      \"cache-control\": \"no-cache\",\n      \"content-type\": \"application/json\",\n      \"origin\": \"https://sceneme.ai\",\n      \"pragma\": \"no-cache\",\n      \"priority\": \"u=1, i\",\n      \"referer\": \"https://sceneme.ai/\",\n      \"sec-ch-ua\": \"\\\"Not)A;Brand\\\";v=\\\"8\\\", \\\"Chromium\\\";v=\\\"138\\\", \\\"Google Chrome\\\";v=\\\"138\\\"\",\n      \"sec-ch-ua-mobile\": \"?0\",\n      \"sec-ch-ua-platform\": \"\\\"macOS\\\"\",\n      \"sec-fetch-dest\": \"empty\",\n      \"sec-fetch-mode\": \"cors\",\n      \"sec-fetch-site\": \"cross-site\",\n      \"via\": \"2.0 Caddy\",\n      \"x-forwarded-for\": \"23.113.216.173\",\n      \"x-forwarded-host\": \"n8n.simplifies.click\",\n      \"x-forwarded-proto\": \"https\"\n    },\n    \"params\": {},\n    \"query\": {},\n    \"body\": {\n      \"ui\": {\n        \"scene\": \"hgvkjhvkvkjbvkjgvkjvkjgcvljvcjlglglvljgvkjgv\",\n        \"driver\": \"character\",\n        \"wantsCutaways\": false,\n        \"character\": \"uitfiuyfuhgkhgfkhjgkjhgkhgkjhghgkjhkjfkjvk\",\n        \"setting\": \"hgckhgchgckhgchgckhchjcgghcjcfhsfbsfbfbefgb\",\n        \"action\": \"gbsgbsbhgchgcjkghkhvckhgfkghkghk\",\n        \"directorsNotes\": \"kykhvcjhkhvcjhchcgjkhkjghcjhcg\",\n        \"wantsMusic\": true,\n        \"musicDesc\": \"ygckhckhgckvhckhgckhcgjkghcjhgcjhgc\",\n        \"wantsCaptions\": true,\n        \"durationSec\": 45,\n        \"referenceText\": \"utfgkckgkgvkgvkgcvkgckhgcvkhgkgvkgh\",\n        \"voiceId\": \"fe3b2cea-969a-4b5d-bc90-fde8578f1dd5\",\n        \"characterGender\": \"female\",\n        \"title\": \"yufcjhgcjhcfhjgch\",\n        \"characterName\": \"hgckhgchgkgckh\",\n        \"advanced\": {\n          \"enabled\": true,\n          \"style\": \"Photorealistic\",\n          \"musicVolume\": 0.1,\n          \"voiceVolume\": 1,\n          \"includeVocals\": true\n        }\n      }\n    },\n    \"webhookUrl\": \"https://n8n.simplifies.click/webhook/sceneme\",\n    \"executionMode\": \"production\",\n    \"requestId\": \"35968\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        336,
+        -352
+      ],
+      "id": "f3f9eb34-b9e4-41ff-a154-1ce17e889557",
+      "name": "Sample Payload"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        144,
+        -352
+      ],
+      "id": "94977d83-0223-449d-8282-6d603576ff6b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Normalize → Plan (RenderPlanV2)\n * - Works with flat or { ui, defaults } payloads.\n * - Routing rules:\n *   character + wantsCutaways=true  → combo\n *   character + wantsCutaways=false → aroll\n *   narrator                        → broll\n */\n\nconst DEF_VOICE_ID = 'fe3b2cea-969a-4b5d-bc90-fde8578f1dd5';\nconst ROUNDING_DECIMALS = 3;\nconst PADDING_SEC = 0.050;\nconst TOLERANCE_SEC = 0.033;\n\nfunction pick(v, ...alts){ for (const x of [v, ...alts]) if (x !== undefined && x !== null && x !== '') return x; }\nfunction clampRes(aspect='16:9'){\n  switch (String(aspect)) {\n    case '9:16': return { width: 576, height: 1024 };\n    case '1:1':  return { width: 1024, height: 1024 };\n    case '4:5':  return { width: 819, height: 1024 };\n    case '16:9':\n    default:     return { width: 1024, height: 576 };\n  }\n}\n\nconst ALLOWED_ROUTES = new Set(['aroll','broll','podcast','combo','music']);\nfunction deriveRoute({ explicit, driver, wantsCutaways }) {\n  const ex = String(explicit || '').toLowerCase().trim();\n  if (ex && ALLOWED_ROUTES.has(ex)) return ex;\n\n  const d = String(driver || '').toLowerCase().trim();\n  const cut = Boolean(wantsCutaways);\n\n  if (d === 'character' &&  cut) return 'combo';\n  if (d === 'character' && !cut) return 'aroll';\n  if (d === 'narrator')          return 'broll';\n  return 'aroll';\n}\n\nconst ROUTE_INDEX = { aroll: 1, broll: 2, podcast: 3, combo: 4, music: 5 };\n\n// Support webhook-style { body } or direct JSON\nconst root = $json.body ?? $json;\nconst ui   = root.ui || {};\nconst defs = root.defaults || {};\n\n// Inputs (prefer flat, then ui.*, then defaults where it makes sense)\nconst explicitRoute = pick(root.videoType, root.route, ui.videoType, ui.route);\nconst driver        = pick(root.driver, ui.driver);\nconst wantsCutaways = pick(root.wantsCutaways, ui.wantsCutaways);\n\nlet routeOut = deriveRoute({ explicit: explicitRoute, driver, wantsCutaways });\n\n// Optional music override\nif (root.videoType === 'music' || ui.videoType === 'music' || root.wantsMusicVideo === true) {\n  routeOut = 'music';\n}\n\nconst requestId = pick($json.requestId, root.requestId, ui.requestId, null);\nconst aspect    = String(pick(root.flags?.aspect, ui.flags?.aspect, '16:9'));\nconst fps       = Number(pick(root.flags?.fps, ui.flags?.fps, defs.fps, 30)) || 30;\nconst resolution= clampRes(aspect);\nconst totalDurationSec = Number(pick(root.durationSec, ui.durationSec, 30)) || 30;\n\nconst voiceId = pick(root.voiceId, ui.voiceId, defs.voiceId, DEF_VOICE_ID);\nconst wps     = Number(pick(root.wps, ui.wps, defs.wps, 2.5)) || 2.5;\nconst wpm     = Number(pick(root.wpm, ui.wpm, defs.wpm, 150)) || 150;\nconst title   = pick(root.title, ui.title, defs.title, 'Untitled');\n\nconst wantsCaptions = !!pick(root.wantsCaptions, ui.wantsCaptions, false);\nconst wantsMusic    = !!pick(root.wantsMusic, ui.wantsMusic, false);\n\nconst switchIndex = ROUTE_INDEX[routeOut] ?? 1;\n\nconst envelope = {\n  kind: 'RenderPlanV2',\n  requestId,\n  title,\n  route: routeOut,\n  routeUsed: routeOut,\n  videoType: routeOut,\n  totalDurationSec,\n  flags: {\n    captions: wantsCaptions,\n    music: wantsMusic,\n  },\n  speech: { wps, wpm, voiceId },\n  settings: {\n    resolution, fps, aspect,\n    respectKeyframes: false,\n    strictness: 0.6,\n    seedLock: false\n  },\n  constraints: {\n    rounding: ROUNDING_DECIMALS,\n    paddingSec: PADDING_SEC,\n    toleranceSec: TOLERANCE_SEC\n  },\n  dispatch: {\n    index: switchIndex,\n    map: ROUTE_INDEX\n  },\n  // Keep original payload for audit\n  source: {\n    ...root,\n    characterGender: pick(root.characterGender, ui.characterGender, 'unspecified'),\n    characterName:  pick(root.characterName,  ui.characterName,  'Host'),\n    // Explicitly check $json level first\n    user_character_url: pick($json.user_character_url, root.user_character_url, ui.user_character_url)\n  },\n  _meta: {\n    receivedAt: new Date().toISOString(),\n    requestId\n  }\n};\n\nreturn [{ json: envelope }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        112
+      ],
+      "id": "6fd2ea31-8289-4a3e-a7d0-f98548f02f9c",
+      "name": "Normalize → Plan"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2048,
+        -64
+      ],
+      "id": "3d67a060-5a28-4f84-8944-78d1721f2de2",
+      "name": "Set Captions URL"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dec4b7e9-9d9e-4345-913a-7d8b784f88c9",
+              "name": "file_url",
+              "value": "={{ $json.response[0].file_url }}",
+              "type": "string"
+            },
+            {
+              "id": "307e8d8f-5f8e-48f1-819b-3b2a7ebb9449",
+              "name": "doMusic",
+              "value": "={{ $json.doMusic }}",
+              "type": "string"
+            },
+            {
+              "id": "3102230b-2f12-4a76-9d87-a9c6c01a4241",
+              "name": "doCaptions",
+              "value": "={{ $json.doCaptions }}",
+              "type": "string"
+            },
+            {
+              "id": "3977237c-2d92-42b2-9340-a0c8f9f09d40",
+              "name": "doHD",
+              "value": "={{ $json.doHD }}",
+              "type": "string"
+            },
+            {
+              "id": "d0da3fec-4fb0-4b36-bd33-887d525a9dae",
+              "name": "captions_url",
+              "value": "={{ $json.captions_url }}",
+              "type": "string"
+            },
+            {
+              "id": "db3fae87-2c40-4347-bb85-78b148a6669e",
+              "name": "music_url",
+              "value": "={{ $json.music_url }}",
+              "type": "string"
+            },
+            {
+              "id": "8a934a8b-f495-4fe2-b6c2-a9749ed15b45",
+              "name": "title",
+              "value": "={{ $('Set requestId').first().json.body.ui.title }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2048,
+        176
+      ],
+      "id": "f10ae525-1344-4396-87ac-7b5748eaa8ec",
+      "name": "Set Music URL"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ds7aM9j4Zz6X6EIe",
+          "mode": "list",
+          "cachedResultName": "Final Render"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1904,
+        -384
+      ],
+      "id": "a8a68bf2-7ee1-4349-af8e-b2459345dc08",
+      "name": "Exec Final Render",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $('Respond to Webhook').item.json.body.ui.userEmail }}",
+        "upsertAttributes": {
+          "upsertAttributesValues": [
+            {
+              "fieldName": "FIRSTNAME",
+              "fieldValue": "={{ $('Respond to Webhook').item.json.body.ui.userFirstName }}"
+            },
+            {
+              "fieldName": "LASTNAME",
+              "fieldValue": "={{ $('Respond to Webhook').item.json.body.ui.userLastName }}"
+            }
+          ]
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.sendInBlue",
+      "typeVersion": 1,
+      "position": [
+        384,
+        -112
+      ],
+      "id": "047240e6-f2f6-4eba-ad28-95addf51bf17",
+      "name": "Upsert a contact",
+      "credentials": {
+        "sendInBlueApi": {
+          "id": "OxXT8ANooxTJNnbn",
+          "name": "Brevo account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "subject": "We are processing your SceneMe request!",
+        "textContent": "=Hi {{ $('Respond to Webhook').item.json.body.ui.userFirstName }},\n\nWe have received your request and are processing your video. This process could take a couple of hours. We will email you as soon as it's ready. \n\nThanks for using SceneMe!",
+        "sender": "support@sceneme.ai",
+        "receipients": "={{ $('Respond to Webhook').item.json.body.ui.userEmail }}",
+        "additionalFields": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.sendInBlue",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -112
+      ],
+      "id": "d32b10f3-4f25-4418-9a1c-d925165216af",
+      "name": "Request Received Email",
+      "credentials": {
+        "sendInBlueApi": {
+          "id": "OxXT8ANooxTJNnbn",
+          "name": "Brevo account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "subject": "Your SceneMe video is ready!",
+        "textContent": "=Hi {{ $('Final Video URL').item.json.userFirstName }},\n\nYour SceneMe video \"{{ $('Final Video URL').item.json.title }}\" is ready:\n{{ $('Final Video URL').item.json.finalVideoUrl }}\n\nThanks for using SceneMe!",
+        "sender": "support@sceneme.ai",
+        "receipients": "={{ $('Final Video URL').item.json.userEmail }}",
+        "additionalFields": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.sendInBlue",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        560
+      ],
+      "id": "bad3e79b-de9c-4a03-b26c-33731dda3f77",
+      "name": "Final Video Email",
+      "credentials": {
+        "sendInBlueApi": {
+          "id": "OxXT8ANooxTJNnbn",
+          "name": "Brevo account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ba173a74-7e78-47f9-9bd8-116d586d52dd",
+              "leftValue": "={{ $json.body.ui.research }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        96
+      ],
+      "id": "644d0539-cd1f-4854-a5de-bab742f4632e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DBlRpm0yCBTUacq4",
+          "mode": "list",
+          "cachedResultName": "Research Workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        0
+      ],
+      "id": "f2c9d1a9-601c-4b7d-870f-dea1776653c5",
+      "name": "Exec Research Stage",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "BwlKrDiKVikzBxDm",
+          "mode": "list",
+          "cachedResultName": "Upscaler"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1904,
+        304
+      ],
+      "id": "02b2296d-70ed-4bb0-ad75-0727a7b9d48d",
+      "name": "Execute Upscaler",
+      "alwaysOutputData": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2048,
+        416
+      ],
+      "id": "09de6b09-7ea9-4eba-bee6-8479fd62a454",
+      "name": "Set Upscaled URL"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2b385af5-ca1d-411a-b25c-47c29ec3b3e8",
+              "leftValue": "={{ $json.doHD }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        400
+      ],
+      "id": "1c567298-6f65-42a4-bd3c-a6a7393f84b0",
+      "name": "If HD"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://ldgujihabgikdkoxztnk.supabase.co/rest/v1/express_vods?job_id=eq.{{ $('Set requestId').first().json.requestId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZ3VqaWhhYmdpa2Rrb3h6dG5rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTIzNTA1NywiZXhwIjoyMDY0ODExMDU3fQ.sj6sx27mAtjzwBmNrSeE-B0WFVCExcT1hBWUkoCVycc"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZ3VqaWhhYmdpa2Rrb3h6dG5rIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTIzNTA1NywiZXhwIjoyMDY0ODExMDU3fQ.sj6sx27mAtjzwBmNrSeE-B0WFVCExcT1hBWUkoCVycc"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"video_url\": \"{{ $('Final Video URL').item.json.finalVideoUrl }}\",\n    \"status\": \"completed\"\n  }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        560
+      ],
+      "id": "39ca057e-73d9-47ce-b01b-01c67c3657e3",
+      "name": "Supabase Upsert"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ba173a74-7e78-47f9-9bd8-116d586d52dd",
+              "leftValue": "={{ !!$json.body.ui.characterImage || !!$json.body.ui.settingImage }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -96,
+        80
+      ],
+      "id": "71e6f49e-0f1a-4ce5-a725-aa3a9c6fea62",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0b1f7f92-6fc8-4224-96a5-d5d197e9fb95",
+              "name": "requestId",
+              "value": "={{ $executionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        96
+      ],
+      "id": "4e1fd95f-4b82-4c0c-8573-8051b7f9a7f3",
+      "name": "Set requestId1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "lIccBZ2vcyZBODNM",
+          "mode": "list",
+          "cachedResultName": "Express Keyframe"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        -16
+      ],
+      "id": "9f8afd9d-59c7-423e-8e34-f5895cedd3fa",
+      "name": "Express Keyframe",
+      "retryOnFail": true
+    }
+  ],
+  "pinData": {
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {}
+      }
+    ],
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.simplifies.click",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "content-length": "1618",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "http://localhost:5174",
+            "priority": "u=1, i",
+            "referer": "http://localhost:5174/",
+            "sec-ch-ua": "\"Google Chrome\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "via": "2.0 Caddy",
+            "x-forwarded-for": "23.113.216.173",
+            "x-forwarded-host": "n8n.simplifies.click",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "ui": {
+              "scene": "A spoken work poetry reading on stage with Demarco.",
+              "driver": "character",
+              "wantsCutaways": true,
+              "character": "African American male in his mid twenties. Athletic with expressive tattoos and hair. ",
+              "setting": "Stage of a concert venue",
+              "action": "Demarco recites poetry on stage live ",
+              "wantsMusic": true,
+              "musicCategoryLabel": "Ambient / Soundscape",
+              "wantsCaptions": true,
+              "durationSec": 45,
+              "referenceText": "Get inspiration from the best public spoken word poems online",
+              "research": true,
+              "voiceId": "recording",
+              "voiceUrl": "https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4",
+              "voice_ref_url": "https://nyc3.digitaloceanspaces.com/media-catalog/staging/misc/recording_1766607381595.mp4",
+              "title": "Demarco recites 4",
+              "characterName": "Demarco",
+              "userEmail": "jerick.sebree@gmail.com",
+              "userFirstName": "Jerick",
+              "userLastName": "Sebree",
+              "characterImage": "https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_fullbody_centered?.png",
+              "settingImage": "https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg",
+              "character_image_url": "https://media-catalog.nyc3.digitaloceanspaces.com/characters/Demarco/Demarco_fullbody_centered?.png",
+              "setting_image_url": "https://nyc3.digitaloceanspaces.com/media-catalog/Catalog/misc/unnamed/unnamed_c899df19-f791-4465-9215-1d9bbfa77d5b-u2.jpg",
+              "camera_angle": "Standard",
+              "advanced": {
+                "enabled": true,
+                "style": "Photorealistic",
+                "resolution": "SD",
+                "musicVolume": 0.1,
+                "voiceVolume": 1,
+                "includeVocals": false,
+                "seed": 446625324
+              }
+            },
+            "user_id": "3ad0105d-7dfd-4790-b1c5-9bade4fb2406"
+          },
+          "webhookUrl": "https://n8n.simplifies.click/webhook/sceneme",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Build Final EDL": {
+      "main": [
+        [
+          {
+            "node": "Composer Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Build Final EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Exec A-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec B-Roll Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Podcast Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Combination Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Music Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Caption Builder": {
+      "main": [
+        [
+          {
+            "node": "Set Captions URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Music Builder": {
+      "main": [
+        [
+          {
+            "node": "Set Music URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec A-Roll Video": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Podcast Builder": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Exec Combination Video": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Exec Music Video": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Composer Builder": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Exec Final Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Settings Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings Handoff": {
+      "main": [
+        [
+          {
+            "node": "If Captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Captions": {
+      "main": [
+        [
+          {
+            "node": "Execute Caption Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Captions URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Music": {
+      "main": [
+        [
+          {
+            "node": "Execute Music Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Music URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Picked URL": {
+      "main": [
+        [
+          {
+            "node": "Final Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec B-Roll Video": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set requestId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Status: queued/processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Video URL": {
+      "main": [
+        [
+          {
+            "node": "Status: Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set requestId": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Payload": {
+      "main": [
+        []
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Sample Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize → Plan": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Set Captions URL": {
+      "main": [
+        [
+          {
+            "node": "If Music",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Music URL": {
+      "main": [
+        [
+          {
+            "node": "If HD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Final Render": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: Done": {
+      "main": [
+        [
+          {
+            "node": "Final Video Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: queued/processing": {
+      "main": [
+        [
+          {
+            "node": "Upsert a contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert a contact": {
+      "main": [
+        [
+          {
+            "node": "Request Received Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Received Email": {
+      "main": [
+        []
+      ]
+    },
+    "Final Video Email": {
+      "main": [
+        [
+          {
+            "node": "Supabase Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Exec Research Stage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize → Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Research Stage": {
+      "main": [
+        [
+          {
+            "node": "Normalize → Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Upscaler": {
+      "main": [
+        [
+          {
+            "node": "Set Upscaled URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Upscaled URL": {
+      "main": [
+        [
+          {
+            "node": "User Picked URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If HD": {
+      "main": [
+        [
+          {
+            "node": "Execute Upscaler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Upscaled URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Express Keyframe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set requestId1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set requestId1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Express Keyframe": {
+      "main": [
+        [
+          {
+            "node": "Set requestId1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "14f94678-5610-452b-a292-18e47a6307d9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "CkWscC9R4X3hMPWj",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:49:19.870Z",
+      "updatedAt": "2025-08-06T22:49:19.870Z",
+      "id": "7BgaVxTNl6wr5BOb",
+      "name": "A_Roll"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:02.962Z",
+      "updatedAt": "2025-08-06T22:47:02.962Z",
+      "id": "CcATkP7FsY4Teqyg",
+      "name": "Top_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:56.080Z",
+      "updatedAt": "2025-08-06T22:46:56.080Z",
+      "id": "CodCjTuynsKNPV8y",
+      "name": "Orchestrator"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:39.172Z",
+      "updatedAt": "2025-08-06T22:51:39.172Z",
+      "id": "GZCCJX14sms6Bt1x",
+      "name": "Storytelling"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:51.457Z",
+      "updatedAt": "2025-08-06T22:48:51.457Z",
+      "id": "M6BBFx48bh9V36J5",
+      "name": "Combo"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:15.867Z",
+      "updatedAt": "2025-08-06T22:48:15.867Z",
+      "id": "lRzQwQcNU2q4zzyp",
+      "name": "Video"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:48.571Z",
+      "updatedAt": "2025-08-06T22:47:48.571Z",
+      "id": "rSILtO5ZKdvpHV5p",
+      "name": "Music"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:19.190Z",
+      "updatedAt": "2025-08-06T22:51:19.190Z",
+      "id": "sMtJ7F5avoY8zMs5",
+      "name": "B_Roll"
+    },
+    {
+      "createdAt": "2025-08-06T22:50:20.731Z",
+      "updatedAt": "2025-08-06T22:50:20.731Z",
+      "id": "xwe3xqTwV9DYlfAh",
+      "name": "Podcast"
+    }
+  ]
+}

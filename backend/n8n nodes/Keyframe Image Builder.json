@@ -1,0 +1,628 @@
+{
+  "name": "Keyframe Image Builder",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33344dd9-529c-4682-89d7-a74d1ed44020",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "173f5db6-f057-48b3-8802-eeb51b936a16",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        16
+      ],
+      "id": "e2c09ac9-6027-4278-8587-5839ebcc1630",
+      "name": "Wait",
+      "webhookId": "a13b7337-5472-4d40-9ad7-85aa19cb8d58"
+    },
+    {
+      "parameters": {
+        "jsCode": "// T2I → RunPod SDXL Job Builder (composer-aligned: per-clip generation, A-roll-only framing)\n// INPUT: items[0].json.t2i = { title, route, resolution, clips[], piggybank:{render,layout,packs} }\n//        Each clip may include meta.generation { guidance_scale, num_inference_steps, seed }\n// OUTPUT: one RunPod job per clip:\n// { json: { shotKey, segId, beatId, shotId, id, type, input:{...}, _meta:{...} } }\n\nconst root = items[0]?.json || {};\nconst t2i  = root.t2i || root;\n\nconst pbRender = t2i.piggybank?.render || {};\nconst packs    = t2i.piggybank?.packs  || {};\nconst resIn    = t2i.resolution || pbRender || {};\n\nconst widthDefault  = Number(resIn.width  ?? 1024);\nconst heightDefault = Number(resIn.height ?? 576);\nconst strict        = Number(pbRender.strictness ?? 0.6);\nconst seedLock      = Boolean(pbRender.seedLock);\n\nconst title = (t2i.title || \"\").trim();\n\n// ---- strictness → defaults (used ONLY if clip.meta.generation is absent) ----\nconst defaultSteps    = Math.max(20, Math.min(50, Math.round(28 + strict * 14))); // widened to 20..50\nconst defaultGuidance = Math.max(5.0, Math.min(12.0, 6.5 + strict * 3.0));       // widened to 5.0..12.0\n\n// ---------- utils ----------\nfunction clean(s) {\n  return (s == null ? \"\" : String(s))\n    .replace(/[\\u2018\\u2019\\u201B]/g, \"'\")\n    .replace(/[\\u201C\\u201D\\u201F]/g, '\"')\n    .replace(/\\u2026/g, \"...\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\nfunction dedupeCsv(s) {\n  const seen = new Set();\n  return clean(s)\n    .split(\",\")\n    .map(x => x.trim())\n    .filter(x => x && (!seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())))\n    .join(\", \");\n}\n// Light phrase scrub: collapse repeated key chunks (e.g., duplicated subject phrase)\nfunction dedupeKeyPhrases(s) {\n  let out = clean(s);\n  out = out.replace(/(baby version of [^,]+),(?:\\s*\\1)+/ig, \"$1\");\n  return out;\n}\n\n// ---- Anti-text policy -------------------------------------------------------\nconst NEG_TEXT_BLOCK = [\n  \"text\",\"letters\",\"typography\",\"lettering\",\"handwriting\",\"calligraphy\",\n  \"caption\",\"subtitles\",\"closed captions\",\n  \"watermark\",\"signature\",\"logo\",\"icon\",\"badge\",\"emblem\",\"sticker\",\"label\",\"tag\",\"branding\",\n  \"poster text\",\"signage\",\"screen UI\",\"overlay\",\"lower-third\",\"ticker\",\"ASCII\",\"glyphs\",\"alphanumeric\",\"HUD\",\"infographic\",\"QR code\"\n].map(t => \"(\" + t + \":1.3)\").join(\", \");\n\nfunction stripTextPhrasesFromPositive(p) {\n  return p\n    .replace(/\\b(no\\s+edge\\s+text(?:\\s+or\\s+watermarks)?|no\\s+text|without\\s+text|watermark(?:s)?|logo(?:s)?|subtitles?|captions?)\\b/ig, \"\")\n    .replace(/\\s*,\\s*,/g, \", \").replace(/\\s{2,}/g, \" \").trim();\n}\n\n// Gentle composition bias to avoid places text often appears\nconst TEXT_SAFE_HINTS = \"unbranded equipment, blank surfaces, clean studio background\";\n\n// ---- Framing policy (A-roll only; do not constrain B-roll) -------------------\nfunction applyFramingPolicy(clipType, p) {\n  if ((clipType || \"\").toLowerCase() !== \"aroll\") return p;\n\n  // Do not overwrite explicit framing if already specified\n  const hasExplicitFraming = /\\b(wide|medium|close-?up|three-quarters?|over[-\\s]?the[-\\s]?shoulder|OTS|profile|eye-?level)\\b/i.test(p);\n\n  let out = p;\n\n  // soften extremes, but only for A-roll\n  out = out.replace(/extreme\\s+close-?up/ig, \"medium close-up\");\n\n  if (!hasExplicitFraming) {\n    // gentle defaults without forcing \"camera-facing\"\n    const ensureOnce = (phrase) => {\n      const re = new RegExp(\"\\\\b\" + phrase.replace(/[.*+?^${}()|[\\\\]\\\\\\\\]/g, \"\\\\$&\") + \"\\\\b\", \"i\");\n      if (!re.test(out)) out = `${phrase}, ${out}`;\n      out = out.replace(new RegExp(re, \"ig\"), phrase);\n    };\n    ensureOnce(\"eye-level\");\n  }\n\n  return out.replace(/\\s*,\\s*,/g, \", \").replace(/\\s{2,}/g, \" \").trim();\n}\n\n// ---- Pack → flavor phrases ---------------------------------------------------\nfunction packFlavors(packs) {\n  const add = [];\n  const look  = String(packs.lookPack || \"\");\n  const motion= String(packs.motionPack || \"\");\n  const props = String(packs.propsPack || \"\");\n  const mouth = String(packs.mouthPack || \"\");\n  const base  = String(packs.basePack || \"\");\n\n  if (/look_clean_host/i.test(look))              add.push(\"clean studio background\");\n  if (/motion_headtalk/i.test(motion))            add.push(\"subtle head-nod micro-motions, steady framing\");\n  if (/props_podcast_headset_mic/i.test(props))   add.push(\"broadcast headphones and headset mic\");\n  if (/mouth_subtle/i.test(mouth))                add.push(\"natural lip motion\");\n  if (/base_podcast_studio_video/i.test(base))    add.push(\"podcast desk environment, soft bokeh practicals\");\n\n  return Array.from(new Set(add.map(x => x.toLowerCase()))).join(\", \");\n}\nconst flavorTail = packFlavors(packs);\n\n// ---- Deterministic hashing for seed (used only if seedLock and no clip seed) --\nfunction hashSeed(str) {\n  let h = 2166136261 >>> 0; // FNV-1a\n  for (let i = 0; i < str.length; i++) {\n    h ^= str.charCodeAt(i);\n    h = Math.imul(h, 16777619);\n  }\n  return (h & 0x7fffffff);\n}\n\n// ---- Build jobs --------------------------------------------------------------\nconst clips = Array.isArray(t2i.clips) ? t2i.clips : [];\n\nconst jobs = clips.map((clip) => {\n  const metaIn = clip.meta && typeof clip.meta === \"object\" ? clip.meta : {};\n  const genIn  = metaIn.generation && typeof metaIn.generation === \"object\" ? metaIn.generation : {};\n\n  // IDs (prefer clip top-level, then meta)\n  const id       = String(clip.id || \"\");\n  const shotKey  = String(clip.shotKey || metaIn.shotKey || \"\");\n  const segId    = String(clip.segId   || metaIn.segId   || \"\");\n  const beatId   = String(clip.beatId  || metaIn.beatId  || \"\");\n  const shotId   = String(clip.shotId  || metaIn.shotId  || id || \"\");\n  const sceneId  = String(clip.sceneId || metaIn.sceneId || \"\");\n  const type     = String(clip.type || metaIn.type || \"\");\n  const route    = String(t2i.route || \"\");\n\n  // Resolution (allow per-clip override via meta.render, else fall back to t2i)\n  const rClip = metaIn.render || {};\n  const width  = Number(rClip.width  ?? widthDefault);\n  const height = Number(rClip.height ?? heightDefault);\n\n  // --- Positive: cleanup → anti-text → framing (A-roll only) → flavors ------\n  let positive = clean(clip.positive || \"\");\n  positive = dedupeKeyPhrases(positive);\n  positive = stripTextPhrasesFromPositive(positive);\n  positive = dedupeCsv(positive);\n  positive = applyFramingPolicy(type, positive);\n  positive = dedupeCsv(`${positive}, ${TEXT_SAFE_HINTS}${flavorTail ? \", \" + flavorTail : \"\"}`);\n\n  // --- Negative: merge + strong anti-text block ------------------------------\n  let negative = clean(clip.negative || \"\");\n  negative = negative.replace(/\\btext artifacts\\b/ig, \"text\");\n  negative = dedupeCsv(`${NEG_TEXT_BLOCK}, ${negative}`);\n\n  // --- Generation params: prefer per-clip meta.generation; fallback to strictness map\n  const steps    = Number.isFinite(Number(genIn.num_inference_steps)) ? Number(genIn.num_inference_steps) : defaultSteps;\n  const guidance = Number.isFinite(Number(genIn.guidance_scale))      ? Number(genIn.guidance_scale)      : defaultGuidance;\n\n  // Seed precedence: meta.generation.seed → seedLock hashing → undefined\n  const seedFromClip = (genIn.seed !== undefined && genIn.seed !== null) ? Number(genIn.seed) : undefined;\n  const seed = (seedFromClip !== undefined)\n    ? seedFromClip\n    : (seedLock ? hashSeed(`${title}::${segId}::${shotKey || id}`) : undefined);\n\n  // Duration passthrough (useful for diagnostics)\n  const durationSec = Number(clip.durationSec ?? metaIn.durationSec ?? 0) || undefined;\n\n  return {\n    json: {\n      // --- Essential IDs on TOP LEVEL ---\n      shotKey,\n      segId,\n      beatId,\n      shotId,\n      id,\n      type,\n\n      // --- INPUT PAYLOAD (Updated for LTX V2) ---\n      input: {\n        prompt: positive,\n        negative_prompt: negative,\n        width,\n        height,\n        num_inference_steps: steps,\n        guidance_scale: guidance,\n        ...(seed !== undefined ? { seed } : {}),\n\n        // NEW: Downstream IDs\n        shot_key: shotKey,\n        shot_id: shotId,\n        seg_id: segId,\n        beat_id: beatId,\n        scene_id: sceneId,\n        clip_id: id,\n        type: type,\n        duration_sec: durationSec\n      },\n\n      // --- Meta (flatten clip.meta last so upstream values can override) ---\n      _meta: {\n        clipId: id,\n        sceneId,\n        segId,\n        type,\n        title,\n        route,\n        modelHint: t2i.modelHint || \"sdxl\",\n        piggybank: t2i.piggybank || {},\n        shotKey,\n        beatId,\n        shotId,\n        durationSec,\n        generation: {\n          guidance_scale: guidance,\n          num_inference_steps: steps,\n          ...(seed !== undefined ? { seed } : {})\n        },\n        ...(metaIn || {})\n      }\n    }\n  };\n});\n\nreturn jobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -208
+      ],
+      "id": "e9643015-96be-46ce-aa43-e9683683f612",
+      "name": "Build SDXL Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse each SDXL result and carry clipId + IDs + type + image_url forward\nreturn items\n  .map(({ json }) => {\n    // --- image url (tolerant) ---\n    const imageUrl =\n      json.image_url ??\n      json.output?.image_url ??\n      json.output?.result?.image_url ??\n      json.output?.image ??\n      null;\n\n    // --- IDs (prefer top-level, then _meta) ---\n    const m       = json._meta || {};\n    const clipId  = json.clipId ?? json.id ?? json.shotId ?? m.clipId ?? m.shotId ?? null;\n\n    const shotKey = json.shotKey ?? m.shotKey ?? null;\n    const segId   = json.segId   ?? m.segId   ?? null;\n    const beatId  = json.beatId  ?? m.beatId  ?? null;\n    const shotId  = json.shotId  ?? m.shotId  ?? clipId ?? null;\n\n    const type    = json.type ?? m.type ?? null; // \"aroll\" | \"broll\"\n\n    if (!clipId || !imageUrl) return null; // skip junk rows safely\n\n    return {\n      json: {\n        // essentials at top-level\n        clipId,\n        shotKey,\n        segId,\n        beatId,\n        shotId,\n        type,\n        image_url: imageUrl,\n        // keep meta for downstream (wins for any extra fields)\n        _meta: json._meta ?? null\n      }\n    };\n  })\n  .filter(Boolean);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        -192
+      ],
+      "id": "23023092-6d6f-40d2-9747-a07b75957d7d",
+      "name": "Parse SDXL Result"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runpod.ai/v2/26db11qogcpri6/status/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "52f8064f-72d2-4177-8ac3-7670e5bf6b39",
+      "name": "Get Keyframe Image",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runpod.ai/v2/26db11qogcpri6/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"input\": {\n    \"prompt\": \"{{ $json.input.prompt }}\",\n    \"negative_prompt\": \"{{ $json.input.negative_prompt }}\",\n    \"width\": {{ $json.input.width }},\n    \"height\": {{ $json.input.height }},\n    \"num_inference_steps\": {{ $json.input.num_inference_steps }},\n    \"guidance_scale\": {{ $json.input.guidance_scale }},\n    \"seed\": -1,\n    \"output\": {\n      \"name\": \"{{ $json._meta.title.replace(/[^a-zA-Z0-9]/g, '_') || 'unnamed' }}\",\n      \"type\": \"scenes\", \n      \"ext\": \"png\",\n      \"root_prefix\": \"Catalog\",\n      \"filename\": \"{name}_{job_id}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        784,
+        0
+      ],
+      "id": "6ef2937c-5029-43b0-a2ac-24347d542334",
+      "name": "Request Keyframe Image",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// pretend your planner gave us 2 clips with prompts\nreturn [{\n  json: {\n    resolution: { width: 1024, height: 1024 },\n    clips: [\n      { id: \"c0\", prompt: \"A wizard on a cliff\",      negative: \"monsters\"       },\n      { id: \"c1\", prompt: \"A dragon breathing fire\",  negative: \"modern vehicles\" }\n    ]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        192
+      ],
+      "id": "47913a8d-de23-4e00-88ad-a275afab693b",
+      "name": "Mock Prompts"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Keyframe EDL (preserve type + logical IDs, prefer higher -u#)\n// Also surface essential IDs (shotKey, segId, beatId, shotId) on all outputs.\n\nconst S = v => (v == null ? \"\" : String(v));\n\nconst input = $items().map(i => i.json || {});\n\n// pull some shared header metadata if available (last write wins)\nlet header = {};\nfor (const j of input) {\n  const m = j._meta || {};\n  if (m && (m.title || m.route || m.modelHint || m.piggybank || m.sceneId)) {\n    header = {\n      title:     m.title     ?? header.title,\n      route:     m.route     ?? header.route,\n      modelHint: m.modelHint ?? header.modelHint,\n      piggybank: m.piggybank ?? header.piggybank,\n      sceneId:   m.sceneId   ?? header.sceneId,\n    };\n  }\n}\n\n// extract numeric \"-u#\" suffix for version preference\nfunction versionOf(idLike) {\n  const m = S(idLike).match(/-u(\\d+)\\b/i);\n  return m ? Number(m[1]) : 0;\n}\n\n// ---- Canonical ID extraction (always try to produce the full quartet)\nfunction extractIds(j) {\n  const m = j._meta || {};\n  const shotKey = (j.shotKey ?? m.shotKey) || \"\";\n  const segId   = (j.segId   ?? m.segId)   || \"\";\n  const beatId  = (j.beatId  ?? m.beatId)  || \"\";\n  const shotId  = (j.shotId  ?? m.shotId)  || \"\";\n\n  // If no shotKey but we have the trio, synth one\n  const sk = shotKey || (segId && beatId && shotId ? `${segId}-${beatId}-${shotId}` : \"\");\n\n  return { shotKey: sk || \"\", segId, beatId, shotId };\n}\n\n// choose the logical id we want to use downstream\n// IMPORTANT: never use _meta.clipId for identity (it was \"S01\" for all)\n// Order: shotKey → {segId-beatId-shotId} (already done in extractIds) → clipId/id\nfunction logicalId(j) {\n  const ids = extractIds(j);\n  if (ids.shotKey) return ids.shotKey;\n  return S(j.clipId || j.id || \"\");\n}\n\n// normalize one record (with essential IDs)\nfunction normalize(j) {\n  const ids  = extractIds(j);\n  const typ  = (j.type != null ? j.type : j?._meta?.type) ?? null;\n  const img  = S(j.image_url || j.src || \"\");\n  const meta = j._meta && typeof j._meta === \"object\" ? j._meta : {};\n\n  // “raw” generator id used only for version ranking (may include -u#)\n  const rawId = S(j.clipId || j.id || \"\");\n\n  return {\n    id:        logicalId(j),   // stable: shotKey or seg-beat-shot\n    type:      typ,            // \"aroll\" | \"broll\" | null\n    image_url: img,\n    // essential IDs (top-level)\n    shotKey:   ids.shotKey || null,\n    segId:     ids.segId   || null,\n    beatId:    ids.beatId  || null,\n    shotId:    ids.shotId  || null,\n    _rawId:    rawId,\n    _version:  versionOf(rawId),\n    _meta:     meta,\n  };\n}\n\n// 1) de-dupe by logical id, preferring higher \"-u#\" version (per shotKey)\nconst byLogical = new Map();\nfor (const j of input) {\n  const n = normalize(j);\n  if (!n.id) continue;\n\n  const prev = byLogical.get(n.id);\n  if (!prev || (n._version ?? 0) >= (prev._version ?? 0)) {\n    byLogical.set(n.id, n);\n  }\n}\n\n// 2) stable array and ordering: keep input order by first appearance of logical id\nconst firstIndexById = new Map();\nfor (let idx = 0; idx < input.length; idx++) {\n  const lid = logicalId(input[idx]);\n  if (lid && !firstIndexById.has(lid)) firstIndexById.set(lid, idx);\n}\n\nlet keyframes = [...byLogical.values()];\nkeyframes.sort((a, b) => {\n  const ia = firstIndexById.get(a.id) ?? Number.MAX_SAFE_INTEGER;\n  const ib = firstIndexById.get(b.id) ?? Number.MAX_SAFE_INTEGER;\n  if (ia !== ib) return ia - ib;\n  // fallback deterministic sort\n  return a.id.localeCompare(b.id);\n});\n\n// 3) Build the EDL (carry meta + essential IDs on each clip)\nconst clips = keyframes.map(k => ({\n  id:      k.id,           // use shotKey (or seg-beat-shot) so each shot stays distinct\n  src:     k.image_url,\n  in:      0,\n  out:     0,\n  type:    k.type,\n  // essential IDs at top-level on clip\n  shotKey: k.shotKey ?? null,\n  segId:   k.segId   ?? null,\n  beatId:  k.beatId  ?? null,\n  shotId:  k.shotId  ?? null,\n  meta:    k._meta,\n}));\n\nconst edl = { tracks: { images: [ { name: \"kf\", clips } ] } };\n\n// 4) Emit keyframes + edl (+ header passthrough for convenience)\nreturn [{\n  json: {\n    keyframes: keyframes.map(k => ({\n      id:        k.id,\n      type:      k.type,\n      src:       k.image_url,\n      image_url: k.image_url,\n      sceneId:   S(k._meta?.sceneId || header.sceneId || \"\"),\n      // essential IDs at top-level\n      shotKey:   k.shotKey ?? null,\n      segId:     k.segId   ?? null,\n      beatId:    k.beatId  ?? null,\n      shotId:    k.shotId  ?? null,\n      meta:      k._meta,\n    })),\n    edl,\n    title:     header.title     ?? undefined,\n    route:     header.route     ?? undefined,\n    modelHint: header.modelHint ?? undefined,\n    piggybank: header.piggybank ?? undefined,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -192
+      ],
+      "id": "0f5e3923-2140-4b53-9786-6b886a8d8e7a",
+      "name": "Build Keyframe EDL"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        112,
+        192
+      ],
+      "id": "61d358d6-174b-4c87-a6a2-eac528f11578",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        416,
+        -144
+      ],
+      "id": "b6a77107-1b25-41f3-aa32-e5fac9084bb7",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        32,
+        -208
+      ],
+      "id": "4c072ef9-3b35-49fa-bcdf-1c8c9fecd84a",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "808fffb3-e566-47f3-a082-db366d230f9c",
+              "name": "id",
+              "value": "={{$json[\"id\"]}}",
+              "type": "string"
+            },
+            {
+              "id": "735d54cc-58aa-463f-96b4-d4c8590d6763",
+              "name": "clipId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json[\"clipId\"]}}",
+              "type": "string"
+            },
+            {
+              "id": "a111fbba-eb42-4ee1-a3e2-1e0cc039058b",
+              "name": "type",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json[\"type\"]}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        992,
+        0
+      ],
+      "id": "3db0683b-b011-4530-aee6-85fa7b61fba3",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7934201a-dc36-4ed1-be57-82afd6314709",
+              "name": "clipId",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json[\"clipId\"]}}",
+              "type": "string"
+            },
+            {
+              "id": "1afd57d3-7af2-4320-a536-2392b990f0b3",
+              "name": "type",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json[\"type\"]}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1376,
+        0
+      ],
+      "id": "3d5e076a-5ad3-4201-a2fe-e080e3f82d3f",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        -192
+      ],
+      "id": "792d1b5c-3d6c-48e3-8777-7e70c99fb073",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {}
+      }
+    ],
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "t2i": {
+            "title": "Zombs",
+            "route": "combo",
+            "resolution": {
+              "width": 960,
+              "height": 544
+            },
+            "modelHint": "sdxl",
+            "clips": [
+              {
+                "id": "AROLL_SHARED",
+                "sceneId": "82225",
+                "type": "aroll",
+                "positive": "(style:1.35) Anime-style, cel shading, clean linework, vibrant flat colors, expressive eyes. (subject:1.3) A green-faced tattered skin clothes ripped zombie with red hair and expressive eyes. (setting:1.2) A campfire at the edge of the woods beside a sleepy old haunted town on Halloween. eye-level medium or medium wide shot, flattering soft key, gentle fill, natural color, cohesive palette. clear view of face when practical; avoid on-frame text or logos",
+                "negative": "lowres, blurry, artifacts, text, watermark, logo, distorted anatomy, extra limbs, photorealistic, realistic, photographic, DSLR, skin pores, film grain",
+                "durationSec": 16.875,
+                "meta": {
+                  "appliesToShotKeys": [
+                    "SEG-01-B01-S01",
+                    "SEG-03-B01-S01"
+                  ],
+                  "order": 1,
+                  "note": "Shared A-roll keyframe (weighted prompt; relaxed framing)",
+                  "generation": {
+                    "guidance_scale": 9,
+                    "num_inference_steps": 48,
+                    "seed": 1724699446
+                  }
+                }
+              },
+              {
+                "id": "SEG-02-B01-S01",
+                "shotKey": "SEG-02-B01-S01",
+                "segId": "SEG-02",
+                "beatId": "B01",
+                "shotId": "S01",
+                "sceneId": "82225",
+                "type": "broll",
+                "positive": "(style:1.3) Anime-style, cel shading, clean linework, vibrant flat colors, expressive eyes. (subject:1.25) A 45 second scary story on Halloween told by a teenage zombie in a dark sleepy haunted Halloween town. A campfire at the edge of the woods beside a sleepy old haunted town on Halloween. A teenage zombie telling a scary story to smaller little zombies Around a campfire. B-Roll cutaways to scenes of the zombies story. (context cue:1.15) Suddenly, a breeze lifts the ashes, and silhouette of a skeletal figure emerges from the darkness, its hollow eyes fixed on us, promising a night of endless terror. cinematic natural light, clean composition, selective focus where appropriate. varied framing when appropriate; faces incidental only; avoid readable text",
+                "negative": "text, logo, watermark, subtitles, lower thirds, readable signage or labels, UI elements, front-facing talking head, direct address to camera, whip pan, rapid zoom, shaky cam, heavy motion blur, strobing, banding, AI artifacts, double subject, distorted anatomy, overexposed highlights, camera, cameras, DSLR, mirrorless camera, camcorder, security camera, CCTV, surveillance camera, viewfinder, camera body, film camera body, camera lens, lens, aperture markings, shutter button, tripod, monopod, gimbal, stabilizer, camera rig, REC icon, recording indicator, frame lines, HUD overlay, timestamp overlay, polaroid camera, instant camera, GoPro, photorealistic, realistic, photographic, DSLR, skin pores, film grain",
+                "durationSec": 11.25,
+                "meta": {
+                  "beatId": "B01",
+                  "shotKey": "SEG-02-B01-S01",
+                  "shotId": "S01",
+                  "order": 2,
+                  "generation": {
+                    "guidance_scale": 8.8,
+                    "num_inference_steps": 44,
+                    "seed": 833801411
+                  }
+                }
+              }
+            ],
+            "piggybank": {
+              "render": {
+                "width": 960,
+                "height": 544,
+                "fps": 30,
+                "aspect": "16:9",
+                "respectKeyframes": false,
+                "strictness": 0.6,
+                "seedLock": false
+              }
+            }
+          },
+          "manifest": {
+            "kfTypeMap": {
+              "AROLL_SHARED": "aroll",
+              "SEG-02-B01-S01": "broll"
+            },
+            "kfSegIdMap": {
+              "AROLL_SHARED": "",
+              "SEG-02-B01-S01": "SEG-02"
+            },
+            "kfShotKeyMap": {
+              "AROLL_SHARED": "",
+              "SEG-02-B01-S01": "SEG-02-B01-S01"
+            },
+            "arollShared": {
+              "AROLL_SHARED": [
+                "SEG-01-B01-S01",
+                "SEG-03-B01-S01"
+              ]
+            }
+          },
+          "jobs": [
+            {
+              "id": "AROLL_SHARED",
+              "type": "aroll",
+              "positive": "(style:1.35) Anime-style, cel shading, clean linework, vibrant flat colors, expressive eyes. (subject:1.3) A green-faced tattered skin clothes ripped zombie with red hair and expressive eyes. (setting:1.2) A campfire at the edge of the woods beside a sleepy old haunted town on Halloween. eye-level medium or medium wide shot, flattering soft key, gentle fill, natural color, cohesive palette. clear view of face when practical; avoid on-frame text or logos",
+              "negative": "lowres, blurry, artifacts, text, watermark, logo, distorted anatomy, extra limbs, photorealistic, realistic, photographic, DSLR, skin pores, film grain",
+              "durationSec": 16.875,
+              "meta": {
+                "appliesToShotKeys": [
+                  "SEG-01-B01-S01",
+                  "SEG-03-B01-S01"
+                ],
+                "order": 1,
+                "note": "Shared A-roll keyframe (weighted prompt; relaxed framing)",
+                "generation": {
+                  "guidance_scale": 9,
+                  "num_inference_steps": 48,
+                  "seed": 1724699446
+                },
+                "type": "aroll",
+                "sceneId": "82225"
+              }
+            },
+            {
+              "id": "SEG-02-B01-S01",
+              "type": "broll",
+              "positive": "(style:1.3) Anime-style, cel shading, clean linework, vibrant flat colors, expressive eyes. (subject:1.25) A 45 second scary story on Halloween told by a teenage zombie in a dark sleepy haunted Halloween town. A campfire at the edge of the woods beside a sleepy old haunted town on Halloween. A teenage zombie telling a scary story to smaller little zombies Around a campfire. B-Roll cutaways to scenes of the zombies story. (context cue:1.15) Suddenly, a breeze lifts the ashes, and silhouette of a skeletal figure emerges from the darkness, its hollow eyes fixed on us, promising a night of endless terror. cinematic natural light, clean composition, selective focus where appropriate. varied framing when appropriate; faces incidental only; avoid readable text",
+              "negative": "text, logo, watermark, subtitles, lower thirds, readable signage or labels, UI elements, front-facing talking head, direct address to camera, whip pan, rapid zoom, shaky cam, heavy motion blur, strobing, banding, AI artifacts, double subject, distorted anatomy, overexposed highlights, camera, cameras, DSLR, mirrorless camera, camcorder, security camera, CCTV, surveillance camera, viewfinder, camera body, film camera body, camera lens, lens, aperture markings, shutter button, tripod, monopod, gimbal, stabilizer, camera rig, REC icon, recording indicator, frame lines, HUD overlay, timestamp overlay, polaroid camera, instant camera, GoPro, photorealistic, realistic, photographic, DSLR, skin pores, film grain",
+              "durationSec": 11.25,
+              "shotKey": "SEG-02-B01-S01",
+              "segId": "SEG-02",
+              "beatId": "B01",
+              "shotId": "S01",
+              "meta": {
+                "beatId": "B01",
+                "shotKey": "SEG-02-B01-S01",
+                "shotId": "S01",
+                "order": 2,
+                "generation": {
+                  "guidance_scale": 8.8,
+                  "num_inference_steps": 44,
+                  "seed": 833801411
+                },
+                "type": "broll",
+                "segId": "SEG-02",
+                "sceneId": "82225"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Keyframe Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SDXL Jobs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse SDXL Result": {
+      "main": [
+        [
+          {
+            "node": "Build Keyframe EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Keyframe Image": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Keyframe Image": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Prompts": {
+      "main": [
+        []
+      ]
+    },
+    "Build Keyframe EDL": {
+      "main": [
+        []
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Mock Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Request Keyframe Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build SDXL Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get Keyframe Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Parse SDXL Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "c72d8bf8-640f-4f8d-9ce4-51a20d32aa97",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "oSGeY21dneGuaMnB",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:47:34.330Z",
+      "updatedAt": "2025-08-06T22:47:34.330Z",
+      "id": "5W4ptl8eNWuki2da",
+      "name": "Base_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:53:30.297Z",
+      "updatedAt": "2025-08-06T22:53:30.297Z",
+      "id": "7xcIe7iR49WMWmDh",
+      "name": "Images"
+    },
+    {
+      "createdAt": "2025-08-06T22:53:24.738Z",
+      "updatedAt": "2025-08-06T22:53:24.738Z",
+      "id": "F7KuBHOcWXLpoaSM",
+      "name": "Keyframe"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:39.172Z",
+      "updatedAt": "2025-08-06T22:51:39.172Z",
+      "id": "GZCCJX14sms6Bt1x",
+      "name": "Storytelling"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:27.709Z",
+      "updatedAt": "2025-08-06T22:47:27.709Z",
+      "id": "RDt1fEwBS590LEn1",
+      "name": "Builder"
+    }
+  ]
+}

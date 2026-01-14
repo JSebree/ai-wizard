@@ -1,0 +1,524 @@
+{
+  "name": "Upscaler",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33344dd9-529c-4682-89d7-a74d1ed44020",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        0
+      ],
+      "id": "f06ba37d-35cb-4959-bcaf-44fdee0769b1",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1472,
+        16
+      ],
+      "id": "b02c22a6-9068-4b9c-865a-2c9e4da2bd9f",
+      "name": "Wait",
+      "webhookId": "4163c95c-9714-48e0-9a7c-58994e6b0e98"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        368,
+        -112
+      ],
+      "id": "5781bd00-a030-477d-89e4-5039bc90462c",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Run Once for All Items\n// We assume your sub-workflow is triggered with a single item:\n//   items[0].json.plan.ttsSegments\n\nconst { ttsSegments } = items[0].json.plan;\n\n// Turn each plan segment into the input shape for your Exec Character Voice Builder:\nconst jobs = ttsSegments.map(seg => ({\n  json: {\n    id:       seg.id,\n    text:     seg.text,\n    voiceId:  seg.voiceId\n  }\n}));\n\nreturn jobs;       // returns N items, one per segment"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        240
+      ],
+      "id": "7d2fa097-17f5-4a5d-b7e2-600c129c5ef9",
+      "name": "Mock Code"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        16,
+        -176
+      ],
+      "id": "596ea15d-d7d7-4cd0-bcc4-a7ff95a0d1e9",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1c4b42c7-e96b-4d87-ae9f-445d22e52034",
+              "name": "jobId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "deb3b058-2a65-4ed9-ae62-10c9cd6828a7",
+              "name": "shotID",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json._expect.id}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        784,
+        0
+      ],
+      "id": "049f1b33-4e14-4fa4-ab2a-2441632ea8fc",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "63cbf27c-74d3-4c6d-aadb-33c7f1a37d6c",
+              "name": "shotID",
+              "value": "={{$item(0).$node[\"Loop Over Items\"].json._expect.id}}",
+              "type": "string"
+            },
+            {
+              "id": "9febf57a-5e85-482e-a121-b5d9d8c3d777",
+              "name": "jobId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "e1b0a1c2-77e7-4fc0-b628-53ddaf682aa7",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        240
+      ],
+      "id": "47814d9a-187c-4540-bb48-bf7af8837372",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        592,
+        -160
+      ],
+      "id": "ac20a5da-1dc6-4fd8-8c1c-6d6a8cf583fb",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Upscale Job — choose best source URL and preserve flags/metadata\n\nconst j = $json || {};\n\n// 1) Pick URL in priority order:\n//    1) response[0].file_url\n//    2) file_url (already flattened)\n//    3) music_url\n//    4) captions_url\nlet incomingUrl =\n  j.response?.[0]?.file_url ||\n  j.file_url ||\n  j.music_url ||\n  j.captions_url ||\n  null;\n\nif (!incomingUrl) {\n  throw new Error('No video URL found (checked response[0].file_url → file_url → music_url → captions_url).');\n}\n\n// 2) Generate a safe filename from the title\nconst rawTitle = (j.title || \"video\").toString().trim();\n\n// Keep only letters, numbers, spaces, hyphens, and underscores, then\n// convert spaces to hyphens and lowercase.\nlet safeTitle = rawTitle\n  .replace(/[^a-zA-Z0-9\\s\\-_]/g, '')   // remove illegal chars\n  .replace(/\\s+/g, '-')                // spaces → hyphens\n  .toLowerCase();\n\nif (!safeTitle) safeTitle = 'video';\n\n// optional uniqueness — timestamp\nconst timestamp = Date.now();\n\n// final filename (no extension—handler will add .mp4 or keep original extension)\nconst outputFilename = `${safeTitle}-${timestamp}`;\n\n// 3) Normalize doHD (handle \"true\"/\"false\" strings)\nlet doHD = j.doHD;\nif (typeof doHD === 'string') {\n  doHD = doHD.toLowerCase() === 'true';\n}\n\n// Choose preset based on doHD (tweak as you like)\nconst preset = doHD ? 'fast' : 'express';\n\n// 4) Return payload for RunPod worker,\n//    while preserving all existing fields on the item.\nreturn {\n  ...j,                      // keep doMusic, doCaptions, doHD, captions_url, music_url, title, etc.\n  input: {\n    video_url: incomingUrl,\n    preset,\n    outscale: 2,\n    output_prefix: 'upscaled/episodes/',\n    output_filename: outputFilename   \n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -176
+      ],
+      "id": "9a0f6aa7-7008-48e3-a4cf-954c49faa96f",
+      "name": "Build Upscale Job"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Upscaler Result (Run Once for Each Item)\n\nfunction normalizeBool(v) {\n  if (typeof v === 'boolean') return v;\n  if (typeof v === 'string') return v.toLowerCase() === 'true';\n  return null;\n}\n\nreturn items.map(item => {\n  const r = item.json || {};\n\n  // RunPod-style output wrapper\n  const output = r.output || r.result || {};\n\n  const url =\n    output.output_url ||\n    output.upscaled_video_url ||\n    output.video_url ||\n    output.url ||\n    null;\n\n  if (!url) {\n    throw new Error('No upscaled video URL found in response.');\n  }\n\n  const doHD        = normalizeBool(r.doHD);\n  const doMusic     = normalizeBool(r.doMusic);\n  const doCaptions  = normalizeBool(r.doCaptions);\n\n  return {\n    json: {\n      // MAIN value for next node\n      upscaled_video_url: url,\n\n      // compatibility for Final Video Output\n      file_url: url,\n      hd_url: url,\n      response: [{ file_url: url }],\n\n      // passthrough\n      original_file_url: r.file_url ?? null,\n      captions_url: r.captions_url ?? null,\n      music_url: r.music_url ?? null,\n      title: r.title ?? null,\n\n      // flags\n      doHD,\n      doMusic,\n      doCaptions,\n\n      // 🔥 FIXED: requestId = id from this RunPod job response\n      requestId: r.id ?? null,\n\n      // debug\n      status: output.status ?? r.status ?? null,\n      jobId: r.id ?? r.jobId ?? null,\n      workerId: r.workerId ?? null,\n    },\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        -160
+      ],
+      "id": "5a7275d4-1f5e-491a-8bb9-cb9a43700f1a",
+      "name": "Parse Upscaler Result"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runpod.ai/v2/vt9zxj81obdvyh/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"input\": $json.input } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        592,
+        0
+      ],
+      "id": "947012ef-d5da-49cd-9dd0-784ac78b4829",
+      "name": "Request Upscale",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.runpod.ai/v2/vt9zxj81obdvyh/status/{{ $json.jobId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "d15bf985-0648-4ac2-b4d0-5de0592086e9",
+      "name": "Get Upscaled Video",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ZWfraTm614GIiwkI",
+          "name": "Llama Script"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b979a9ec-ba5c-43cd-ae66-0d162004927d",
+              "name": "upscaled_video_url",
+              "value": "={{ $json.upscaled_video_url }}",
+              "type": "string"
+            },
+            {
+              "id": "cc74d489-3eb9-483b-a9f0-9381372d0e10",
+              "name": "doHD",
+              "value": "={{ $json.doHD }}",
+              "type": "boolean"
+            },
+            {
+              "id": "4ff81714-a45f-4e0a-be9a-fe8488af57b3",
+              "name": "doMusic",
+              "value": "={{ $json.doMusic }}",
+              "type": "boolean"
+            },
+            {
+              "id": "dfbbc98b-ff38-4da4-a56e-371b255c0c8b",
+              "name": "doCaptions",
+              "value": "={{ $json.doCaptions }}",
+              "type": "boolean"
+            },
+            {
+              "id": "ed12b82b-ed4a-4c4b-bdb0-75caaaa09f06",
+              "name": "captions_url",
+              "value": "={{ $json.captions_url }}",
+              "type": "string"
+            },
+            {
+              "id": "696215bc-7dd3-41da-b9e3-bd984ede7667",
+              "name": "music_url",
+              "value": "={{ $json.music_url }}",
+              "type": "string"
+            },
+            {
+              "id": "c5273b3a-b381-42f1-b220-ab85face2b93",
+              "name": "hd_url",
+              "value": "={{ $json.upscaled_video_url }}",
+              "type": "string"
+            },
+            {
+              "id": "50a612f1-1c41-480c-9918-956309bf9bd6",
+              "name": "original_file_url",
+              "value": "={{ $json.original_file_url }}",
+              "type": "string"
+            },
+            {
+              "id": "33e8bf79-0538-4333-b246-012d52e1aec6",
+              "name": "requestId",
+              "value": "={{ $json.jobId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1472,
+        -160
+      ],
+      "id": "b5b173b9-7efd-440f-b7c1-5efadf1f7685",
+      "name": "Final Video Output"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "file_url": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/960e5bd5-9b1e-4625-96bf-ea7cc831316a_output_0.mp4",
+          "doMusic": "true",
+          "doCaptions": "true",
+          "doHD": "true",
+          "captions_url": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/ad90e1fe-beeb-414d-84f6-7c1b4e51ba27_captioned.mp4",
+          "music_url": "https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/n8n-nca-bucket/960e5bd5-9b1e-4625-96bf-ea7cc831316a_output_0.mp4",
+          "title": "Vancouver vlog"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Upscaled Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Request Upscale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Code": {
+      "main": [
+        []
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build Upscale Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get Upscaled Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Mock Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Parse Upscaler Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Upscale Job": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Upscaler Result": {
+      "main": [
+        [
+          {
+            "node": "Final Video Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Upscale": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Upscaled Video": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "49364b50-a72b-4aba-891e-dcd95a414e91",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "BwlKrDiKVikzBxDm",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:47:34.330Z",
+      "updatedAt": "2025-08-06T22:47:34.330Z",
+      "id": "5W4ptl8eNWuki2da",
+      "name": "Base_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:27.709Z",
+      "updatedAt": "2025-08-06T22:47:27.709Z",
+      "id": "RDt1fEwBS590LEn1",
+      "name": "Builder"
+    }
+  ]
+}

@@ -1,0 +1,801 @@
+{
+  "name": "Final Render",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        288
+      ],
+      "id": "19e7af8b-e773-4537-8899-9bb5165c54e6",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://n8n-nca-toolkit-9mavn.ondigitalocean.app/v1/ffmpeg/compose",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ $json.compose_request }}",
+        "headerParametersJson": "{\n  \"Content-Type\": \"application/json\"\n}"
+      },
+      "name": "Request Final Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -64
+      ],
+      "id": "25c1363d-ae91-4e18-a8fb-daa94cc75b67",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kYUz8gwWtyRXykmg",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compose Final Video — build ffmpeg payload from normalized EDL (route-agonistic)\n// Rules:\n// - A-roll clips: use embedded audio ONLY (no narration overlay).\n// - B-roll clips: overlay narration aligned to absolute EDL time.\n//   • Pure B-roll → narration can span whole timeline (padded if short).\n//   • Combo → narration present only during B-roll windows (padded to cover).\n// - Podcast: still image spans the audio.\n//\n// IMPORTANT:\n// - A-roll is ASSUMED to have embedded audio by default.\n//   You can override per clip via: clip.hasAudio=true  OR  clip._meta.hasAudio=true  OR  clip.audio=true\n//   Or globally via settings.default_aroll_has_audio=false (to opt out).\n\nconst root = $input.item.json || {};\nconst edl = root.edl;\nconst settings = root.settings || {};\nif (!edl) throw new Error('Compose: missing EDL');\n\nconst vTracks   = edl.tracks?.video  || [];\nconst aTracks   = edl.tracks?.audio  || [];\nconst iTracks   = edl.tracks?.images || [];\n\n// ---------- geometry + quality ----------\nconst pbRender = settings.piggybank?.render || {};\nconst fps = Number(settings.fps || pbRender.fps || edl.fps || 30) || 30;\nconst res = {\n  // DEFAULTS CHANGED → 960x544\n  width:  Number(settings.resolution?.width  || pbRender.width  || edl.resolution?.width  || 960) || 960,\n  height: Number(settings.resolution?.height || pbRender.height || edl.resolution?.height || 544) || 544,\n};\nfunction pickCrf(strictness) { const s = Number.isFinite(+strictness) ? +strictness : 0.6; return s>=0.75?18:s>=0.5?20:22; }\nconst crf = pickCrf(pbRender.strictness);\nconst lenSec = Math.max(0, Number(settings.length_sec || edl.length_sec || 0) || 0);\n\n// ---------- webhook ----------\nconst DEFAULT_WEBHOOK = \"https://n8n.simplifies.click/webhook-test/FinalVideo\";\nconst webhookUrl =\n  settings.compose_webhook_url ||\n  settings.webhook_url ||\n  root.compose_request?.webhook_url ||\n  DEFAULT_WEBHOOK;\n\n// ---------- helpers ----------\nconst lower = (s) => String(s ?? '').toLowerCase();\nconst FADE = 0.05; // 50ms narration fades\nconst dur = (c) => {\n  const inn = Number(c?.in)  || 0;\n  const out = Number(c?.out) || 0;\n  const d = Math.max(0, out - (inn ? inn : 0)) || out;\n  return d || Number(c?.durationSec || c?.duration || 0) || 0;\n};\nconst to3 = (x) => (Number(x)||0).toFixed(3);\nfunction sumDur(cs) { return (cs||[]).reduce((s,c)=> s + (dur(c)||0), 0); }\nfunction buildOut({ inputs, parts, outputs, warnings=[], music_prep }) {\n  const compose_request = {\n    id: 'final_compose',\n    inputs,\n    filters: [{ filter: parts.join(';') }],\n    outputs,\n    metadata: { thumbnail:true, filesize:true, duration:true, bitrate:true, encoder:true, warnings, music_prep, program_length: music_prep?.program_length ?? lenSec },\n    webhook_url: webhookUrl,\n  };\n  return [{ json: { edl, settings, compose_request } }];\n}\n\n// ---------- accepted A-roll detector (expanded) ----------\nfunction isAcceptedAroll(c) {\n  const url = String(c?.src || '');\n  // accept either latent_sync_out or infinitetalk_out\n  const pathOK = /\\/a-roll-output\\/(latent_sync_out|infinitetalk_out)\\/[^/]+\\.mp4$/i.test(url);\n  const hasAudioHint = (c?.hasAudio === true) || (c?.audio === true) || (c?._meta?.hasAudio === true);\n  return pathOK || hasAudioHint;\n}\n\n// ---------- collect video (STRICT) ----------\nconst defaultArollHasAudio = (settings.default_aroll_has_audio !== false);\nconst rawVideos = [];\nconst warnings = [];\n\nfor (const tr of vTracks) {\n  for (const c of (tr.clips || [])) {\n    if (!c?.src) continue;\n\n    const declaredType = lower(c.type || tr.name || 'video');\n\n    if (declaredType === 'aroll') {\n      if (!isAcceptedAroll(c)) {\n        warnings.push(`Ignored A-roll clip ${c.id || c.shotKey || '(no-id)'} — URL not an accepted lipsync path and no hasAudio hint.`);\n        continue;\n      }\n      const hinted = (c.hasAudio === true) || (c.audio === true) || (c._meta?.hasAudio === true);\n      rawVideos.push({\n        ...c,\n        _type: 'aroll',\n        _absIn: Number(c.in) || 0,\n        _dur:  dur(c),\n        _hasAudio: (hinted || defaultArollHasAudio),\n        _lipsync: true\n      });\n    } else if (declaredType === 'broll') {\n      rawVideos.push({\n        ...c,\n        _type: 'broll',\n        _absIn: Number(c.in) || 0,\n        _dur:  dur(c),\n        _hasAudio: false,\n        _lipsync: false\n      });\n    } else {\n      warnings.push(`Ignored clip ${c.id || c.shotKey || '(no-id)'} — unsupported type '${declaredType}'.`);\n      continue;\n    }\n  }\n}\n\n// ----- dedupe by (shotKey@absIn@dur@type), prefer lipsync A-roll if conflict -----\nconst seen = new Map();\nfor (const v of rawVideos) {\n  const k = `${v.shotKey || v.id || 'no-key'}@${to3(v._absIn)}@${to3(v._dur)}@${v._type}`;\n  if (!seen.has(k)) {\n    seen.set(k, v);\n  } else {\n    const existing = seen.get(k);\n    const preferV = (v._type === 'aroll' && v._lipsync);\n    const preferE = (existing._type === 'aroll' && existing._lipsync);\n    if (preferV && !preferE) seen.set(k, v);\n  }\n}\nlet videos = Array.from(seen.values());\nvideos.sort((a,b) => (a._absIn - b._absIn) || (a._type === 'aroll' ? -1 : 1));\n\n// ---------- collect audio tracks ----------\nconst routeUsed = String(settings.routeUsed || '').toLowerCase();\nconst narrTrack = aTracks.find(t => lower(t?.name) === 'narration');\nlet narrClips = (narrTrack?.clips || []).filter(c => c?.src) || [];\nif (routeUsed === 'aroll') narrClips = []; // A-roll only route → no narration overlay\n\n// =====================================\n// BRANCH A: have VIDEO clips\n// =====================================\nif (videos.length > 0) {\n  const inputs = [\n    ...videos.map(v => ({ file_url: v.src })),\n    ...narrClips.map(a => ({ file_url: a.src })),\n  ];\n  const parts = [];\n\n  // ----- SPECIAL CASE: pure A-roll (no b-roll, no narration) -----\n  const allAroll = videos.length > 0 && videos.every(v => v._type === 'aroll');\n  const hasNarr  = narrClips.length > 0;\n  const hasBroll = videos.some(v => v._type !== 'aroll');\n\n  if (allAroll && !hasNarr && !hasBroll) {\n    // Minimal, tightly-wired graph to avoid dangling audio pads.\n    for (let i = 0; i < videos.length; i++) {\n      const d = to3(videos[i]._dur || lenSec || 0);\n\n      // video\n      parts.push(\n        `[${i}:v]setpts=PTS-STARTPTS,` +\n        `scale=${res.width}:${res.height}:force_original_aspect_ratio=decrease,` +\n        `pad=${res.width}:${res.height}:(ow-iw)/2:(oh-ih)/2,` +\n        `fps=${fps},format=yuv420p,setsar=1,trim=duration=${d},setpts=PTS-STARTPTS[v${i}]`\n      );\n\n      // audio (embedded only)\n      parts.push(\n        `[${i}:a]atrim=duration=${d},asetpts=PTS-STARTPTS,` +\n        `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`\n      );\n    }\n\n    let outVideo, outAudio;\n    if (videos.length === 1) {\n      outVideo = '[v0]null[outv]';\n      outAudio = '[a0]anull[outa]';\n      parts.push(`${outVideo};${outAudio}`);\n    } else {\n      const pairs = videos.map((_, i) => `[v${i}][a${i}]`).join('');\n      parts.push(`${pairs}concat=n=${videos.length}:v=1:a=1[outv][outa]`);\n    }\n\n    const includedDur = videos.reduce((s, v) => s + (v._dur || 0), 0);\n    const music_prep = {\n      program_length: Number(to3(includedDur)),\n      windows: { aroll: videos.map(v => [Number(v._absIn)||0, Number((v._absIn||0)+(v._dur||0))]), broll: [], narration: [] },\n      totals: { aroll: Number(to3(includedDur)), broll: 0, narration: 0 },\n      volume_plan: { master: 1.0, under_aroll: 0.15, under_broll: 0.25, under_narration: 0.20, fade: 0.06 },\n      options: { loop: false, limiter: true, target_lufs: -14 }\n    };\n\n    const outOpts = [\n      { option: '-map', argument: '[outv]' },\n      { option: '-map', argument: '[outa]' },\n      { option: '-c:v', argument: 'libx264' },\n      { option: '-crf', argument: String(crf) },\n      { option: '-preset', argument: 'medium' },\n      { option: '-pix_fmt', argument: 'yuv420p' },\n      { option: '-r', argument: String(fps) },\n      { option: '-s', argument: `${res.width}x${res.height}` }, // → 960x544\n      { option: '-movflags', argument: '+faststart' },\n      { option: '-c:a', argument: 'aac' },\n      { option: '-b:a', argument: '160k' },\n      { option: '-shortest' },\n    ];\n    if (lenSec > 0) outOpts.push({ option: '-t', argument: to3(lenSec) });\n\n    return buildOut({ inputs, parts, outputs: [{ options: outOpts }], warnings, music_prep });\n  }\n  // ----- END SPECIAL CASE -----\n\n  // 1) Normalize video → [v{i}]\n  for (let i = 0; i < videos.length; i++) {\n    const d = to3(videos[i]._dur || lenSec || 0);\n    parts.push(\n      `[${i}:v]setpts=PTS-STARTPTS,` +\n      `scale=${res.width}:${res.height}:force_original_aspect_ratio=decrease,` +\n      `pad=${res.width}:${res.height}:(ow-iw)/2:(oh-ih)/2,` +\n      `fps=${fps},format=yuv420p,setsar=1,trim=duration=${d},setpts=PTS-STARTPTS[v${i}]`\n    );\n  }\n\n  // 2) Base audio per-clip (embedded only for lipsync A-roll)\n  for (let i = 0; i < videos.length; i++) {\n    const v = videos[i];\n    const d = to3(v._dur || 0);\n    if (v._type === 'aroll' && v._hasAudio) {\n      parts.push(\n        `[${i}:a]atrim=duration=${d},asetpts=PTS-STARTPTS,` +\n        `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[ba${i}]`\n      );\n    } else {\n      if (v._type === 'aroll' && !v._hasAudio) {\n        warnings.push(`A-roll clip at index ${i} explicitly disabled for embedded audio; using silence.`);\n      }\n      parts.push(\n        `anullsrc=r=48000:cl=stereo,atrim=duration=${d},` +\n        `aformat=sample_fmts=fltp:channel_layouts=stereo[ba${i}]`\n      );\n    }\n  }\n\n  // 3) Build unified narration timeline aligned to ABSOLUTE EDL time\n  const narrBaseIdx = videos.length;\n  let tlLabel = null;\n  if (narrClips.length > 0) {\n    const delayed = [];\n    for (let k = 0; k < narrClips.length; k++) {\n      const nc  = narrClips[k];\n      const inn = Number(nc.in) || 0;\n      const d   = dur(nc);\n      const aIn = `${narrBaseIdx + k}:a`;\n      const lbl = `nd${k}`;\n      const fade = Number(Math.min(FADE, Math.max(0, d/4)).toFixed(3));\n      const fadeOutSt = Number(Math.max(0, d - fade).toFixed(3));\n      const ms = Math.max(0, Math.round(inn * 1000));\n\n      parts.push(\n        `[${aIn}]atrim=duration=${to3(d)},asetpts=PTS-STARTPTS,` +\n        `afade=t=in:st=0:d=${to3(fade)},afade=t=out:st=${to3(fadeOutSt)}:d=${to3(fade)},` +\n        `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,` +\n        `adelay=${ms}:all=1[${lbl}]`\n      );\n      delayed.push(`[${lbl}]`);\n    }\n    if (delayed.length === 1) {\n      tlLabel = delayed[0].slice(1, -1);\n    } else {\n      tlLabel = 'ntl';\n      parts.push(`${delayed.join('')}amix=inputs=${delayed.length}:duration=longest:normalize=1[${tlLabel}]`);\n    }\n  } else {\n    tlLabel = 'ntl';\n    const T = Math.max(lenSec, videos.reduce((s,v)=>s+v._dur,0));\n    parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${to3(T)},aformat=sample_fmts=fltp:channel_layouts=stereo[${tlLabel}]`);\n  }\n\n  // 3.5) Ensure narration padded to B-roll window end\n  const brollClips = videos.filter(v => v._type !== 'aroll');\n  const brollEndAbs = brollClips.reduce((mx, v) => Math.max(mx, (v._absIn || 0) + (v._dur || 0)), 0);\n  let tlPadded = tlLabel;\n  if (brollEndAbs > 0) {\n    tlPadded = 'ntl_pad';\n    parts.push(`[${tlLabel}]apad,atrim=duration=${to3(brollEndAbs)},aformat=sample_fmts=fltp:channel_layouts=stereo[${tlPadded}]`);\n  }\n\n  // 3.6) Split for reuse\n  let narrSplitNames = [];\n  if (brollClips.length > 0) {\n    narrSplitNames = brollClips.map((_, i) => `ns${i}`);\n    parts.push(`[${tlPadded}]asplit=${brollClips.length}${narrSplitNames.map(n => `[${n}]`).join('')}`);\n  }\n\n  // 4) Per-clip narration slices\n  for (let i = 0, bIdx = 0; i < videos.length; i++) {\n    const v = videos[i];\n    const s = to3(v._absIn || 0);\n    const d = to3(v._dur   || 0);\n    if (v._type === 'aroll' || routeUsed === 'aroll') {\n      parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${d},aformat=sample_fmts=fltp:channel_layouts=stereo[na${i}]`);\n    } else {\n      const branch = narrSplitNames[bIdx++];\n      parts.push(\n        `[${branch}]atrim=start=${s}:duration=${d},asetpts=PTS-STARTPTS,` +\n        `volume=0.85,aformat=sample_fmts=fltp:channel_layouts=stereo[na${i}]`\n      );\n    }\n  }\n\n  // 5) Mix base + narration per clip → [a{i}]\n  for (let i = 0; i < videos.length; i++) {\n    parts.push(`[ba${i}][na${i}]amix=inputs=2:duration=longest:normalize=1[a${i}]`);\n  }\n\n  // 6) Concat pairs → [outv][outa]\n  const pairs = videos.map((_, i) => `[v${i}][a${i}]`).join('');\n  parts.push(`${pairs}concat=n=${videos.length}:v=1:a=1[outv][outa]`);\n\n  // ---------- music prep ----------\n  const arollWins = videos.filter(v=>v._type==='aroll').map(v=>[Number(v._absIn)||0, Number((v._absIn||0)+(v._dur||0))]);\n  const brollWins = videos.filter(v=>v._type!=='aroll').map(v=>[Number(v._absIn)||0, Number((v._absIn||0)+(v._dur||0))]);\n  const narrWins  = narrClips.map(n=>[Number(n.in)||0, Number((n.in||0)+dur(n))]);\n\n  const includedDur = videos.reduce((s,v)=> s + (v._dur||0), 0);\n\n  const music_prep = {\n    program_length: Number(to3(includedDur)),\n    windows: { aroll: arollWins, broll: brollWins, narration: narrWins },\n    totals: {\n      aroll: Number(to3(arollWins.reduce((s,[a,b])=>s+(b-a),0))),\n      broll: Number(to3(brollWins.reduce((s,[a,b])=>s+(b-a),0))),\n      narration: Number(to3(narrWins.reduce((s,[a,b])=>s+(b-a),0))),\n    },\n    volume_plan: { master: 1.0, under_aroll: 0.15, under_broll: 0.25, under_narration: 0.20, fade: 0.06 },\n    options: { loop: false, limiter: true, target_lufs: -14 }\n  };\n\n  const outOpts = [\n    { option: '-map', argument: '[outv]' },\n    { option: '-map', argument: '[outa]' },\n    { option: '-c:v', argument: 'libx264' },\n    { option: '-crf', argument: String(crf) },\n    { option: '-preset', argument: 'medium' },\n    { option: '-pix_fmt', argument: 'yuv420p' },\n    { option: '-r', argument: String(fps) },\n    { option: '-s', argument: `${res.width}x${res.height}` }, // → 960x544\n    { option: '-movflags', argument: '+faststart' },\n    { option: '-c:a', argument: 'aac' },\n    { option: '-b:a', argument: '160k' },\n    { option: '-shortest' },\n  ];\n  if (lenSec > 0) outOpts.push({ option: '-t', argument: to3(lenSec) });\n\n  return buildOut({ inputs, parts, outputs: [{ options: outOpts }], warnings, music_prep });\n}\n\n// =====================================\n// BRANCH B: podcast still (no video) — cover image + narration\n// =====================================\nconst kf = iTracks.find(t => lower(t?.name) === 'kf');\nconst cover = kf?.clips?.[0];\nif (!cover) throw new Error('Compose: no video clips and no cover image (kf) found)');\n\nconst L = to3(lenSec > 0 ? lenSec : Math.max(5, sumDur(narrClips)));\nconst inputsPodcast = [{ file_url: cover.src || cover.image_url }, ...narrClips.map(a => ({ file_url: a.src }))];\n\nconst partsPodcast = [];\npartsPodcast.push(\n  `[0:v]loop=999999:size=1:start=0,` +\n  `scale=${res.width}:${res.height}:force_original_aspect_ratio=decrease,` +\n  `pad=${res.width}:${res.height}:(ow-iw)/2:(oh-ih)/2,` +\n  `fps=${fps},trim=duration=${L},setpts=PTS-STARTPTS[outv]`\n);\n\nlet tlLabelPod = null;\nif (narrClips.length > 0) {\n  const layers = [];\n  for (let i = 0; i < narrClips.length; i++) {\n    const d = dur(narrClips[i]);\n    const fade = Number(Math.min(FADE, Math.max(0, d/4)).toFixed(3));\n    const fadeOutSt = Number(Math.max(0, d - fade).toFixed(3));\n    partsPodcast.push(\n      `[${1+i}:a]atrim=duration=${to3(d)},asetpts=PTS-STARTPTS,` +\n      `afade=t=in:st=0:d=${to3(fade)},afade=t=out:st=${to3(fadeOutSt)}:d=${to3(fade)},` +\n      `aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[pod${i}]`\n    );\n    layers.push(`[pod${i}]`);\n  }\n  if (layers.length === 1) {\n    tlLabelPod = layers[0].slice(1, -1);\n  } else {\n    tlLabelPod = 'podmix';\n    partsPodcast.push(`${layers.join('')}amix=inputs=${layers.length}:duration=longest:normalize=1[${tlLabelPod}]`);\n  }\n} else {\n  tlLabelPod = 'podsil';\n  partsPodcast.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${L},aformat=sample_fmts=fltp:channel_layouts=stereo[${tlLabelPod}]`);\n}\npartsPodcast.push(`[${tlLabelPod}]anull[outa]`);\n\n// Music prep for podcast mode\nconst music_prep_pod = {\n  program_length: Number(L),\n  windows: { aroll: [], broll: [], narration: narrClips.map(n=>[Number(n.in)||0, Number((n.in||0)+dur(n))]) },\n  totals: { aroll: 0, broll: 0, narration: Number(to3(sumDur(narrClips))) },\n  volume_plan: { master: 1.0, under_aroll: 0.15, under_broll: 0.25, under_narration: 0.20, fade: 0.06 },\n  options: { loop: false, limiter: true, target_lufs: -14 }\n};\n\nconst outOptsPodcast = [\n  { option: '-map', argument: '[outv]' },\n  { option: '-map', argument: '[outa]' },\n  { option: '-c:v', argument: 'libx264' },\n  { option: '-crf', argument: String(crf) },\n  { option: '-preset', argument: 'medium' },\n  { option: '-pix_fmt', argument: 'yuv420p' },\n  { option: '-r', argument: String(fps) },\n  { option: '-s', argument: `${res.width}x${res.height}` }, // → 960x544\n  { option: '-movflags', argument: '+faststart' },\n  { option: '-c:a', argument: 'aac' },\n  { option: '-b:a', argument: '160k' },\n  { option: '-shortest' },\n];\nif (Number(L) > 0) outOptsPodcast.push({ option: '-t', argument: L });\n\nreturn buildOut({ inputs: inputsPodcast, parts: partsPodcast, outputs: [{ options: outOptsPodcast }], warnings, music_prep: music_prep_pod });"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        80
+      ],
+      "id": "898d6045-8f86-4372-9e76-107f902fd813",
+      "name": "Composer Builder"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d4c9089a-f5ac-47cc-b800-abd96c2c2e33",
+              "leftValue": "={{ $('Search video bucket').item.json.Key }}",
+              "rightValue": "=n8n-nca-bucket/{{ $json.job_id }}_output_0.mp4",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        304,
+        -64
+      ],
+      "id": "eba2115c-fbae-4468-89fb-0eb8832de25b",
+      "name": "Caption complete?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        464,
+        0
+      ],
+      "id": "8be2bc6a-1085-48df-96d6-59dbcc807b3d",
+      "name": "Wait for caption",
+      "webhookId": "0810024f-dd22-4e58-87e4-1052494fe853"
+    },
+    {
+      "parameters": {
+        "resource": "bucket",
+        "operation": "search",
+        "bucketName": "n8n-nca-bucket",
+        "additionalFields": {
+          "prefix": "=n8n-nca-bucket/{{ $json.job_id }}_output_0.mp4"
+        }
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -64
+      ],
+      "id": "73b9035b-7fc1-499c-864b-cb3c33acbedf",
+      "name": "Search video bucket",
+      "alwaysOutputData": false,
+      "credentials": {
+        "s3": {
+          "id": "UwjAKScLP91wEOiS",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "547da7e2-04e3-4337-9947-82d87f15b44b",
+              "name": "job_id",
+              "value": "={{ $('Request Final Video').item.json.job_id }}",
+              "type": "string"
+            },
+            {
+              "id": "2af47735-2712-41bc-b534-b5421812b2ce",
+              "name": "duration",
+              "value": "={{ $('Composer Builder').item.json.compose_request.metadata.music_prep.program_length }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        128,
+        -64
+      ],
+      "id": "6c737cfe-9f52-4a3f-839c-22134259a0ec",
+      "name": "Set Video ID"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -560,
+        80
+      ],
+      "id": "6efbdb69-e101-4bf3-9d56-1b15d1b07566",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compose Final Video — create an ffmpeg/compose payload from the normalized EDL\n// Handles: video present (concat + optional narration) and podcast/still (no video)\n// Mode: Run once for all items\n\nconst root = $input.item.json;\nconst edl = root?.edl;\nconst settings = root?.settings || {};\nif (!edl) throw new Error('Compose: missing EDL');\n\nconst vTracks = edl.tracks?.video || [];\nconst aTracks = edl.tracks?.audio || [];\nconst iTracks = edl.tracks?.images || [];\nconst timeline = edl._meta?.timeline || [];\nconst fps = settings.fps || 30;\nconst res = settings.resolution || { width: 1024, height: 1024 };\nconst lenSec = Number(settings.length_sec || 0) || 0;\n\n// map shotId -> first start offset (sec) for alignment\nconst startMap = new Map();\nfor (const t of timeline) {\n  if (t?.shotId != null && !startMap.has(t.shotId)) {\n    startMap.set(t.shotId, Number(t.start) || 0);\n  }\n}\n\n// gather ordered videos\nconst videos = [];\nfor (const tr of vTracks) for (const c of (tr.clips || [])) if (c?.src) videos.push(c);\n\n// narration (optional)\nconst narr = aTracks.find(t => String(t.name).toLowerCase() === 'narration');\nconst narrClips = (narr?.clips || []).filter(c => c?.src);\n\n// image cover (for podcast/still)\nlet cover = null;\nconst kf = iTracks.find(t => String(t.name).toLowerCase() === 'kf');\nif (kf?.clips?.length) cover = kf.clips[0];\n\n// ---------- Branch 1: have video clips ----------\nif (videos.length > 0) {\n  const inputs = [\n    ...videos.map(v => ({ file_url: v.src })),\n    ...narrClips.map(a => ({ file_url: a.src })),\n  ];\n\n  const parts = [];\n\n  // 1) concatenate video (with its own audio) → [outv][basea]\n  if (videos.length === 1) {\n    parts.push(`[0:v]null[outv]`);\n    parts.push(`[0:a]anull[basea]`);\n  } else {\n    const pairs = [];\n    for (let i = 0; i < videos.length; i++) pairs.push(`[${i}:v][${i}:a]`);\n    parts.push(`${pairs.join('')}concat=n=${videos.length}:v=1:a=1[outv][basea]`);\n  }\n\n  // 2) narration alignment/mix (only if present)\n  if (narrClips.length > 0) {\n    const narrBaseIdx = videos.length;\n    const delayed = [];\n    for (let i = 0; i < narrClips.length; i++) {\n      const c = narrClips[i];\n      const sid = c.shotId || c.id;\n      const startSec = (sid != null && startMap.has(sid)) ? startMap.get(sid) : 0;\n      const ms = Math.max(0, Math.round(startSec * 1000));\n      const inL = `${narrBaseIdx + i}:a`;\n      const outL = `nd${i}`;\n      parts.push(`[${inL}]adelay=${ms}|${ms}[${outL}]`);\n      delayed.push(`[${outL}]`);\n    }\n    if (delayed.length === 1) {\n      parts.push(`${delayed[0]}anull[narr]`);\n    } else {\n      parts.push(`${delayed[0]}anull[nmix0]`);\n      for (let i = 1; i < delayed.length; i++) {\n        const prev = i === 1 ? 'nmix0' : `nmix${i-1}`;\n        const cur  = `nmix${i}`;\n        parts.push(`[${prev}]${delayed[i]}amix=inputs=2:duration=longest[${cur}]`);\n      }\n      parts.push(`[nmix${delayed.length-1}]anull[narr]`);\n    }\n    // base + narration (duck narration slightly)\n    parts.push(`[basea]anull[a0]`);\n    parts.push(`[narr]volume=0.85[nv]`);\n    parts.push(`[a0][nv]amix=inputs=2:duration=longest[outa]`);\n  } else {\n    parts.push(`[basea]anull[outa]`);\n  }\n\n  const outputs = [{\n    options: [\n      { option: '-map', argument: '[outv]' },\n      { option: '-map', argument: '[outa]' },\n      { option: '-c:v', argument: 'libx264' },\n      { option: '-crf', argument: '23' },\n      { option: '-preset', argument: 'medium' },\n      { option: '-c:a', argument: 'aac' },\n      { option: '-b:a', argument: '160k' },\n      { option: '-pix_fmt', argument: 'yuv420p' },\n      { option: '-r', argument: String(fps) },\n      { option: '-s', argument: `${res.width}x${res.height}` },\n    ]\n  }];\n\n  const metadata = { thumbnail:true, filesize:true, duration:true, bitrate:true, encoder:true };\n\n  return [{\n    json: {\n      edl,\n      settings,\n      compose_request: {\n        inputs,\n        filters: [{ filter: parts.join(';') }],\n        outputs,\n        metadata,\n        id: 'final_compose'\n      }\n    }\n  }];\n}\n\n// ---------- Branch 2: NO video clips → synthesize from still image (podcast/still) ----------\nif (!cover) throw new Error('Compose: no video clips and no cover image (kf) found');\n\nconst audioInputs = narrClips.map(a => ({ file_url: a.src }));\nconst inputs = [\n  { file_url: cover.src || cover.image_url }, // input 0: image\n  ...audioInputs,                              // input 1..N: narration clips\n];\n\n// Build [outv] from still image: repeat → trim to length → fps/scale\nconst L = Math.max(0, Number(lenSec || 0) || 0); // seconds\nconst parts = [];\nparts.push(\n  `[0:v]loop=999999:size=1:start=0,scale=${res.width}:${res.height},fps=${fps},` +\n  `trim=duration=${L},setpts=PTS-STARTPTS[outv]`\n);\n\n// Build [outa] from narration clips (delay & mix to one stream). If none, synthesize silence.\nif (narrClips.length > 0) {\n  const delayed = [];\n  for (let i = 0; i < narrClips.length; i++) {\n    const c = narrClips[i];\n    const sid = c.shotId || c.id;\n    const startSec = (sid != null && startMap.has(sid)) ? startMap.get(sid) : 0;\n    const ms = Math.max(0, Math.round(startSec * 1000));\n    const inL = `${1 + i}:a`;\n    const outL = `nd${i}`;\n    parts.push(`[${inL}]adelay=${ms}|${ms}[${outL}]`);\n    delayed.push(`[${outL}]`);\n  }\n  if (delayed.length === 1) {\n    parts.push(`${delayed[0]}anull[outa]`);\n  } else {\n    parts.push(`${delayed[0]}anull[nmix0]`);\n    for (let i = 1; i < delayed.length; i++) {\n      const prev = i === 1 ? 'nmix0' : `nmix${i-1}`;\n      const cur  = `nmix${i}`;\n      parts.push(`[${prev}]${delayed[i]}amix=inputs=2:duration=longest[${cur}]`);\n    }\n    parts.push(`[nmix${delayed.length-1}]anull[outa]`);\n  }\n} else {\n  // no narration: synthesize silence of length L\n  parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${L}[outa]`);\n}\n\nconst outputs = [{\n  options: [\n    { option: '-map', argument: '[outv]' },\n    { option: '-map', argument: '[outa]' },\n    { option: '-c:v', argument: 'libx264' },\n    { option: '-crf', argument: '23' },\n    { option: '-preset', argument: 'medium' },\n    { option: '-c:a', argument: 'aac' },\n    { option: '-b:a', argument: '160k' },\n    { option: '-pix_fmt', argument: 'yuv420p' },\n    { option: '-r', argument: String(fps) },\n    { option: '-s', argument: `${res.width}x${res.height}` },\n  ]\n}];\n\nconst metadata = { thumbnail:true, filesize:true, duration:true, bitrate:true, encoder:true };\n\nreturn [{\n  json: {\n    edl,\n    settings,\n    compose_request: {\n      inputs,\n      filters: [{ filter: parts.join(';') }],\n      outputs,\n      metadata,\n      id: 'final_compose'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        288
+      ],
+      "id": "533015f0-3e4a-480f-a9ef-3ad337e8f4e5",
+      "name": "Mock Prompt"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "FinalVideo",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -256
+      ],
+      "id": "5c4d29f1-f0d8-43b1-8506-b96a5e73aa16",
+      "name": "Webhook",
+      "webhookId": "6845965e-d2b2-4df6-90ca-ffa748d109c0"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7cf6d0c2-f237-4e9d-94d4-296fb9e05cc2",
+              "name": "final-url",
+              "value": "=https://n8n-nca-bucket.nyc3.digitaloceanspaces.com/{{ $('Search video bucket').item.json.Key }}",
+              "type": "string"
+            },
+            {
+              "id": "02d7acbb-bf80-4aab-9607-55356358fdc9",
+              "name": "duration",
+              "value": "={{ $json.duration }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        -80
+      ],
+      "id": "192b44cf-b182-48b4-9bd0-8ba9dfb7959f",
+      "name": "Final Video URL"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "edl": {
+            "tracks": {
+              "video": [
+                {
+                  "name": "video",
+                  "clips": [
+                    {
+                      "id": "0280b34b-48b3-4f9e-8ba1-e366c6e43baf-u2",
+                      "shotKey": "SEG-01-B01-S01",
+                      "segId": "SEG-01",
+                      "beatId": "B01",
+                      "shotId": "S01",
+                      "sceneId": "SCN1",
+                      "requestId": "SCN1__SEG-01-B01-S01",
+                      "type": "aroll",
+                      "src": "https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_bd4ec55a-2108-4796-a56e-4422c45bf020.mp4",
+                      "poster": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/0e249133-5f95-4940-b6c7-fbc6a084e910-u2.jpg",
+                      "in": 0,
+                      "out": 8.133333333333333,
+                      "durationSec": 8.133333333333333,
+                      "route": "aroll",
+                      "firstShotId": "S01",
+                      "jobId": "SCN1__SEG-01-B01-S01",
+                      "voice_url": "https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/ec6c89bda45f4771bd1907ca4428161c.wav",
+                      "_meta": {
+                        "fps": 30,
+                        "num_frames": 244,
+                        "provider_status": "succeeded",
+                        "model": "InfiniteTalk/ComfyUI",
+                        "workerId": "s3q4fdxzbksy5s",
+                        "debug": {
+                          "height": 544,
+                          "input_type": "image",
+                          "max_frame": 283,
+                          "person_count": "single",
+                          "prompt_id": "b559242e-7a71-411c-99b3-c99ec3463d99",
+                          "width": 960,
+                          "workflow": "/I2V_single.json"
+                        },
+                        "hasAudio": true
+                      },
+                      "hasAudio": true,
+                      "audio": true,
+                      "source": "lipsync",
+                      "segIndex": 1
+                    },
+                    {
+                      "shotKey": "SEG-02-B01-S01",
+                      "segId": "SEG-02",
+                      "beatId": "B01",
+                      "shotId": "S01",
+                      "sceneId": "59229",
+                      "requestId": "59229",
+                      "type": "broll",
+                      "src": "https://video-generations.nyc3.digitaloceanspaces.com/59229__SEG-02-B01-S01.mp4",
+                      "poster": "",
+                      "durationSec": 13.233,
+                      "in": 8.133333333333333,
+                      "out": 21.366333333333333,
+                      "clipId": "S01",
+                      "baseShotId": "S01",
+                      "label": "",
+                      "route": "",
+                      "firstShotId": "",
+                      "jobId": null,
+                      "characterId": null,
+                      "characterName": null,
+                      "voiceId": null,
+                      "source": "edl1",
+                      "id": "S01",
+                      "segIndex": 1,
+                      "_meta": {
+                        "label": "59229"
+                      }
+                    },
+                    {
+                      "shotKey": "SEG-02-B01-S02",
+                      "segId": "SEG-02",
+                      "beatId": "B01",
+                      "shotId": "S02",
+                      "sceneId": "59229",
+                      "requestId": "59229",
+                      "type": "broll",
+                      "src": "https://video-generations.nyc3.digitaloceanspaces.com/59229__SEG-02-B01-S02.mp4",
+                      "poster": "",
+                      "durationSec": 19.867,
+                      "in": 21.366333333333333,
+                      "out": 41.233333333333334,
+                      "clipId": "S02",
+                      "baseShotId": "S02",
+                      "label": "",
+                      "route": "",
+                      "firstShotId": "",
+                      "jobId": null,
+                      "characterId": null,
+                      "characterName": null,
+                      "voiceId": null,
+                      "source": "edl1",
+                      "id": "S02",
+                      "segIndex": 1,
+                      "_meta": {
+                        "label": "59229"
+                      }
+                    },
+                    {
+                      "id": "9ca264bc-8009-46bf-add8-94375f4c6749-u2",
+                      "shotKey": "SEG-03-B01-S01",
+                      "segId": "SEG-03",
+                      "beatId": "B01",
+                      "shotId": "S01",
+                      "sceneId": "SCN1",
+                      "requestId": "SCN1__SEG-03-B01-S01",
+                      "type": "aroll",
+                      "src": "https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_caa23470-8316-4c9a-b658-0306b0ff1b2d.mp4",
+                      "poster": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/0e249133-5f95-4940-b6c7-fbc6a084e910-u2.jpg",
+                      "in": 41.233333333333334,
+                      "out": 51.36666666666667,
+                      "durationSec": 10.133333333333333,
+                      "route": "aroll",
+                      "firstShotId": "S01",
+                      "jobId": "SCN1__SEG-03-B01-S01",
+                      "voice_url": "https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/eaf41f96ab3c4d0fbf1852d454ce4915.wav",
+                      "_meta": {
+                        "fps": 30,
+                        "num_frames": 304,
+                        "provider_status": "succeeded",
+                        "model": "InfiniteTalk/ComfyUI",
+                        "workerId": "s3q4fdxzbksy5s",
+                        "debug": {
+                          "height": 544,
+                          "input_type": "image",
+                          "max_frame": 333,
+                          "person_count": "single",
+                          "prompt_id": "31791b1e-8d5b-47e3-86a5-f9b607b44028",
+                          "width": 960,
+                          "workflow": "/I2V_single.json"
+                        },
+                        "hasAudio": true
+                      },
+                      "hasAudio": true,
+                      "audio": true,
+                      "source": "lipsync",
+                      "segIndex": 1
+                    }
+                  ]
+                }
+              ],
+              "images": [
+                {
+                  "name": "kf",
+                  "clips": [
+                    {
+                      "id": "0e249133-5f95-4940-b6c7-fbc6a084e910-u2",
+                      "src": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/0e249133-5f95-4940-b6c7-fbc6a084e910-u2.jpg",
+                      "in": 0,
+                      "out": 0,
+                      "type": "aroll",
+                      "shotKey": null,
+                      "segId": null,
+                      "beatId": null,
+                      "shotId": "AROLL_SHARED",
+                      "meta": {
+                        "clipId": "AROLL_SHARED",
+                        "sceneId": "59229",
+                        "segId": "",
+                        "type": "aroll",
+                        "title": "Baby Zuck!",
+                        "route": "combo",
+                        "modelHint": "sdxl",
+                        "piggybank": {
+                          "render": {
+                            "width": 960,
+                            "height": 544,
+                            "fps": 30,
+                            "aspect": "16:9",
+                            "respectKeyframes": false,
+                            "strictness": 0.6,
+                            "seedLock": false
+                          }
+                        },
+                        "shotKey": "",
+                        "beatId": "",
+                        "shotId": "AROLL_SHARED",
+                        "appliesToShotKeys": [
+                          "SEG-01-B01-S01",
+                          "SEG-03-B01-S01"
+                        ],
+                        "order": 1,
+                        "note": "Shared A-roll keyframe for all A-roll segments to keep character consistent"
+                      }
+                    },
+                    {
+                      "id": "SEG-02-B01-S01",
+                      "src": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/9830d013-03a8-4f5c-bb02-d5887587e1e0-u2.jpg",
+                      "in": 0,
+                      "out": 0,
+                      "type": "broll",
+                      "shotKey": "SEG-02-B01-S01",
+                      "segId": "SEG-02",
+                      "beatId": "B01",
+                      "shotId": "S01",
+                      "meta": {
+                        "clipId": "SEG-02-B01-S01",
+                        "sceneId": "59229",
+                        "segId": "SEG-02",
+                        "type": "broll",
+                        "title": "Baby Zuck!",
+                        "route": "combo",
+                        "modelHint": "sdxl",
+                        "piggybank": {
+                          "render": {
+                            "width": 960,
+                            "height": 544,
+                            "fps": 30,
+                            "aspect": "16:9",
+                            "respectKeyframes": false,
+                            "strictness": 0.6,
+                            "seedLock": false
+                          }
+                        },
+                        "shotKey": "SEG-02-B01-S01",
+                        "beatId": "B01",
+                        "shotId": "S01",
+                        "order": 2
+                      }
+                    },
+                    {
+                      "id": "SEG-02-B01-S02",
+                      "src": "https://nyc3.digitaloceanspaces.com/image-generations/sdxl_outputs/5eace2ad-25b6-4d17-b03d-d1181a030078-u2.jpg",
+                      "in": 0,
+                      "out": 0,
+                      "type": "broll",
+                      "shotKey": "SEG-02-B01-S02",
+                      "segId": "SEG-02",
+                      "beatId": "B01",
+                      "shotId": "S02",
+                      "meta": {
+                        "clipId": "SEG-02-B01-S02",
+                        "sceneId": "59229",
+                        "segId": "SEG-02",
+                        "type": "broll",
+                        "title": "Baby Zuck!",
+                        "route": "combo",
+                        "modelHint": "sdxl",
+                        "piggybank": {
+                          "render": {
+                            "width": 960,
+                            "height": 544,
+                            "fps": 30,
+                            "aspect": "16:9",
+                            "respectKeyframes": false,
+                            "strictness": 0.6,
+                            "seedLock": false
+                          }
+                        },
+                        "shotKey": "SEG-02-B01-S02",
+                        "beatId": "B01",
+                        "shotId": "S02",
+                        "order": 3
+                      }
+                    }
+                  ]
+                }
+              ],
+              "audio": [
+                {
+                  "name": "narration",
+                  "clips": [
+                    {
+                      "id": "SEG-02",
+                      "segId": "SEG-02",
+                      "shotId": "SEG-02",
+                      "type": "narration",
+                      "src": "https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/42dfec8eff514935b8d2e5fb9504681f.wav",
+                      "in": 8.133333333333333,
+                      "out": 41.233333333333334,
+                      "_meta": {
+                        "voiceId": "447f6f9b-9e3b-4f15-8761-dd77019e56c3-u2",
+                        "alignedTo": "broll_segment_window"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "resolution": {
+              "width": 1024,
+              "height": 576
+            },
+            "fps": 30,
+            "length_sec": 51.36666666666667,
+            "_meta": {
+              "timeline_master": "video",
+              "durations": {
+                "video": 51.36666666666667,
+                "narration": 33.1
+              },
+              "sort_order": "shotKey → (seg, beat, shot) → order → segIndex",
+              "aligned_narration": true,
+              "broll_windows": [
+                {
+                  "segId": "SEG-02",
+                  "start": 8.133333333333333,
+                  "end": 41.233333333333334
+                }
+              ],
+              "ui_prefs": {
+                "wantsCutaways": true,
+                "wantsMusic": true,
+                "wantsCaptions": true
+              },
+              "settings": {
+                "music": {
+                  "enabled": true,
+                  "prompt": "inspiring background podcast music",
+                  "genre": null,
+                  "mood": null,
+                  "bpm": null
+                },
+                "captions": {
+                  "enabled": true,
+                  "style": null,
+                  "language": null,
+                  "format": null
+                }
+              }
+            }
+          },
+          "settings": {},
+          "compose_request": {
+            "id": "final_compose",
+            "inputs": [
+              {
+                "file_url": "https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_bd4ec55a-2108-4796-a56e-4422c45bf020.mp4"
+              },
+              {
+                "file_url": "https://video-generations.nyc3.digitaloceanspaces.com/59229__SEG-02-B01-S01.mp4"
+              },
+              {
+                "file_url": "https://video-generations.nyc3.digitaloceanspaces.com/59229__SEG-02-B01-S02.mp4"
+              },
+              {
+                "file_url": "https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_caa23470-8316-4c9a-b658-0306b0ff1b2d.mp4"
+              },
+              {
+                "file_url": "https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/42dfec8eff514935b8d2e5fb9504681f.wav"
+              }
+            ],
+            "filters": [
+              {
+                "filter": "[0:v]trim=start=0:duration=8.133333,setpts=PTS-STARTPTS,scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2,fps=30[v0];[1:v]trim=start=0:duration=13.233,setpts=PTS-STARTPTS,scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2,fps=30[v1];[2:v]trim=start=0:duration=19.867,setpts=PTS-STARTPTS,scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2,fps=30[v2];[3:v]trim=start=0:duration=10.133333,setpts=PTS-STARTPTS,scale=1024:576:force_original_aspect_ratio=decrease,pad=1024:576:(ow-iw)/2:(oh-ih)/2,fps=30[v3];[v0][v1][v2][v3]concat=n=4:v=1:a=0[outv];[0:a]atrim=start=0:duration=8.133333,asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[ba0];anullsrc=r=48000:cl=stereo,atrim=duration=13.233,aformat=sample_fmts=fltp:channel_layouts=stereo[ba1];anullsrc=r=48000:cl=stereo,atrim=duration=19.867,aformat=sample_fmts=fltp:channel_layouts=stereo[ba2];[3:a]atrim=start=0:duration=10.133333,asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[ba3];[ba0][ba1][ba2][ba3]concat=n=4:v=0:a=1[basea];[4:a]adelay=8133|8133,atrim=duration=33.1,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.05,afade=t=out:st=33.05:d=0.05,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[nd0];[nd0]anull[narr];[basea]anull[a0];[narr]volume=0.85[nv];[a0][nv]amix=inputs=2:duration=longest:normalize=1[outa]"
+              }
+            ],
+            "outputs": [
+              {
+                "options": [
+                  {
+                    "option": "-map",
+                    "argument": "[outv]"
+                  },
+                  {
+                    "option": "-map",
+                    "argument": "[outa]"
+                  },
+                  {
+                    "option": "-c:v",
+                    "argument": "libx264"
+                  },
+                  {
+                    "option": "-crf",
+                    "argument": "23"
+                  },
+                  {
+                    "option": "-preset",
+                    "argument": "medium"
+                  },
+                  {
+                    "option": "-pix_fmt",
+                    "argument": "yuv420p"
+                  },
+                  {
+                    "option": "-r",
+                    "argument": "30"
+                  },
+                  {
+                    "option": "-s",
+                    "argument": "1024x576"
+                  },
+                  {
+                    "option": "-movflags",
+                    "argument": "+faststart"
+                  },
+                  {
+                    "option": "-c:a",
+                    "argument": "aac"
+                  },
+                  {
+                    "option": "-b:a",
+                    "argument": "160k"
+                  },
+                  {
+                    "option": "-shortest",
+                    "argument": ""
+                  },
+                  {
+                    "option": "-t",
+                    "argument": "51.367"
+                  }
+                ]
+              }
+            ],
+            "metadata": {
+              "thumbnail": true,
+              "filesize": true,
+              "duration": true,
+              "bitrate": true,
+              "encoder": true,
+              "warnings": [],
+              "settings": {
+                "music": {
+                  "enabled": true,
+                  "prompt": "inspiring background podcast music",
+                  "genre": null,
+                  "mood": null,
+                  "bpm": null
+                },
+                "captions": {
+                  "enabled": true,
+                  "style": null,
+                  "language": null,
+                  "format": null
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Mock Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Final Video": {
+      "main": [
+        [
+          {
+            "node": "Search video bucket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Composer Builder": {
+      "main": [
+        [
+          {
+            "node": "Request Final Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caption complete?": {
+      "main": [
+        [
+          {
+            "node": "Final Video URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for caption": {
+      "main": [
+        [
+          {
+            "node": "Search video bucket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search video bucket": {
+      "main": [
+        [
+          {
+            "node": "Set Video ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video ID": {
+      "main": [
+        [
+          {
+            "node": "Caption complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Composer Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "696f7b6a-4b98-46c6-b4c0-401546596710",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "ds7aM9j4Zz6X6EIe",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:47:34.330Z",
+      "updatedAt": "2025-08-06T22:47:34.330Z",
+      "id": "5W4ptl8eNWuki2da",
+      "name": "Base_Level"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:47:27.709Z",
+      "updatedAt": "2025-08-06T22:47:27.709Z",
+      "id": "RDt1fEwBS590LEn1",
+      "name": "Builder"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:15.867Z",
+      "updatedAt": "2025-08-06T22:48:15.867Z",
+      "id": "lRzQwQcNU2q4zzyp",
+      "name": "Video"
+    }
+  ]
+}

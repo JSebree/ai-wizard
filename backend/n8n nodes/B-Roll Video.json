@@ -1,0 +1,812 @@
+{
+  "name": "B-Roll Video",
+  "nodes": [
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        496,
+        -48
+      ],
+      "id": "dbbfbbf1-1f44-4d42-b58d-8aecb923b92e",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "jKDc1cnUVzeC6Olg",
+          "mode": "list",
+          "cachedResultName": "Character Voice Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        -112
+      ],
+      "id": "7994111d-e847-4a4d-9237-65a537efc3b5",
+      "name": "Exec Character Voice Builder",
+      "retryOnFail": true,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "oSGeY21dneGuaMnB",
+          "mode": "list",
+          "cachedResultName": "Keyframe Image Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        80
+      ],
+      "id": "39e4d18e-c2f9-4a8f-9df5-0585b1187939",
+      "name": "Exec Keyframe Image Builder",
+      "alwaysOutputData": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "iqLKfeGUPCsxrIAa",
+          "mode": "list",
+          "cachedResultName": "B-Roll Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        272
+      ],
+      "id": "fdb3e001-4f8c-47b2-a8e5-e8a5c5d528ac",
+      "name": "Exec B-Roll Builder",
+      "retryOnFail": true,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        -112
+      ],
+      "id": "858a924a-7334-4ac1-a31b-b3636791c879",
+      "name": "Set Character Voice EDL"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        80
+      ],
+      "id": "ecbb7f28-b54e-4135-838a-d7b4a25e1c89",
+      "name": "Set Keyframe Images EDL"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{\n(() => {\n  const SP = 'https://video-generations.nyc3.digitaloceanspaces.com/';\n  const rx = /\\/([^\\/?#]+\\.(mp4|mov|webm))(?:\\?|$)/i;\n  const rewrite = u => (!u || u.includes('digitaloceanspaces.com')) ? u : (u.match(rx) ? SP + u.match(rx)[1] : u);\n\n  const INPUT = $json;\n  const inEdl = INPUT.edl ?? INPUT;\n  const inTracks = (inEdl.tracks && inEdl.tracks.video) || [];\n\n  const outTracks = inTracks.map(t => ({\n    ...t,\n    clips: (t.clips || []).map(c => ({\n      ...c,\n      base_src: c.src,\n      src: rewrite(c.src),\n    })),\n  }));\n\n  const outEdl = { ...inEdl, tracks: { ...(inEdl.tracks || {}), video: outTracks } };\n  return INPUT.edl ? { ...INPUT, edl: outEdl } : outEdl;\n})()\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        272
+      ],
+      "id": "34ae2280-8dd9-4a89-8bef-26f593b45434",
+      "name": "Set B-Roll EDL"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Character Voice Prompts (B-ROLL Narration)\n// INPUT: items[0].json { planner, planMeta, envelope, ... }\n//        later items may include { kind:\"vo\", text, start_sec, end_sec, duration_sec, speech, segId, ... }\n// OUTPUT: { tts: { segments, voices, wps, route: \"broll\", title, prompts, piggybank, voice_ref_url } }\n\nconst rows = $items().map(i => i.json || {});\nconst root      = rows[0] || {};\nconst planner   = root.planner || {};\nconst planMeta  = root.planMeta || {};\nconst envelope  = root.envelope || {};\nconst piggy     = root.piggybank || planner.piggybank || {};\n\nconst S = v => (v == null ? \"\" : String(v));\nconst clean = s => (typeof s === \"string\" ? s.replace(/\\s+/g, \" \").trim() : \"\");\nconst N = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };\nconst words = s => clean(s).split(/\\s+/).filter(Boolean).length;\n\n// ---------- helpers ----------\nconst first = (...xs) => xs.find(v => v !== undefined && v !== null && v !== \"\");\nconst getsegId = (r) =>\n  S(\n    first(\n      r?.segId,\n      r?.segment?.segId,\n      r?.source?.segment?.segId,\n      envelope?.segment?.segId,\n      envelope?.source?.segment?.segId\n    ) || \"SEG-01\"\n  );\n\n// ---------- pacing / voice selection ----------\nconst WPS =\n  N(planner?.speech?.wps) ||\n  N(planMeta?.speech?.wps) ||\n  N(envelope?.speech?.wps) || 2.5;\n\nconst defaultVoiceId =\n  S(planMeta?.speech?.voiceId) ||\n  S(envelope?.speech?.voiceId) ||\n  S(piggy?.voice?.id) || \"\";\n\nconst route = \"broll\";\nconst title = S(planner.title || envelope.title || \"\");\n\n// ---------- extraction of inputs ----------\nconst src = (envelope && envelope.source) || {};\nconst ui  = src.ui || {};\n\n// ** NEW: voice ref url passthrough **\nconst voiceRefUrl = S(first(\n  src.voice_ref_url,\n  ui.voice_ref_url,\n  planner.voice_ref_url,\n  src.voiceUrl,\n  ui.voiceUrl\n));\n\n// ---------- style prompt for VO ----------\nconst stylePrompt =\n  \"Style: warm, unhurried off-screen narrator; light morning energy; natural pauses at sentence ends; no announcer hype. \" +\n  \"Diction: clear, conversational; avoid over-enunciation. \" +\n  \"Pacing: ~\" + (WPS * 60) + \" wpm max; breathe between images. \" +\n  \"Do NOT describe camera moves or read any on-screen text.\";\n\n// ---------- collect VO rows ----------\nconst voRows = rows.filter(r =>\n  (r && (r.kind === \"vo\" || (r.text && r.track === \"broll\")))\n);\n\nconst segments = [];\n\n// Primary path: use VO rows (preferred)\nfor (const r of voRows) {\n  const text = clean(r.text || \"\");\n  if (!text) continue;\n\n  const start = N(r.start_sec ?? r.startSec, 0);\n  const end   = N(r.end_sec   ?? r.endSec, start + N(r.duration_sec ?? r.duration, 0));\n  const dur   = Math.max(0, end - start) || N(planner.durationSec, 0);\n\n  const segId = getsegId(r);\n\n  const seg = {\n    // IMPORTANT: use segment id and expose as 'segId' (lowercase)\n    segId,\n    type: \"broll_narration\",\n    characterId: null,            // off-screen narrator\n    voiceId: S(r.speech?.voiceId || defaultVoiceId),\n    text,\n    targetSec: dur,\n    startSec: start,\n    endSec: start + dur\n  };\n\n  // duration sanity vs WPS\n  if (WPS > 0) {\n    const maxWords = Math.floor(dur * WPS);\n    const w = words(text);\n    if (w > maxWords) seg.warn = `Narration (${w} words) may exceed ${dur}s at ${WPS} wps (≈${maxWords} max).`;\n  }\n\n  segments.push(seg);\n}\n\n// Fallback: single segment from planner.referenceText\nif (!segments.length && planner.referenceText) {\n  const dur = N(planner.durationSec, 0);\n  segments.push({\n    segId: \"SEG-01\",                 // default when no VO rows exist\n    type: \"broll_narration\",\n    characterId: null,\n    voiceId: defaultVoiceId,\n    text: clean(planner.referenceText),\n    targetSec: dur,\n    startSec: 0,\n    endSec: dur\n  });\n}\n\n// ---------- voices list ----------\nconst voiceIds = Array.from(new Set(segments.map(s => s.voiceId).filter(Boolean)));\nconst voices = voiceIds.map(vid => ({\n  voiceId: vid,\n  // gentle defaults that fit B-roll\n  pitchSemitones: 0,\n  speed: 1,\n  emotion: \"neutral\",\n  energy: 0.45,\n  voiceAccent: \"auto\"\n}));\n\n// ---------- output ----------\nreturn [{\n  json: {\n    tts: {\n      segments,                 // each item now has 'segId', not 'id'\n      voices,\n      wps: WPS,\n      route,\n      title,\n      prompts: { style: stylePrompt },\n      voice_ref_url: voiceRefUrl, // Attached here\n      piggybank: piggy?.voice\n        ? { voice: { id: S(piggy.voice.id || \"\"), displayName: S(piggy.voice.displayName || \"\") } }\n        : (defaultVoiceId ? { voice: { id: defaultVoiceId, displayName: \"\" } } : undefined)\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -112
+      ],
+      "id": "3c774f16-b28c-472c-89f5-5960df56b362",
+      "name": "Character Voice Prompts"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -736,
+        -304
+      ],
+      "id": "4a133c51-1a9d-4bca-80e8-97d1c9bd18f5",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Voice EDL → Jobs (B-roll only)\n// Normalizes to ONE job per voice clip:\n// { id?, segId?, shotId, track: \"broll\", audio_url, duration_sec, start_sec, end_sec }\n//\n// Accepts either:\n//  • Legacy EDL:   root.edl.tracks.audio[].clips[]\n//  • Simple list:  root.voices[]\n//  • (If a TrackEDL with segments appears, we still try to read voice URLs from segment outputs)\n\nconst root = items?.[0]?.json ?? {};\n\n// ---------- helpers ----------\nconst N = (v, d = 0) => {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n};\nconst pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '') ?? null;\n\n// Name heuristics for voice tracks\nconst VO_NAMES = ['a_vo', 'vo', 'voice', 'narration', 'a_roll_vo', 'broll_vo'];\n\n// ---------- TrackEDL.segments (rare for VO, but handle if present) ----------\nlet jobs = [];\nconst edl =\n  (root && root.kind === 'TrackEDL' && root) ||\n  (root?.edl && root.edl.kind === 'TrackEDL' && root.edl) ||\n  null;\n\nif (edl?.segments && Array.isArray(edl.segments) && edl.segments.length) {\n  jobs = edl.segments\n    .map(s => {\n      const seg = s.segment ?? {};\n      const tIn  = N(seg.startSec, 0);\n      const tOut = N(seg.endSec, tIn + N(seg.durationSec, 0));\n      const dur  = Math.max(0, tOut - tIn);\n\n      const url = pick(\n        s.outputs?.voice?.audio_url,\n        s.outputs?.voice?.url,\n        s.outputs?.audio?.url,\n        s.outputs?.audioUrl,\n        s.voice?.audio_url,\n        s.voice?.url,\n        s.audio_url,\n        s.src\n      );\n\n      if (!url) return null;\n\n      const idLike =\n        s.segId ?? seg.segId ?? s.shotKey ?? s.shotId ?? s.id ?? null;\n\n      return {\n        json: {\n          id:           idLike,\n          segId:        seg.segId ?? idLike ?? null,\n          shotId:       s.shotId ?? s.shotKey ?? seg.segId ?? idLike,\n          track:        'broll',\n          audio_url:    url,\n          duration_sec: N(s.duration_sec, dur),\n          start_sec:    tIn,\n          end_sec:      tOut,\n\n          // back-compat\n          audioUrl:     url,\n          duration:     N(s.duration_sec, dur),\n        }\n      };\n    })\n    .filter(Boolean);\n}\n\n// ---------- Legacy EDL: edl.tracks.audio[].clips[] ----------\nif (!jobs.length) {\n  // choose first audio track that looks like VO; else fall back to first audio track\n  const audioTracks = root.edl?.tracks?.audio ?? [];\n  const pickIdx = Math.max(\n    -1,\n    ...audioTracks\n      .map((t, i) => ({ i, name: String(t?.name ?? '').toLowerCase() }))\n      .map(({ i, name }) => (VO_NAMES.includes(name) ? i + 1000 : (name ? i : -1)))\n  );\n  const chosen =\n    (pickIdx >= 1000 ? audioTracks[pickIdx - 1000] : null) ||\n    (Array.isArray(audioTracks) && audioTracks.length ? audioTracks[0] : null);\n\n  const clips = chosen?.clips ?? [];\n  if (Array.isArray(clips) && clips.length) {\n    jobs = clips.map(c => {\n      const tIn  = N(c.in, 0);\n      const tOut = Number.isFinite(Number(c.out)) ? Number(c.out) : tIn + N(c.duration_sec ?? c.duration, 0);\n      const dur  = Math.max(0, tOut - tIn);\n      const idLike = c.id ?? c.shotId ?? null;\n\n      return {\n        json: {\n          id:           idLike,\n          segId:        idLike,\n          track:        'broll',\n          audio_url:    c.src ?? c.audio_url ?? null,\n          duration_sec: dur,\n          start_sec:    tIn,\n          end_sec:      tOut,\n\n          // back-compat\n          audioUrl:     c.src ?? c.audio_url ?? null,\n          duration:     dur\n        }\n      };\n    });\n  }\n}\n\n// ---------- Simple list: root.voices[] ----------\nif (!jobs.length && Array.isArray(root.voices) && root.voices.length) {\n  jobs = root.voices.map(v => {\n    const dur = N(v.duration_sec ?? v.out, 0);\n    return {\n      json: {\n        id:           v.id ?? null,\n        segId:        v.shotId ?? v.id ?? null,\n        track:        'broll',\n        audio_url:    v.audio_url ?? v.src ?? null,\n        duration_sec: dur,\n        start_sec:    0,\n        end_sec:      dur,\n\n        // back-compat\n        audioUrl:     v.audio_url ?? v.src ?? null,\n        duration:     dur\n      }\n    };\n  });\n}\n\n// Nothing found → return empty (n8n can be set to “Always Output Data” if needed)\nreturn jobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        96
+      ],
+      "id": "9096c24a-f407-4c31-ab19-f5077b31f154",
+      "name": "Parse Voice EDL -> Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Planner Payload (B-ROLL ONLY)\n * Input: RenderPlanV2 envelope (route= \"broll\")\n * Output: { planner, planMeta, envelope }\n */\nconst env = $json;\n\nconst pick = (v, ...alts) => { for (const x of [v, ...alts]) if (x !== undefined && x !== null && x !== '') return x; };\nconst asBool = (v, fb = false) => (v === true || v === false) ? v : fb;\nconst num = (v, fb = null) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };\n\n// ---- Shorthands to user inputs ---------------------------------------------\nconst ui  = env.source?.ui || {};\nconst src = env.source || {};\n\n// ---- B-roll defaults --------------------------------------------------------\nconst videoType       = 'broll';\nconst defaultDriver   = 'environment';           // visuals lead; no on-camera host\nconst defaultAction   = 'atmospheric city/lifestyle cutaways; slow pushes/pans; inserts & details';\nconst defaultCutaways = true;                    // b-roll is inherently cutaways\nconst defaultCaptions = false;                   // no dialog by default\nconst defaultMusic    = true;                    // music carries the montage by default\n\n// Flags: UI wins, else plan.flags, else b-roll defaults\nconst wantsMusic    = asBool(pick(ui.wantsMusic,    env.flags?.music),    defaultMusic);\nconst wantsCaptions = asBool(pick(ui.wantsCaptions, env.flags?.captions), defaultCaptions);\n\n// Duration: prefer envelope total, else UI hint, else 30\nconst durationSec = num(env.totalDurationSec, num(ui.durationSec, 30)) || 30;\n\n// ---- Planner payload --------------------------------------------------------\nconst planner = {\n  scene:          pick(ui.scene,          src.scene,          env.title, ''),\n  driver:         pick(ui.driver,         src.driver,         defaultDriver),\n  wantsCutaways:  asBool(pick(ui.wantsCutaways, src.wantsCutaways), defaultCutaways),\n  character:      null, // b-roll has no on-camera host\n  setting:        pick(ui.setting,        src.setting,        'evocative exteriors/interiors; pleasing light'),\n  action:         pick(ui.action,         src.action,         defaultAction),\n  directorsNotes: pick(ui.directorsNotes, src.directorsNotes, 'visual storytelling only; cinematic but natural'),\n  wantsMusic,\n  musicDesc:      pick(ui.musicDesc,      src.musicDesc,      ''),\n  wantsCaptions,\n  durationSec,\n  referenceText:  pick(ui.referenceText,  env.sourceTexts?.referenceText, src.referenceText, ''),\n  videoType,\n  // --- NEW: inherit visual style from input (A-roll-like behavior) ---\n  style: pick(ui?.advanced?.style, src?.advanced?.style, null)\n};\n\n// ---- Plan meta passthrough --------------------------------------------------\nconst planMeta = {\n  constraints: {\n    rounding:     env.constraints?.rounding ?? 3,\n    paddingSec:   env.constraints?.paddingSec ?? 0.05,\n    toleranceSec: env.constraints?.toleranceSec ?? 0.033,\n    wps:          env.speech?.wps ?? 2.5\n  },\n  speech: {\n    // Kept for uniform envelope shape (even if unused in b-roll)\n    voiceId: pick(env.speech?.voiceId, 'fe3b2cea-969a-4b5d-bc90-fde8578f1dd5'),\n    wpm:     env.speech?.wpm ?? 150,\n    wps:     env.speech?.wps ?? 2.5\n  },\n  ids: {\n    orchestratorId: env.requestId || null,\n    packageId: 'BR-PKG'\n  }\n};\n\nreturn [{ json: { planner, planMeta, envelope: env } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        -304
+      ],
+      "id": "733fa787-c68c-484c-a355-34f7a77eef22",
+      "name": "Planner Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Keyframe EDL → Jobs\n// Emits one \"job\" per segment/clip with essential IDs: shotKey, segId, beatId, shotId.\n// Uses standard shotId (never mirrored from shotKey/id).\n\nconst root = $items()?.[0]?.json ?? {};\n\n// ---------- helpers ----------\nconst S = v => (v == null ? \"\" : String(v));\nconst N = v => (v === \"\" || v == null ? undefined : Number(v));\nconst dur = (inn, out, fallback) => {\n  const i = N(inn) ?? 0;\n  const o = N(out);\n  if (o != null && o >= i) return o - i;\n  return N(fallback) ?? 0;\n};\n\n// Parse \"SEG-01-B02-S07\" → { segId:\"SEG-01\", beatId:\"B02\", shotId:\"S07\" }\nfunction parseShotKey(sk) {\n  const m = S(sk).match(/^SEG-(\\d+)-B(\\d+)-S(\\d+)$/i);\n  if (!m) return null;\n  const p2 = n => String(n).padStart(2, \"0\");\n  return { segId: `SEG-${p2(m[1])}`, beatId: `B${p2(m[2])}`, shotId: `S${p2(m[3])}` };\n}\n\n// Normalize IDs from any object with possible fields.\n// shotId: prefer explicit `shotId`; fall back to parsed from `shotKey`.\n// Never mirror from `id`.\nfunction normalizeIds(obj = {}) {\n  const shotKey = obj.shotKey ?? obj.meta?.shotKey ?? null;\n  let segId   = obj.segId   ?? obj.meta?.segId   ?? null;\n  let beatId  = obj.beatId  ?? obj.meta?.beatId  ?? null;\n  let shotId  = obj.shotId  ?? obj.meta?.shotId  ?? null;\n\n  if ((!shotId || !segId || !beatId) && shotKey) {\n    const p = parseShotKey(shotKey);\n    if (p) {\n      segId  = segId  ?? p.segId;\n      beatId = beatId ?? p.beatId;\n      shotId = shotId ?? p.shotId;\n    }\n  }\n\n  return {\n    shotKey: shotKey ?? null,\n    segId:   segId   ?? null,\n    beatId:  beatId  ?? null,\n    shotId:  shotId  ?? null\n  };\n}\n\n// ---------- modern TrackEDL path ----------\nconst edl =\n  (root && root.kind === \"TrackEDL\" && root) ||\n  (root?.edl && root.edl.kind === \"TrackEDL\" && root.edl) ||\n  null;\n\nconst segments = (edl?.segments && Array.isArray(edl.segments))\n  ? edl.segments\n  : (Array.isArray(root.segments) ? root.segments : []);\n\nif (segments && segments.length) {\n  const out = segments.map(s => {\n    const seg = s.segment ?? {};\n    const ids = normalizeIds({\n      shotKey: s.shotKey ?? seg.shotKey,\n      segId:   seg.segId ?? s.segId,\n      beatId:  s.beatId,\n      shotId:  s.shotId\n    });\n\n    const startSec = N(seg.startSec ?? s.startSec) ?? 0;\n    const endSec   = N(seg.endSec   ?? s.endSec);\n    const durationSec = dur(startSec, endSec, seg.durationSec ?? s.durationSec);\n\n    const image_url =\n      s.image_url || s.src || s.url ||\n      seg.image_url || seg.src || seg.url || null;\n\n    return {\n      json: {\n        // essential IDs\n        shotKey: ids.shotKey,\n        segId:   ids.segId,\n        beatId:  ids.beatId,\n        shotId:  ids.shotId,\n\n        sceneId: S(s.sceneId ?? seg.sceneId ?? \"\"),\n        type:    S(s.type ?? seg.type ?? \"\"),      // \"aroll\" | \"broll\" | \"\"\n        startSec,\n        endSec: endSec ?? (startSec + (durationSec || 0)),\n        durationSec,\n\n        // prompt crumbs (optional)\n        character_desc: s.outputs?.character ?? \"\",\n        setting_desc:   s.outputs?.setting   ?? \"\",\n        negative:       s.prompts?.negative  ?? \"\",\n\n        // helpful direct fetch\n        image_url: image_url ?? null,\n\n        // passthrough\n        rails:  Array.isArray(s.rails) ? s.rails : [],\n        meta:   s.meta ?? null,\n        source: s.source ?? null,\n      }\n    };\n  });\n  return out;\n}\n\n// ---------- legacy images track path ----------\nconst keyframes = Array.isArray(root.keyframes) ? root.keyframes : [];\nconst byId = Object.create(null);\nfor (const kf of keyframes) byId[kf.id] = kf;\n\nconst imageTrack = root.edl?.tracks?.images?.[0] || { clips: [] };\nconst clips = Array.isArray(imageTrack.clips) ? imageTrack.clips : [];\n\nconst out = clips.map(clip => {\n  const kf =\n    byId[clip.id] ||\n    keyframes.find(k => k.src === clip.src || k.image_url === clip.src) ||\n    {};\n\n  // Normalize IDs from clip (primary) and fall back to keyframe/meta; never mirror from `id`\n  const ids = normalizeIds({\n    shotKey: clip.shotKey ?? kf.shotKey ?? kf.meta?.shotKey,\n    segId:   clip.segId   ?? kf.segId   ?? kf.meta?.segId,\n    beatId:  clip.beatId  ?? kf.beatId  ?? kf.meta?.beatId,\n    shotId:  clip.shotId  ?? kf.shotId  ?? kf.meta?.shotId\n  });\n\n  const startSec = N(clip.in) ?? 0;\n  const endSec   = N(clip.out);\n  const durationSec = dur(startSec, endSec, clip.durationSec);\n\n  return {\n    json: {\n      // essential IDs\n      shotKey: ids.shotKey,\n      segId:   ids.segId,\n      beatId:  ids.beatId,\n      shotId:  ids.shotId,\n\n      sceneId: \"\",\n      type:    S(clip.type ?? kf.type ?? \"\"),   // often null → \"\"\n      startSec,\n      endSec: endSec ?? (startSec + (durationSec || 0)),\n      durationSec,\n\n      character_desc: S(kf.character_desc ?? \"\"),\n      setting_desc:   S(kf.setting_desc   ?? \"\"),\n      negative:       S(kf.negative       ?? \"\"),\n\n      image_url: S(clip.src ?? kf.image_url ?? kf.src ?? \"\"),\n\n      rails:  [],\n      meta:   null,\n      source: null,\n    }\n  };\n});\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        288
+      ],
+      "id": "43fa46f1-f182-4994-b8e3-59a3afa9affd",
+      "name": "Parse Keyframe EDL -> Jobs"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -512,
+        80
+      ],
+      "id": "0a032f60-0e86-4181-b335-616e4f22eb45",
+      "name": "Merge Plan + Voice"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -512,
+        272
+      ],
+      "id": "90c2ef9c-bd37-4623-8abb-e0a3632d48e9",
+      "name": "Merge Plan + Keyframes"
+    },
+    {
+      "parameters": {
+        "jsCode": "// B-Roll Prompt Composer ➜ i2v Jobs\n// SOURCE OF TRUTH: Actual audio length only\n//   • Audio EDL (prefer narration track; else sum all audio tracks)\n//   • PLUS loose wav items (audio_url/audioUrl) not already in the EDL (dedup by URL)\n// VO match with min 2s per shot; drop LAST on compress until all ≥ 2s\n// Keyframe match priority: shotKey → (beatId+shotId) → positional\n// Ensures unique image_url per shot\n// Global ordering: sort by beatId then shotId, then rebuild timestamps linearly\n// IDs: Always emit { shotKey, segId, beatId, shotId } at top level (shotId = standard field; parse from shotKey only if missing)\n\nconst rows = $items().map(i => i.json || {});\nconst root = rows[0] || {};\nconst planner  = root.planner  || {};\nconst envelope = root.envelope || {};\n\nconst S = v => (v == null ? \"\" : String(v));\nconst N = v => (Number.isFinite(Number(v)) ? Number(v) : 0);\nconst clean = s => (s == null ? \"\" : String(s)).replace(/\\s+/g,\" \").trim();\n\n// ---- FORCE resolution to 960x544 ----\nconst width  = 960;\nconst height = 544;\n\nconst fps    = N(envelope?.settings?.fps) || 30;\nconst aspect = S(envelope?.settings?.aspect || \"16:9\");\n\nconst rounding = Math.max(0, Number(root?.planMeta?.constraints?.rounding ?? envelope?.constraints?.rounding ?? 3));\nconst R = (x) => Number((Number.isFinite(x) ? x : 0).toFixed(rounding));\nconst EPS = Math.pow(10, -rounding) * 2; // equality tolerance\n\n// ---------- helpers ----------\nfunction parseShotKey(sk) {\n  // Accepts patterns like SEG-01-B02-S07 (case-insensitive)\n  const m = S(sk).match(/^SEG-(\\d+)-B(\\d+)-S(\\d+)$/i);\n  if (!m) return null;\n  const p2 = x => String(x).padStart(2,\"0\");\n  return {\n    segId:  `SEG-${p2(m[1])}`,\n    beatId: `B${p2(m[2])}`,\n    shotId: `S${p2(m[3])}`,\n  };\n}\n\n// ---------- collect shots (keep segId; fill missing IDs from shotKey, but prefer standard fields) ----------\nlet shots = rows\n  .filter(r => r && (r.kind === \"shot\" || (r.shotId && (r.t2i || r.i2v))))\n  .map(r => {\n    const shotKey = S(r.source?.shotKey || r.shotKey || r.source?.origShotKey || \"\");\n    const parsed  = parseShotKey(shotKey) || {};\n\n    const segId   = S(r.segId || r.source?.segId || parsed.segId || \"\");\n    const beatId  = S(r.beatId || r.source?.origBeatId || r.source?.beatId || parsed.beatId || \"\");\n    // Standard shotId preferred; only fall back to parsed shotId if the standard is missing\n    const shotId  = S(r.shotId || parsed.shotId || \"\");\n\n    const start   = N(r.start_sec ?? r.startSec);\n    const end     = N(r.end_sec   ?? r.endSec);\n    const dur     = N(r.duration_sec ?? r.durationSec) || Math.max(0, end - start) || 0;\n\n    return {\n      segId, beatId, shotId, shotKey,\n      composite: `${beatId}::${shotId}`,\n      start, end, dur,\n      pos:    clean(r.t2i?.positive || r.i2v?.positive || \"\"),\n      neg:    clean(r.t2i?.negative || r.i2v?.negative || \"\"),\n      motion: clean(r.i2v?.motionHint || r.i2v?.motion || \"\"),\n      tags:   Array.isArray(r.tags) ? r.tags : [],\n      subject: clean(r.subject || \"\"),\n      setting: clean(r.setting || \"\"),\n      sceneId: S(r.source?.sceneId || r.segId || r.source?.segId || \"\")\n    };\n  });\n\n// If all shot durations are absent, seed evenly (we will rescale to audio length later)\nif (shots.length && shots.every(s => !s.dur)) {\n  const placeholder = shots.length; // neutral, will be overridden by audio\n  const even = placeholder / shots.length;\n  shots = shots.map((s,i) => ({ ...s, dur: even, start: i*even, end: (i+1)*even }));\n}\n\n// order by beat then shot\nconst parseBeat = v => {\n  if (!v) return Infinity;\n  const num = parseInt(String(v).replace(/\\D+/g, \"\"), 10);\n  return Number.isFinite(num) ? num : Infinity;\n};\nshots.sort((a, b) => {\n  const ba = parseBeat(a.beatId);\n  const bb = parseBeat(b.beatId);\n  if (ba !== bb) return ba - bb;\n  return String(a.shotId).localeCompare(String(b.shotId), undefined, { numeric: true });\n});\n\n// ---------- collect keyframes ----------\nfunction extractKeyframeKeys(r) {\n  const kShotId  = S(r.shotId || r.id || r.clipId || \"\");\n  const kBeatId  = S(r.meta?.beatId || r.source?.origBeatId || r.source?.beatId || \"\");\n  const kShotKey = S(r.meta?.shotKey || r.source?.shotKey || r.shotKey || \"\");\n  const parsed   = parseShotKey(kShotKey) || {};\n  const kSegId   = S(r.segId || r.meta?.segId || parsed.segId || \"\");\n  return { kShotId, kBeatId, kShotKey, kSegId };\n}\n\nconst keyframes = rows\n  .filter(r => r && r.image_url)\n  .map(r => {\n    const { kShotId, kBeatId, kShotKey } = extractKeyframeKeys(r);\n    return {\n      shotId:  kShotId,\n      beatId:  kBeatId,\n      shotKey: kShotKey,\n      composite: `${kBeatId}::${kShotId}`,\n      url: S(r.image_url)\n    };\n  });\n\n// Indexes (NO shotId-only index)\nconst kfByShotKey   = new Map(keyframes.filter(k => k.shotKey).map(k => [k.shotKey, k]));\nconst kfByComposite = new Map(keyframes.filter(k => k.beatId && k.shotId).map(k => [k.composite, k]));\n\n// Positional pool excludes anything already indexed\nconst indexedUrls = new Set([\n  ...[...kfByShotKey.values()].map(k => k.url),\n  ...[...kfByComposite.values()].map(k => k.url),\n]);\nconst positionalKFs = keyframes.filter(k => !indexedUrls.has(k.url));\n\nconst usedUrls = new Set();\nfunction takeFirstUnusedPositional() {\n  while (positionalKFs.length) {\n    const k = positionalKFs.shift();\n    if (!usedUrls.has(k.url)) return k;\n  }\n  return null;\n}\nfunction matchKeyframe(sh) {\n  if (sh.shotKey && kfByShotKey.has(sh.shotKey)) {\n    const k = kfByShotKey.get(sh.shotKey);\n    if (!usedUrls.has(k.url)) { usedUrls.add(k.url); return { url: k.url, matchedBy: \"shotKey\", unique: true }; }\n  }\n  if (sh.beatId && sh.shotId && kfByComposite.has(sh.composite)) {\n    const k = kfByComposite.get(sh.composite);\n    if (!usedUrls.has(k.url)) { usedUrls.add(k.url); return { url: k.url, matchedBy: \"beatId+shotId\", unique: true }; }\n  }\n  const p = takeFirstUnusedPositional();\n  if (p) { usedUrls.add(p.url); return { url: p.url, matchedBy: \"positional\", unique: true }; }\n  return { url: \"\", matchedBy: \"none\", unique: false };\n}\n\n// ---------- AUDIO (sole source of truth) ----------\n// [CHANGED] summarize EDL with per-segId rollups (while preserving existing totals)\nfunction summarizeEDL(edl) {\n  const audioTracks = Array.isArray(edl?.tracks?.audio) ? edl.tracks.audio : [];\n  const byTrack = [];\n  const urls = new Set();\n\n  const segSums = new Map();     // segId -> total duration across all tracks\n  const segNarrSums = new Map(); // segId -> duration on narration track only\n\n  function durFromClip(c) {\n    const cin  = N(c?.in);\n    const cout = N(c?.out);\n    const hasIn  = Number.isFinite(cin);\n    const hasOut = Number.isFinite(cout) && cout >= 0;\n    let dur = 0;\n    if (hasOut && hasIn) dur = cout - cin;\n    else if (hasOut) dur = cout; // treat 'out' as duration when 'in' absent\n    else dur = N(c?.duration ?? c?.duration_sec ?? 0);\n    if (!Number.isFinite(dur) || dur < 0) dur = 0;\n    const src = S(c?.src || c?.url || c?.audio_url || c?.audioUrl || \"\");\n    if (src) urls.add(src);\n    return R(dur);\n  }\n\n  for (const t of audioTracks) {\n    const name = S(t?.name).toLowerCase() || \"\";\n    const clips = Array.isArray(t?.clips) ? t.clips : [];\n    let sum = 0;\n    for (const c of clips) {\n      const d = durFromClip(c);\n      sum += d;\n      // per-clip segId accumulation\n      const segId = S(c?.segId || \"\");\n      if (segId) {\n        segSums.set(segId, R(N(segSums.get(segId)) + d));\n        if (name === \"narration\") {\n          segNarrSums.set(segId, R(N(segNarrSums.get(segId)) + d));\n        }\n      }\n    }\n    byTrack.push({ name, sum: R(sum) });\n  }\n\n  // Preferred: narration track sum; fallback: sum of ALL audio tracks\n  const narr = byTrack.find(x => x.name === \"narration\");\n  const lengthTracks = narr ? narr.sum : R(byTrack.reduce((a,b)=>a + b.sum, 0));\n\n  const lengthField = R(N(edl?.length_sec));\n\n  // Choose tracks over field when present; else field\n  const lengthChosen = byTrack.length ? lengthTracks : lengthField;\n\n  return {\n    lengthChosen: R(Math.max(0, lengthChosen)),\n    lengthTracks,\n    lengthField,\n    trackBreakdown: byTrack,\n    urls: [...urls],\n    hasTracks: audioTracks.length > 0,\n    segSums,      // [CHANGED] totals per seg (all tracks)\n    segNarrSums   // [CHANGED] totals per seg (narration only)\n  };\n}\n\nfunction collectLooseWavs() {\n  const loose = [];\n  for (const r of rows) {\n    const url = S(r.audio_url || r.audioUrl || r.voice_url || r.voiceUrl || \"\");\n    if (!url) continue;\n    // prefer explicit duration fields; else compute from start/end\n    let d =\n      N(r.duration_sec) ||\n      N(r.duration)     ||\n      (Number.isFinite(N(r.end_sec)) && Number.isFinite(N(r.start_sec)) ? N(r.end_sec) - N(r.start_sec) : 0) ||\n      N(r.endSec) - N(r.startSec) || 0;\n    d = R(Math.max(0, d));\n    if (d > 0) {\n      loose.push({\n        url,\n        duration: d,\n        segId: S(r.segId || r.sceneId || \"\"), // [CHANGED] carry segId for per-seg attribution\n        sourceIndex: rows.indexOf(r)\n      });\n    }\n  }\n  return loose;\n}\n\n// Pull all EDLs that have audio tracks or length_sec\nconst edlCandidates = [];\nfor (let i = 0; i < rows.length; i++) {\n  const edl = rows[i]?.edl;\n  if (!edl) continue;\n  const hasAudio = Array.isArray(edl?.tracks?.audio) && edl.tracks.audio.length > 0;\n  const hasLen   = Number.isFinite(Number(edl?.length_sec));\n  if (hasAudio || hasLen) {\n    const s = summarizeEDL(edl);\n    edlCandidates.push({ idx: i, sum: s });\n  }\n}\n\nlet edlPick = null;\nif (edlCandidates.length) {\n  // Prefer the candidate that has a narration track with the largest lengthChosen;\n  // otherwise the one with the largest lengthChosen overall.\n  edlPick = edlCandidates\n    .sort((a,b) => {\n      const aHasNarr = a.sum.trackBreakdown.some(t => t.name === \"narration\") ? 1 : 0;\n      const bHasNarr = b.sum.trackBreakdown.some(t => t.name === \"narration\") ? 1 : 0;\n      if (aHasNarr !== bHasNarr) return bHasNarr - aHasNarr;\n      return b.sum.lengthChosen - a.sum.lengthChosen;\n    })[0];\n}\n\nconst edlUrls = new Set(edlPick ? edlPick.sum.urls : []);\nconst looseWavs = collectLooseWavs().filter(w => !edlUrls.has(w.url)); // dedupe vs EDL\n\n// ---------- [CHANGED] Build voice length *per segId* ----------\nconst voBySeg = new Map();\n\n// Seed from EDL: prefer narration per seg; else all-tracks per seg\nif (edlPick) {\n  const segNarr = edlPick.sum.segNarrSums;\n  const segAll  = edlPick.sum.segSums;\n  // take union of keys\n  const keys = new Set([...(segNarr?.keys?.() ?? []), ...(segAll?.keys?.() ?? [])]);\n  for (const k of keys) {\n    const v = N(segNarr?.get?.(k)) || N(segAll?.get?.(k)) || 0;\n    if (v > 0) voBySeg.set(k, R(v));\n  }\n}\n\n// Add loose WAVs not represented in EDL (by URL dedupe already done); attribute by segId if present\nfor (const w of looseWavs) {\n  const k = S(w.segId || \"\");\n  if (!k) continue; // only attribute when segId is known\n  const cur = N(voBySeg.get(k)) || 0;\n  voBySeg.set(k, R(cur + N(w.duration)));\n}\n\n// ---------- duration solver (per segId) ----------\nconst MIN_SHOT_SEC = 2;\n\nfunction rescaleDurations(target, arr) {\n  const srcTotal = arr.reduce((a,b)=>a+(b.dur||0),0) || 1;\n  const factor = target / srcTotal;\n  const scaled = arr.map(s => ({ ...s, dur: Math.max(0, (s.dur||0) * factor) }));\n  const sumBefore = scaled.slice(0, -1).reduce((a,b)=>a+R(b.dur), 0);\n  const last = scaled[scaled.length - 1];\n  last.dur = Math.max(0, target - R(sumBefore));\n  return scaled.map(s => ({ ...s, dur: R(s.dur) }));\n}\n\nfunction compressWithMinDropLast(target, arr, minSec) {\n  let pool = arr.map(s => ({ ...s }));\n  while (pool.length) {\n    pool = rescaleDurations(target, pool);\n    if (pool.every(s => s.dur >= minSec - EPS)) return pool;\n    pool.pop(); // drop LAST\n  }\n  return [];\n}\n\n// [CHANGED] Group shots by segId, retime within each group to that seg’s VO duration\nconst bySeg = new Map();\nfor (const s of shots) {\n  const k = S(s.segId || \"\");\n  if (!bySeg.has(k)) bySeg.set(k, []);\n  bySeg.get(k).push({ ...s });\n}\n\nlet adjustedShots = [];\nfor (const [segId, group] of bySeg.entries()) {\n  const target = N(voBySeg.get(segId)) || 0;\n  const shotTotal = R(group.reduce((sum,s) => sum + (s.dur || 0), 0));\n\n  let g = group.map(s => ({ ...s }));\n  if (target > 0 && g.length) {\n    if (target > shotTotal + EPS) {\n      g = rescaleDurations(target, g);\n    } else if (target < shotTotal - EPS) {\n      const compressed = compressWithMinDropLast(target, g, MIN_SHOT_SEC);\n      g = compressed.length ? compressed : rescaleDurations(target, g); // safety\n    } else {\n      g = rescaleDurations(target, g);\n    }\n  }\n\n  // contiguous timeline per seg\n  let cursor = 0;\n  g = g.map((s) => {\n    const start = cursor;\n    const end   = R(cursor + (s.dur || 0));\n    cursor = end;\n    return { ...s, start: R(start), end: R(end) };\n  });\n\n  adjustedShots.push(...g);\n}\n\n// preserve overall sort (already sorted); adjustedShots aligned per-seg timelines\nconst sumAfterBySeg = {};\nfor (const [segId, group] of new Map([...adjustedShots.reduce((m,s)=>{\n  const k=S(s.segId||\"\"); if(!m.has(k)) m.set(k,[]); m.get(k).push(s); return m;\n}, new Map())])) {\n  const tgt = N(voBySeg.get(segId)) || 0;\n  const sum = R(group.reduce((a,b)=>a+(b.dur||0),0));\n  sumAfterBySeg[segId] = { target: tgt, sumAfter: sum, matches: tgt>0 ? Math.abs(sum - tgt) <= EPS : true };\n}\n\n// ---------- prompts ----------\nfunction synthPositive(r) {\n  const bits = [r.subject, r.setting, r.tags.slice(0,3).join(\", \")].filter(Boolean);\n  const base = bits.length ? bits.join(\". \") + \".\" : \"\";\n  return (base + \" faces incidental only; no readable text; cinematic natural light; warm morning glow; cohesive palette; clean composition; gentle motivated motion only; shallow depth of field where appropriate\").trim();\n}\nfunction finalPositive(r) {\n  const p = r.pos || synthPositive(r);\n  return r.motion ? `${p} ${r.motion}` : p;\n}\nfunction finalNegative(r) {\n  return r.neg || \"text, logo, watermark, subtitles, lower thirds, readable signage or labels, UI elements, front-facing talking head, interview, direct address, faces close-up, hands covering lens, whip pan, rapid zoom, shaky cam, heavy motion blur, strobing, banding, AI artifacts, double subject, distorted anatomy, overexposed highlights\";\n}\n\n// ---------- emit (IDs ensured) ----------\nconst titleOut = envelope?.title || \"Untitled\";\nlet out = adjustedShots.map(sh => {\n  const { url, matchedBy, unique } = matchKeyframe(sh);\n  if (!url) return null;\n\n  const base = {\n    kind: \"i2v_job\",\n    route: \"broll\",\n\n    // ESSENTIAL IDS at top level\n    shotKey: sh.shotKey || null,\n    segId:   sh.segId   || null,\n    beatId:  sh.beatId  || null,\n    shotId:  sh.shotId  || null, // standard shotId\n\n    sceneId: sh.sceneId,\n    type: \"broll\",\n    title: titleOut,\n    resolution: { width, height }, // forced 960x544\n    fps,\n    aspect,\n    startSec: sh.start,\n    endSec: sh.end,\n    durationSec: sh.dur,\n    promptText: finalPositive(sh),\n    negativePrompt: finalNegative(sh),\n    image_url: url,\n    assetKey: url,\n    idempotencyKey: url,\n    piggybank: {\n      render: {\n        width, height, fps, aspect, // forced 960x544\n        respectKeyframes: Boolean(envelope?.settings?.respectKeyframes),\n        strictness: Number(envelope?.settings?.strictness ?? 0.6),\n        seedLock: Boolean(envelope?.settings?.seedLock ?? false)\n      }\n    },\n    __trace: {\n      sourceOfTruth: \"audioOnly\",\n      // [CHANGED] expose per-seg targets & checks for transparency\n      canonicalAudioBySeg: Object.fromEntries([...voBySeg.entries()].map(([k,v]) => [k, v])),\n      sumAfterBySeg,\n      minShotSec: MIN_SHOT_SEC,\n      droppedPolicy: \"drop-last-on-compress\",\n      hadKeyframe: true,\n      matchedBy,\n      uniqueUrl: unique,\n      compositeTried: sh.composite,\n      orderKey: { beatId: sh.beatId, shotId: sh.shotId }\n    }\n  };\n\n  return { json: base };\n}).filter(Boolean);\n\n// Final dedupe by image_url (extra safety)\nconst seenURL = new Set();\nout = out.filter(row => {\n  const url = row.json.image_url;\n  if (!url) return false;\n  if (seenURL.has(url)) return false;\n  seenURL.add(url);\n  return true;\n});\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        272
+      ],
+      "id": "f725aabe-c100-463f-9e32-96c393c49e0f",
+      "name": "B-Roll-Prompt Composer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keyframe Prompt Composer (T2I) — B-ROLL (one keyframe per shot)\n// Style-first prompting + toon-aware negatives + camera/overlay suppression\n// Emits { t2i, manifest, jobs } with stable ordering and 960×544 SDXL defaults.\n\nconst rows = $items().map(i => i.json || {});\nconst root = rows[0] || {};\n\nconst planner  = root.planner  || {};\nconst envelope = root.envelope || {};\nconst planMeta = root.planMeta || {};\n\nconst S = v => (v == null ? \"\" : String(v));\nconst clean = s => (typeof s === \"string\" ? s.replace(/\\s+/g, \" \").trim() : \"\");\nconst N = v => (Number.isFinite(Number(v)) ? Number(v) : 0);\n\n// ---------- STYLE (inherit + adapter) ----------\nconst RAW_STYLE = clean(\n  planner.style ??\n  planMeta.style ??\n  envelope?.source?.ui?.advanced?.style ??\n  envelope?.source?.advanced?.style ??\n  \"\"\n) || \"Photorealistic\";\n\nconst styleExpansions = {\n  \"photorealistic\": \"Photorealistic, realistic lighting, natural skin texture, cinematic composition\",\n  \"cinematic\": \"Cinematic, filmic color grade, dramatic lighting, shallow depth of field\",\n  \"documentary\": \"Documentary style, naturalistic lighting, candid realism, handheld feel\",\n  \"anime\": \"Anime-style, cel shading, clean linework, vibrant flat colors, expressive eyes\",\n  \"pixar-style\": \"Pixar-style, 3D animated film still, stylized CG, soft plastic materials, gentle subsurface scattering, exaggerated proportions\",\n  \"watercolor\": \"Watercolor painting, soft washes, paper texture, bleeding pigments, hand-painted look\",\n  \"comic-book\": \"Comic-book style, inked outlines, halftone shading, bold flat colors, graphic stylization\",\n  \"noir\": \"Film noir, high-contrast lighting, strong chiaroscuro, moody shadows, desaturated tones\"\n};\nfunction expandStyle(raw) {\n  const key = String(raw || \"\").toLowerCase();\n  for (const k of Object.keys(styleExpansions)) {\n    if (key.includes(k)) return styleExpansions[k];\n  }\n  return raw || \"Photorealistic\";\n}\nconst STYLE = expandStyle(RAW_STYLE);\nconst IS_TOONISH = /anime|pixar|comic|watercolor/i.test(RAW_STYLE);\nconst TOON_ANTI_REALISM = \"photographic, photorealistic, realistic, DSLR, skin pores, film grain\";\n\n// Ensure STYLE appears first (dedup-safe)\nfunction regexEscape(str) { return String(str).replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\"); }\nfunction ensureStyleFirst(text) {\n  const core = clean(text);\n  if (!core) return `(style:1.35) ${STYLE}`;\n  const lead = clean(STYLE.split(\",\")[0]);\n  const hasLeadAtStart = new RegExp(\"^\\\\s*(\\\\(style:\\\\s*\\\\d+(?:\\\\.\\\\d+)?\\\\)\\\\s*)?\" + regexEscape(lead), \"i\").test(core);\n  if (hasLeadAtStart) return core;\n  const rawToken = clean(RAW_STYLE);\n  const dedupbed = core.replace(new RegExp(\"\\\\b\" + regexEscape(rawToken) + \"\\\\b\\\\s*,?\\\\s*\", \"i\"), \"\");\n  return `(style:1.35) ${STYLE}. ${clean(dedupbed)}`;\n}\n\n// ---------- title / route ----------\nconst title =\n  S(planner.title) ||\n  S(envelope.title) ||\n  S(envelope?.source?.defaults?.title) ||\n  \"B-roll\";\nconst route = \"broll\";\n\n// ---------- collect TTS/voice durations (fallback only) ----------\nconst ttsById = new Map();\nfor (let i = 1; i < rows.length; i++) {\n  const j = rows[i];\n  if (!j) continue;\n  if ((j.shotId && (j.duration_sec || j.duration)) || j.audio_url || j.audioUrl) {\n    if (j.shotId) ttsById.set(S(j.shotId), N(j.duration_sec ?? j.duration));\n    if (j.segId)  ttsById.set(S(j.segId),  N(j.duration_sec ?? j.duration));\n  }\n  const segs = j?.tts?.segments;\n  if (Array.isArray(segs)) {\n    for (const seg of segs) {\n      const sidShot = S(seg.id || seg.shotId || \"\");\n      const sidSeg  = S(seg.segId || seg.segid || \"\");\n      const d = Number(seg.targetSec ?? seg.durationSec ?? seg.duration ?? 0);\n      if (Number.isFinite(d) && d > 0) {\n        if (sidShot) ttsById.set(sidShot, d);\n        if (sidSeg)  ttsById.set(sidSeg, d);\n      }\n    }\n  }\n}\n\n// ---------- B-roll defaults / guardrails ----------\nconst POS_TAIL = [\n  \"cinematic natural light\",\n  \"cohesive palette\",\n  \"clean composition\",\n  \"gentle motivated motion only\",\n  \"selective focus when appropriate\",\n  \"faces incidental only; avoid readable text\"\n].join(\", \");\n\nconst BASE_NEGATIVE = [\n  \"text\",\"logo\",\"watermark\",\"subtitles\",\"lower thirds\",\"readable signage or labels\",\"UI elements\",\n  \"front-facing talking head\",\"interview\",\"direct address\",\"faces close-up\",\n  \"whip pan\",\"rapid zoom\",\"shaky cam\",\"heavy motion blur\",\"strobing\",\"banding\",\n  \"AI artifacts\",\"bad hands\",\"extra limbs\",\"double subject\",\"distorted anatomy\",\"overexposed highlights\"\n].join(\", \");\n\nconst NEGATIVE_TAIL = IS_TOONISH ? `${BASE_NEGATIVE}, ${TOON_ANTI_REALISM}` : BASE_NEGATIVE;\n\n// Suppress cameras/rigs/overlays unless explicitly allowed via [allow_camera]\nconst CAMERA_ONLY_NEG = [\n  \"camera\",\"cameras\",\"DSLR\",\"mirrorless camera\",\"camcorder\",\n  \"security camera\",\"CCTV\",\"surveillance camera\",\n  \"viewfinder\",\"film camera body\",\"camera body\",\n  \"lens\",\"aperture markings\",\"shutter button\",\n  \"tripod\",\"monopod\",\"gimbal\",\"stabilizer\",\"camera rig\",\n  \"frame lines\",\"HUD overlay\",\"REC icon\",\"recording indicator\",\"timestamp overlay\",\n  \"polaroid camera\",\"instant camera\",\"GoPro\"\n].join(\", \");\n\nfunction dedupeCsv(s) {\n  const seen = new Set();\n  return String(s || \"\")\n    .split(\",\")\n    .map(x => x.trim())\n    .filter(x => x && (!seen.has(x.toLowerCase()) && seen.add(x.toLowerCase())))\n    .join(\", \");\n}\nfunction enforceCameraBlock(positive, negative) {\n  const allow = /(\\[allow_camera\\])|(\\bsecurity\\s+camera\\b)|(\\bCCTV\\b)/i.test(String(positive || \"\"));\n  if (allow) return dedupeCsv(negative || \"\");\n  return dedupeCsv([negative || \"\", CAMERA_ONLY_NEG].filter(Boolean).join(\", \"));\n}\n\n// ---------- resolution / model hint / piggybank ----------\nconst resolution = { width: 960, height: 544 }; // force SDXL-friendly\nconst modelHint = \"sdxl\";\nconst fps = N(planner.settings?.fps) || N(envelope.settings?.fps) || 30;\n\nconst piggybank = {\n  render: {\n    width:  resolution.width,\n    height: resolution.height,\n    fps,\n    aspect: planner.settings?.aspect || envelope.settings?.aspect || \"16:9\",\n    respectKeyframes: planner.settings?.respectKeyframes ?? false,\n    strictness: planner.settings?.strictness ?? 0.6,\n    seedLock: planner.settings?.seedLock ?? false,\n    seed: envelope?.source?.ui?.advanced?.seed ?? undefined\n  }\n};\n\n// ---------- ID helpers ----------\nconst pad2 = n => String(n).padStart(2, \"0\");\nfunction normBeat(b) {\n  const m = String(b || \"\").match(/^B(\\d+)$/i);\n  return m ? `B${pad2(m[1])}` : S(b || \"\");\n}\nfunction parseShotKey(sk) {\n  const m = String(sk || \"\").match(/^SEG-(\\d+)-B(\\d+)-S(\\d+)$/i);\n  return m ? { segId: `SEG-${pad2(m[1])}`, beatId: `B${pad2(m[2])}`, shotId: `S${pad2(m[3])}` } : null;\n}\nfunction synthShotKey(segId, beatId, shotId) {\n  const a = S(segId).trim(), b = S(beatId).trim(), c = S(shotId).trim();\n  return (a && b && c) ? `${a}-${b}-${c}` : \"\";\n}\nfunction finalizeIds({ segId, beatId, shotId, shotKey }) {\n  let _segId = S(segId), _beatId = normBeat(S(beatId)), _shotId = S(shotId), _shotKey = S(shotKey);\n  if (_shotKey && (!(_segId && _beatId && _shotId))) {\n    const p = parseShotKey(_shotKey);\n    if (p) { _segId = _segId || p.segId; _beatId = _beatId || p.beatId; _shotId = _shotId || p.shotId; }\n  }\n  if (!_shotKey && _segId && _beatId && _shotId) _shotKey = synthShotKey(_segId, _beatId, _shotId);\n  if (!(_segId && _beatId && _shotId && _shotKey)) return null; // require full IDs\n  return { segId: _segId, beatId: _beatId, shotId: _shotId, shotKey: _shotKey };\n}\n\n// ---------- duration / prompt helpers ----------\nfunction chooseDuration(sh, ids) {\n  const explicit = N(sh.durationSec ?? sh.duration_sec ?? sh.duration);\n  if (explicit) return explicit;\n  const start = N(sh.startSec ?? sh.start_sec);\n  const end   = N(sh.endSec   ?? sh.end_sec);\n  if (end > start) return end - start;\n  const byShot = N(ttsById.get(S(ids.shotId)));\n  if (byShot) return byShot;\n  const bySeg = N(ttsById.get(S(ids.segId)));\n  if (bySeg) return bySeg;\n  return 0;\n}\n\nfunction synthPositiveFromShot(sh) {\n  const bits = [\n    clean(sh.subject),\n    clean(sh.setting),\n    (Array.isArray(sh.tags) ? sh.tags.filter(Boolean).slice(0,3).join(\", \") : \"\")\n  ].filter(Boolean);\n  const core = bits.length ? bits.join(\". \") + \".\" : \"contextual cutaway visuals.\";\n  return ensureStyleFirst(`${core} ${POS_TAIL}`);\n}\n\nfunction buildPromptLookup(srcRows) {\n  const map = new Map();\n  for (const r of srcRows) {\n    const arr = Array.isArray(r.shotPrompts) ? r.shotPrompts : [];\n    for (const sp of arr) {\n      const key = S(sp.shotKey || \"\");\n      if (!key) continue;\n      map.set(key, {\n        pos: clean(sp.t2i?.positive || sp.i2v?.positive || \"\"),\n        neg: clean(sp.t2i?.negative || sp.i2v?.negative || \"\")\n      });\n    }\n  }\n  return map;\n}\n\nfunction collectShots(allRows) {\n  const shots = [];\n  for (const r of allRows) {\n    if (!r) continue;\n    if (r.kind === \"shot\" || (r.shotId && (r.t2i || r.i2v))) {\n      shots.push(r);\n      continue;\n    }\n    if (Array.isArray(r.shots) && r.shots.length) {\n      for (const s of r.shots) shots.push({ ...s, segId: r.segId ?? r.segment?.segId ?? r.id, source: r });\n    }\n    const beats = Array.isArray(r.beats) ? r.beats : [];\n    for (const b of beats) {\n      const bs = Array.isArray(b.shots) ? b.shots : [];\n      for (const s of bs) {\n        shots.push({\n          ...s,\n          beatId: s.beatId ?? b.beatId ?? b.id,\n          segId: r.segId ?? r.segment?.segId ?? r.id,\n          source: r\n        });\n      }\n    }\n  }\n  return shots;\n}\n\n// ---------- order helpers ----------\nfunction segOrderOf(segIdLike) {\n  const s = S(segIdLike);\n  const m = s.match(/SEG-(\\d+)/i);\n  return m ? Number(m[1]) : Number.POSITIVE_INFINITY;\n}\nfunction beatOrderOf(beatIdLike) {\n  const b = S(beatIdLike || \"\");\n  const m = b.match(/B(\\d+)/i);\n  return m ? Number(m[1]) : 1;\n}\nfunction shotOrderFromId(id) {\n  const m = S(id).match(/S(\\d+)/i);\n  return m ? Number(m[1]) : 9999;\n}\n\n// ---------- build clips ----------\nconst promptByShotKey = buildPromptLookup(rows);\nconst shotRows = collectShots(rows.slice(1)); // skip planner row\n\nconst clips = [];\nlet buildOrder = 1;\nconst seenKey = new Set();\n\nfor (const sh of shotRows) {\n  const ids = finalizeIds({\n    segId:  S(sh.segId || sh.source?.segId || \"\"),\n    beatId: S(sh.beatId || \"\"),\n    shotId: S(sh.shotId || sh.id || \"\"),\n    shotKey: S(sh.shotKey || \"\")\n  });\n  if (!ids) continue;\n  if (seenKey.has(ids.shotKey)) continue;\n  seenKey.add(ids.shotKey);\n\n  const durationSec = chooseDuration(sh, ids);\n\n  const fromLookup = promptByShotKey.get(ids.shotKey);\n  const positiveRaw =\n    clean(sh.t2i?.positive || sh.i2v?.positive || \"\") ||\n    (fromLookup?.pos || \"\") ||\n    synthPositiveFromShot(sh);\n\n  const negativeRaw =\n    clean(sh.t2i?.negative || sh.i2v?.negative || \"\") ||\n    (fromLookup?.neg || \"\") ||\n    NEGATIVE_TAIL;\n\n  const positive = ensureStyleFirst(positiveRaw);\n  const negative = enforceCameraBlock(positive, IS_TOONISH ? `${negativeRaw}, ${TOON_ANTI_REALISM}` : negativeRaw);\n\n  clips.push({\n    id: ids.shotId, // stable short id\n    shotKey: ids.shotKey,\n    segId:   ids.segId,\n    beatId:  ids.beatId,\n    shotId:  ids.shotId,\n\n    sceneId: S(envelope?.requestId || planMeta?.ids?.orchestratorId || \"\"),\n    type: \"broll\",\n    positive,\n    negative,\n    durationSec,\n\n    meta: {\n      order: buildOrder,\n      segId: ids.segId,\n      beatId: ids.beatId,\n      shotKey: ids.shotKey,\n      shotId: ids.shotId\n    }\n  });\n  buildOrder += 1;\n}\n\n// Fallback if no explicit shots\nif (!clips.length) {\n  const core = [clean(planner.scene), clean(planner.setting), clean(planner.action), clean(planner.directorsNotes)]\n    .filter(Boolean).join(\". \");\n  const positive = ensureStyleFirst(`${core}. ${POS_TAIL}`);\n  const negative = enforceCameraBlock(positive, NEGATIVE_TAIL);\n\n  clips.push({\n    id: \"S01\",\n    shotKey: \"\",\n    segId: \"\",\n    beatId: \"B01\",\n    shotId: \"S01\",\n    sceneId: S(envelope?.requestId || planMeta?.ids?.orchestratorId || \"\"),\n    type: \"broll\",\n    positive,\n    negative,\n    durationSec: N(planner.durationSec),\n    meta: { order: 1 }\n  });\n}\n\n// ---------- chronological sort, then re-number ----------\nclips.sort((a, b) => {\n  const sA = segOrderOf(a.segId);\n  const sB = segOrderOf(b.segId);\n  if (sA !== sB) return sA - sB;\n\n  const bA = beatOrderOf(a.beatId || a.meta?.beatId);\n  const bB = beatOrderOf(b.beatId || b.meta?.beatId);\n  if (bA !== bB) return bA - bB;\n\n  const shA = shotOrderFromId(a.shotId || a.meta?.shotId || a.id);\n  const shB = shotOrderFromId(b.shotId || b.meta?.shotId || b.id);\n  if (shA !== shB) return shA - shB;\n\n  return N(a.meta?.order) - N(b.meta?.order);\n});\nfor (let i = 0; i < clips.length; i++) {\n  if (!clips[i].meta) clips[i].meta = {};\n  clips[i].meta.order = i + 1;\n}\n\n// ---------- manifest ----------\nconst manifest = {\n  kfTypeMap: {},\n  kfSegIdMap: {},\n  kfShotKeyMap: {}\n};\nfor (const c of clips) {\n  manifest.kfTypeMap[c.id]    = c.type || \"broll\";\n  manifest.kfSegIdMap[c.id]   = S(c.segId || \"\");\n  manifest.kfShotKeyMap[c.id] = S(c.shotKey || c.id || \"\");\n}\n\n// ---------- jobs payload ----------\nconst jobs = clips.map(c => ({\n  id: c.id,\n  type: c.type,\n  positive: c.positive,\n  negative: c.negative,\n  durationSec: c.durationSec,\n  shotKey: c.shotKey,\n  segId: c.segId,\n  beatId: c.beatId,\n  shotId: c.shotId,\n  meta: {\n    ...c.meta,\n    type: c.type,\n    segId: c.segId,\n    sceneId: c.sceneId,\n    shotKey: c.shotKey,\n    beatId: c.beatId,\n    shotId: c.shotId\n  }\n}));\n\n// ---------- output ----------\nreturn [{\n  json: {\n    t2i: {\n      title,\n      route,\n      resolution,\n      modelHint,\n      clips,\n      piggybank\n    },\n    manifest,\n    jobs\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        80
+      ],
+      "id": "94ddbd5b-15e4-4416-93b1-bdb21b749702",
+      "name": "Keyframe-Prompt Composer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark Voice Roles — B-roll only friendly (✅ ensures ALL IDs flow through)\n// Removes lipsync (A-roll) audio when present; in B-roll-only runs, tags all voices as narration.\n// Now enriches every voice with segId, beatId, shotId, and shotKey (the “four IDs”),\n// plus sceneId, requestId, orchestratorId, track, and videoType when discoverable.\n\nconst all = $items().map(i => i.json || {});\n\n// ---------- helpers ----------\nconst lower = s => String(s || '').toLowerCase();\nconst S = v => (v == null ? \"\" : String(v));\nconst N = v => (v == null || v === \"\" || Number.isNaN(Number(v)) ? undefined : Number(v));\nconst idOf  = c => c?.shotId || c?._meta?.shotId || c?.id || c?.clipId || c?.label || null;\n\n// Build shotKey from IDs (only if we have all parts)\nconst buildShotKey = ({ segId, beatId, shotId }) => {\n  const a = S(segId), b = S(beatId), c = S(shotId);\n  return (a && b && c) ? `${a}-${b}-${c}` : \"\";\n};\n\n// Parse a shotKey like SEG-01-B09-S01\nfunction parseShotKey(shotKey) {\n  const m = S(shotKey).match(/^(SEG-\\d+)-(B\\d+)-(S\\d+)$/i);\n  if (!m) return { segId: \"\", beatId: \"\", shotId: \"\" };\n  return { segId: m[1], beatId: m[2], shotId: m[3] };\n}\n\n// ---------- 0) Collect global request/orchestrator (if present) ----------\nconst globalRequestId = all.find(x => S(x.requestId))?.requestId || null;\nconst globalOrchestratorId =\n  all.find(x => S(x.orchestratorId))?.orchestratorId ||\n  all.find(x => S(x?.source?.segment?.orchestratorId))?.source?.segment?.orchestratorId ||\n  null;\n\n// ---------- 1) Discover A-roll wins and A-roll→B-roll fallbacks ----------\nlet arollOK    = new Set(); // real lipsync A-roll shots\nlet brollFromA = new Set(); // A-roll shots that fell back to B-roll\n\nfunction collectFromTrack(edlLike, trackName) {\n  const tracks = edlLike?.edl?.tracks?.video ?? edlLike?.tracks?.video ?? [];\n  const t = tracks.find(t => lower(t?.name) === lower(trackName));\n  const ids = new Set((t?.clips || []).map(idOf).filter(Boolean));\n  // *RollEDL1 also expose top-level clips; honor type\n  for (const c of (edlLike?.clips || [])) {\n    if (lower(c?.type) === lower(trackName)) {\n      const id = idOf(c);\n      if (id) ids.add(id);\n    }\n  }\n  return ids;\n}\n\nfunction forEachTrackClip(edlLike, fn) {\n  const tracks = edlLike?.edl?.tracks?.video ?? edlLike?.tracks?.video ?? [];\n  for (const t of tracks) for (const c of (t?.clips || [])) fn(t, c);\n  // also scan top-level clips on *RollEDL1\n  for (const c of (edlLike?.clips || [])) fn(null, c);\n}\n\nfunction looksLikeARollRow(r) {\n  const type = lower(r?.type);\n  const hasVid = !!(r.base_video_url || r.video_url || r.src);\n  const hasSid = !!(r.shotId || r.id || r.clipId);\n  return (type === 'aroll') && hasVid && hasSid;\n}\n\n// a) explicit subflow stamps if present\nfor (const it of all.filter(x => x.track === 'aroll' && x.source === 'aroll-subflow')) {\n  collectFromTrack(it, 'aroll').forEach(id => arollOK.add(id));\n}\nfor (const it of all.filter(x => x.track === 'broll' && x.source === 'aroll-subflow')) {\n  collectFromTrack(it, 'broll').forEach(id => brollFromA.add(id));\n}\n\n// b) EDL-like objects\nfor (const it of all) {\n  const kind = lower(it?.kind || it?.edl?.kind);\n  const isEDL =\n    kind === 'trackedl' || kind === 'arolledl1' || kind === 'brolledl1' ||\n    Array.isArray(it?.edl?.tracks?.video) || Array.isArray(it?.tracks?.video) || Array.isArray(it?.clips);\n\n  if (!isEDL) continue;\n\n  collectFromTrack(it, 'aroll').forEach(id => arollOK.add(id));\n\n  forEachTrackClip(it, (_t, c) => {\n    const fb = c?._meta?.fallbackFrom || c?.fallbackFrom || c?.meta?.fallbackFrom || null;\n    if (lower(fb) === 'aroll') {\n      const id = idOf(c);\n      if (id) brollFromA.add(id);\n    }\n  });\n}\n\n// c) plain A-roll clip rows\nfor (const r of all) {\n  if (looksLikeARollRow(r)) {\n    const sid = r.shotId || r.id || r.clipId;\n    if (sid) arollOK.add(sid);\n  }\n}\n\n// ★ B-roll-only detection (no A-roll anywhere)\nconst brollOnly =\n  arollOK.size === 0 &&\n  !all.some(x => lower(x?.routeUsed) === 'aroll' || lower(x?.videoType) === 'aroll' || lower(x?.track) === 'aroll');\n\n// ---------- 2) Build ID indices from all upstream shapes ----------\nconst idxByShotKey = new Map();             // shotKey -> info\nconst idxByTuple   = new Map();             // segId|beatId|shotId -> info\nconst idxBySeg     = new Map();             // segId -> info (fallback)\nconst infoList     = [];                    // for opportunistic scans\n\nfunction indexInfo(info) {\n  // Normalize\n  const segId  = S(info.segId || \"\");\n  const beatId = S(info.beatId || \"\");\n  const shotId = S(info.shotId || \"\");\n  let   shotKey = S(info.shotKey || \"\");\n  if (!shotKey) shotKey = buildShotKey({ segId, beatId, shotId });\n\n  const keyTuple = `${segId}|${beatId}|${shotId}`;\n\n  const packed = {\n    segId, beatId, shotId, shotKey,\n    sceneId: S(info.sceneId || \"\"),\n    requestId: S(info.requestId || globalRequestId || \"\"),\n    orchestratorId: S(info.orchestratorId || globalOrchestratorId || \"\"),\n    track: S(info.track || info.videoType || \"\"),\n    videoType: S(info.videoType || info.track || \"\"),\n  };\n\n  if (shotKey) idxByShotKey.set(shotKey, packed);\n  if (segId && beatId && shotId) idxByTuple.set(keyTuple, packed);\n  if (segId && !idxBySeg.has(segId)) idxBySeg.set(segId, packed);\n  infoList.push(packed);\n}\n\n// a) TrackEDL segments → shots arrays\nfor (const it of all) {\n  const segments = Array.isArray(it?.segments) ? it.segments : (Array.isArray(it?.edl?.segments) ? it.edl.segments : []);\n  for (const s of segments) {\n    // segment-level crumbs\n    const segObj = s.segment || {};\n    const segId = S(segObj.segId || s.segId || \"\");\n    const reqId = S(it.requestId || s.requestId || \"\");\n    const orch  = S(segObj.orchestratorId || s.orchestratorId || \"\");\n    const track = S(s.track || segObj.track || it.track || \"\");\n\n    // shots list inside a segment\n    const shots = Array.isArray(s.shots) ? s.shots : [];\n    for (const sh of shots) {\n      indexInfo({\n        segId,\n        beatId: S(sh.beatId || \"\"),\n        shotId: S(sh.shotId || \"\"),\n        shotKey: S(sh.shotKey || \"\"),\n        sceneId: S(s.sceneId || segObj.segId || \"\"),\n        requestId: reqId,\n        orchestratorId: orch,\n        track: track,\n        videoType: S(s.videoType || segObj.videoType || it.videoType || track || \"\")\n      });\n    }\n\n    // shotPrompts inside segment\n    const shotPrompts = Array.isArray(s.shotPrompts) ? s.shotPrompts : [];\n    for (const sp of shotPrompts) {\n      indexInfo({\n        segId,\n        beatId: S(sp.beatId || \"\"),\n        shotId: S(sp.shotId || \"\"),\n        shotKey: S(sp.shotKey || \"\"),\n        sceneId: S(s.sceneId || segObj.segId || \"\"),\n        requestId: reqId,\n        orchestratorId: orch,\n        track: track,\n        videoType: S(s.videoType || segObj.videoType || it.videoType || track || \"\")\n      });\n    }\n  }\n}\n\n// b) shotsIndex / promptsIndex helpers if present\nfor (const it of all) {\n  for (const arrName of [\"shotsIndex\", \"promptsIndex\"]) {\n    for (const row of (Array.isArray(it?.[arrName]) ? it[arrName] : [])) {\n      indexInfo({\n        segId: S(row.segId || \"\"),\n        beatId: S(row.beatId || \"\"),\n        shotId: S(row.shotId || \"\"),\n        shotKey: S(row.shotKey || \"\"),\n        sceneId: S(row.sceneId || it.sceneId || \"\"),\n        requestId: S(it.requestId || \"\"),\n        orchestratorId: S(it.orchestratorId || \"\"),\n        track: S(row.track || it.track || \"\"),\n        videoType: S(row.videoType || it.videoType || \"\")\n      });\n    }\n  }\n}\n\n// c) keyframes & image tracks\nfor (const it of all) {\n  const kfs = Array.isArray(it?.keyframes) ? it.keyframes : [];\n  for (const kf of kfs) {\n    indexInfo({\n      segId: S(kf.segId || kf.meta?.segId || \"\"),\n      beatId: S(kf.beatId || kf.meta?.beatId || \"\"),\n      shotId: S(kf.shotId || kf.meta?.shotId || \"\"),\n      shotKey: S(kf.shotKey || kf.meta?.shotKey || \"\"),\n      sceneId: S(kf.sceneId || kf.meta?.sceneId || \"\"),\n      requestId: S(it.requestId || \"\"),\n      orchestratorId: S(it.orchestratorId || \"\"),\n      track: S(kf.type || \"\"),\n      videoType: S(kf.type || \"\")\n    });\n  }\n\n  const imgTrack = it?.edl?.tracks?.images?.[0];\n  const clips = Array.isArray(imgTrack?.clips) ? imgTrack.clips : [];\n  for (const c of clips) {\n    indexInfo({\n      segId: S(c.segId || c.meta?.segId || \"\"),\n      beatId: S(c.beatId || c.meta?.beatId || \"\"),\n      shotId: S(c.shotId || c.meta?.shotId || \"\"),\n      shotKey: S(c.shotKey || c.meta?.shotKey || \"\"),\n      sceneId: S(c.sceneId || c.meta?.sceneId || it.sceneId || \"\"),\n      requestId: S(it.requestId || \"\"),\n      orchestratorId: S(it.orchestratorId || \"\"),\n      track: S(c.type || \"\"),\n      videoType: S(c.type || \"\")\n    });\n  }\n}\n\n// d) *RollEDL1 top-level clips\nfor (const it of all) {\n  for (const c of (Array.isArray(it?.clips) ? it.clips : [])) {\n    indexInfo({\n      segId: S(c.segId || \"\"),\n      beatId: S(c.beatId || \"\"),\n      shotId: S(c.shotId || \"\"),\n      shotKey: S(c.shotKey || \"\"),\n      sceneId: S(c.sceneId || \"\"),\n      requestId: S(c.requestId || it.requestId || \"\"),\n      orchestratorId: S(it.orchestratorId || \"\"),\n      track: S(c.type || it.track || \"\"),\n      videoType: S(c.type || it.videoType || \"\")\n    });\n  }\n}\n\n// ---------- 3) Normalize voices from multiple shapes (carry & enrich IDs) ----------\nlet voices = [];\n\n// helper to enrich a partial voice row with IDs\nfunction enrichIDs(v) {\n  let { segId, beatId, shotId, shotKey, sceneId, requestId, orchestratorId, track, videoType } = v;\n\n  // try to complete from shotKey\n  if (!segId || !beatId || !shotId) {\n    if (shotKey) {\n      const p = parseShotKey(shotKey);\n      segId  = segId  || p.segId;\n      beatId = beatId || p.beatId;\n      shotId = shotId || p.shotId;\n    }\n  }\n\n  // if still missing, consult indices\n  if (shotKey && idxByShotKey.has(shotKey)) {\n    const info = idxByShotKey.get(shotKey);\n    segId  = segId  || info.segId;\n    beatId = beatId || info.beatId;\n    shotId = shotId || info.shotId;\n    sceneId = sceneId || info.sceneId;\n    requestId = requestId || info.requestId;\n    orchestratorId = orchestratorId || info.orchestratorId;\n    track = track || info.track;\n    videoType = videoType || info.videoType;\n  }\n\n  // if we have full tuple, backfill from tuple index\n  if (segId && beatId && shotId && idxByTuple.has(`${segId}|${beatId}|${shotId}`)) {\n    const info = idxByTuple.get(`${segId}|${beatId}|${shotId}`);\n    shotKey = shotKey || info.shotKey;\n    sceneId = sceneId || info.sceneId;\n    requestId = requestId || info.requestId;\n    orchestratorId = orchestratorId || info.orchestratorId;\n    track = track || info.track;\n    videoType = videoType || info.videoType;\n  }\n\n  // derive shotKey if still missing and tuple is complete\n  if (!shotKey) {\n    const built = buildShotKey({ segId, beatId, shotId });\n    if (built) shotKey = built;\n  }\n\n  // seg-only fallback (last resort)\n  if (segId && !beatId && !shotId && idxBySeg.has(segId)) {\n    const info = idxBySeg.get(segId);\n    beatId = beatId || info.beatId;\n    shotId = shotId || info.shotId;\n    shotKey = shotKey || info.shotKey;\n    sceneId = sceneId || info.sceneId;\n    requestId = requestId || info.requestId;\n    orchestratorId = orchestratorId || info.orchestratorId;\n    track = track || info.track;\n    videoType = videoType || info.videoType;\n  }\n\n  // final global fallbacks\n  requestId = requestId || globalRequestId || null;\n  orchestratorId = orchestratorId || globalOrchestratorId || null;\n\n  return {\n    ...v,\n    segId: segId || null,\n    beatId: beatId || null,\n    shotId: shotId || null,\n    shotKey: shotKey || null,\n    sceneId: sceneId || null,\n    requestId,\n    orchestratorId,\n    track: track || (brollOnly ? 'broll' : null),\n    videoType: videoType || (brollOnly ? 'broll' : null),\n  };\n}\n\n// a) explicit voices array (carry any provided IDs)\nfor (const container of all) {\n  if (Array.isArray(container?.voices)) {\n    const containerSeg = S(container.segId || \"\");\n    const containerBeat = S(container.beatId || \"\");\n    const containerShot = S(container.shotId || \"\");\n    const containerShotKey = S(container.shotKey || \"\");\n    const containerScene = S(container.sceneId || \"\");\n    const containerReq = S(container.requestId || \"\");\n    const containerOrch = S(container.orchestratorId || \"\");\n\n    voices.push(\n      ...container.voices.map(v => {\n        const base = {\n          id: v.id ?? null,\n          audio_url: v.audio_url ?? v.url ?? null,\n          duration_sec: Number(v.duration_sec ?? v.duration ?? 0) || 0,\n          // IDs from voice row or container-level defaults\n          segId: S(v.segId || containerSeg || \"\"),\n          beatId: S(v.beatId || containerBeat || \"\"),\n          shotId: S(v.shotId || containerShot || v.clipId || \"\"),\n          shotKey: S(v.shotKey || containerShotKey || \"\"),\n          sceneId: S(v.sceneId || containerScene || \"\"),\n          requestId: S(v.requestId || containerReq || \"\"),\n          orchestratorId: S(v.orchestratorId || containerOrch || \"\"),\n          track: S(v.track || container.track || container.videoType || \"\"),\n          videoType: S(v.videoType || container.videoType || container.track || \"\"),\n        };\n        return enrichIDs(base);\n      })\n    );\n  }\n}\n\n// b) audio EDL tracks\nfor (const master of all) {\n  const audioTracks = master?.edl?.tracks?.audio || [];\n  if (!Array.isArray(audioTracks)) continue;\n\n  for (const t of audioTracks) {\n    for (const c of (t?.clips || [])) {\n      const cin  = Number(c.in ?? 0);\n      const cout = Number(c.out ?? 0);\n      const dur  = (Number.isFinite(cin) && Number.isFinite(cout) && cout >= cin)\n        ? (cout - cin)\n        : Number(c.duration ?? c.duration_sec ?? 0) || cout || 0;\n\n      const base = {\n        id: c.id ?? null,\n        audio_url: c.src ?? c.url ?? null,\n        duration_sec: dur,\n        // IDs (from clip, from container, or indices)\n        segId: S(c.segId || master.segId || \"\"),\n        beatId: S(c.beatId || \"\"),\n        shotId: S(c.shotId || c.label || \"\"),\n        shotKey: S(c.shotKey || \"\"),\n        sceneId: S(master.sceneId || \"\"),\n        requestId: S(master.requestId || globalRequestId || \"\"),\n        orchestratorId: S(master.orchestratorId || \"\"),\n        track: 'broll',         // audio track here is narration for b-roll run\n        videoType: 'broll',\n      };\n\n      voices.push(enrichIDs(base));\n    }\n  }\n}\n\n// c) loose rows with voice urls\nfor (const r of all) {\n  const url = r.audio_url ?? r.audioUrl ?? r.voiceUrl ?? null;\n  if (!url) continue;\n\n  const base = {\n    id: r.id ?? null,\n    audio_url: url,\n    duration_sec: Number(r.duration_sec ?? r.duration ?? r.voiceDurationSec ?? 0) || 0,\n    segId: S(r.segId || \"\"),\n    beatId: S(r.beatId || \"\"),\n    shotId: S(r.shotId || r.clipId || \"\"),\n    shotKey: S(r.shotKey || \"\"),\n    sceneId: S(r.sceneId || \"\"),\n    requestId: S(r.requestId || globalRequestId || \"\"),\n    orchestratorId: S(r.orchestratorId || \"\"),\n    track: S(r.track || r.videoType || (brollOnly ? 'broll' : '')),\n    videoType: S(r.videoType || r.track || (brollOnly ? 'broll' : '')),\n  };\n\n  voices.push(enrichIDs(base));\n}\n\n// d) de-dupe by (audio_url + shotKey|segId|shotId)\nconst seen = new Set();\nvoices = voices.filter(v => {\n  const key = `${v.audio_url || ''}|${v.shotKey || `${v.segId || ''}|${v.shotId || ''}`}`;\n  if (seen.has(key)) return false;\n  seen.add(key);\n  return true;\n});\n\n// ---------- 4) Keep only narration voices & tag role ----------\nconst keep = voices.filter(v => {\n  const sid = v.shotId || v.id;\n  if (!sid) return true;\n  if (brollOnly) return true;        // ★ all voices are narration in B-roll-only runs\n  if (brollFromA.has(sid)) return true;\n  return !arollOK.has(sid);          // drop true lipsync A-roll voices\n}).map(v => ({\n  ...v,\n  role: 'narration',                 // ★ explicit role\n  route: 'broll'                     // ★ helpful downstream hint\n}));\n\n// ---------- 5) Scrub audio EDLs in all upstream items (preserve IDs on survivors) ----------\nconst scrubbed = $input.all().map(it => {\n  const obj = JSON.parse(JSON.stringify(it.json || {}));\n\n  const audioTracks = obj?.edl?.tracks?.audio;\n  if (Array.isArray(audioTracks)) {\n    obj.edl.tracks.audio = audioTracks\n      .map(track => {\n        const clips = (track.clips || []).filter(c => {\n          const sid = c.shotId || c.id || c.label;\n          if (!sid) return true;\n          if (brollOnly) return true;     // ★ keep everything in B-roll-only\n          if (brollFromA.has(sid)) return true;\n          return !arollOK.has(sid);\n        });\n        return { ...track, clips };\n      })\n      .filter(track => (track.clips || []).length > 0);\n\n    if (obj.edl.tracks.audio.length === 0) delete obj.edl.tracks.audio;\n  }\n\n  if (Array.isArray(obj.voices)) delete obj.voices;\n\n  obj.__trace = {\n    ...(obj.__trace || {}),\n    markVoiceRoles: {\n      arollOKCount: arollOK.size,\n      arollFallbackToBrollCount: brollFromA.size,\n      brollOnly                        // ★ trace flag\n    }\n  };\n\n  return { json: obj };\n});\n\n// ---------- 6) Return scrubbed upstream + normalized, ID-enriched voices ----------\nreturn [\n  ...scrubbed,\n  { json: { voices: keep } },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -16
+      ],
+      "id": "d53e5519-ba26-4c66-b80a-c4559bc13e85",
+      "name": "Mark Voice Roles"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Narration EDL — B-roll friendly & attach voice_url to EVERY b-roll segment\n// ✅ Guarantees required IDs are carried (segId, beatId, shotId, shotKey, sceneId, requestId, orchestratorId, track, videoType)\n// ✅ Emits ONE continuous narration per b-roll segment (id = segId) whose duration covers all shots in that segment\n// ✅ Drops upstream audio EDLs so this becomes the single source of truth\n\nconst upstream = $input.all();\nconst all = upstream.map(x => x.json || {});\n\nconst S = v => (v == null ? \"\" : String(v));\nconst N = v => (v == null || v === \"\" || Number.isNaN(Number(v)) ? undefined : Number(v));\nconst lower = s => String(s || \"\").toLowerCase();\n\n// ---------- 1) Harvest explicit narration voices and enrich with IDs ----------\nlet voices = [];\nfor (const obj of all) {\n  if (!Array.isArray(obj?.voices)) continue;\n  for (const v of obj.voices) {\n    if (lower(v.role) !== \"narration\") continue;\n    voices.push({\n      id: v.id ?? null,\n      audio_url: v.audio_url ?? v.url ?? null,\n      duration_sec: Number(v.duration_sec ?? v.duration ?? 0) || 0,\n      segId: S(v.segId || \"\"),\n      beatId: S(v.beatId || \"\"),\n      shotId: S(v.shotId || \"\"),\n      shotKey: S(v.shotKey || \"\"),\n      sceneId: S(v.sceneId || \"\"),\n      requestId: S(v.requestId || obj.requestId || \"\"),\n      orchestratorId: S(v.orchestratorId || obj.orchestratorId || \"\"),\n      track: S(v.track || obj.track || obj.videoType || \"broll\"),\n      videoType: S(v.videoType || obj.videoType || obj.track || \"broll\"),\n      route: \"broll\"\n    });\n  }\n}\n\n// Fallback: scan audio EDLs only if no explicit narration found\nif (voices.length === 0) {\n  const withAudio = all.find(x => Array.isArray(x?.edl?.tracks?.audio));\n  if (withAudio) {\n    for (const t of (withAudio.edl.tracks.audio || [])) {\n      for (const c of (t.clips || [])) {\n        const cin  = Number(c.in ?? 0);\n        const cout = Number(c.out ?? 0);\n        const dur  = Number.isFinite(cin) && Number.isFinite(cout) && cout >= cin\n          ? (cout - cin)\n          : Number(c.duration ?? c.duration_sec ?? 0) || cout || 0;\n        voices.push({\n          id: c.id ?? null,\n          audio_url: c.src ?? c.url ?? null,\n          duration_sec: dur,\n          segId: S(c.segId || \"\"),\n          beatId: S(c.beatId || \"\"),\n          shotId: S(c.shotId || c.label || \"\"),\n          shotKey: S(c.shotKey || \"\"),\n          sceneId: \"\",\n          requestId: S(withAudio.requestId || \"\"),\n          orchestratorId: S(withAudio.orchestratorId || \"\"),\n          track: \"broll\",\n          videoType: \"broll\",\n          route: \"broll\"\n        });\n      }\n    }\n  }\n}\n\n// If still none, pass through untouched but annotate why\nif (voices.length === 0) {\n  return [\n    ...upstream,\n    { json: { __trace: { narration: { added: false, reason: \"no_voices_found\" } } } }\n  ];\n}\n\n// ---------- 2) Build a map of b-roll segments with total visual durations ----------\nconst segmentsBySegId = new Map();\n/**\n * Each entry: {\n *   segId, requestId, orchestratorId, sceneId, track, videoType,\n *   shots: [{beatId, shotId, shotKey, startSec, endSec, durationSec}],\n *   durationSec (sum or end-start), startSec, endSec\n * }\n */\nfor (const master of all) {\n  if (!Array.isArray(master?.segments)) continue;\n  for (const s of master.segments) {\n    if (lower(s.track) !== \"broll\" && lower(s?.segment?.track) !== \"broll\") continue;\n\n    const segId = S(s.segment?.segId || s.segId || \"\");\n    if (!segId) continue;\n\n    const startSec = N(s.segment?.startSec ?? s.startSec) ?? 0;\n    const endSec   = N(s.segment?.endSec ?? s.endSec);\n    const fallbackDur = N(s.segment?.durationSec ?? s.totalDuration ?? s.targetDuration);\n    let durationSec;\n    if (endSec !== undefined && startSec !== undefined && endSec >= startSec) {\n      durationSec = endSec - startSec;\n    } else {\n      // sum shots as a fallback\n      const sum = (Array.isArray(s.shots) ? s.shots : []).reduce((acc, sh) => acc + (N(sh.durationSec) || 0), 0);\n      durationSec = sum || fallbackDur || 0;\n    }\n\n    const entry = segmentsBySegId.get(segId) || {\n      segId,\n      requestId: S(master.requestId || s.requestId || \"\"),\n      orchestratorId: S(master.orchestratorId || s.orchestratorId || s.source?.segment?.orchestratorId || \"\"),\n      sceneId: S(s.sceneId || s.segment?.segId || \"\"),\n      track: \"broll\",\n      videoType: \"broll\",\n      shots: [],\n      startSec: startSec || 0,\n      endSec: (endSec !== undefined ? endSec : undefined),\n      durationSec: 0\n    };\n\n    // collect shots with IDs\n    for (const sh of (Array.isArray(s.shots) ? s.shots : [])) {\n      entry.shots.push({\n        beatId: S(sh.beatId || \"\"),\n        shotId: S(sh.shotId || \"\"),\n        shotKey: S(sh.shotKey || \"\"),\n        startSec: N(sh.startSec) ?? 0,\n        endSec: N(sh.endSec) ?? ((N(sh.startSec) ?? 0) + (N(sh.durationSec) || 0)),\n        durationSec: N(sh.durationSec) || ((N(sh.endSec) ?? 0) - (N(sh.startSec) ?? 0)) || 0\n      });\n    }\n\n    entry.durationSec += durationSec;\n    segmentsBySegId.set(segId, entry);\n  }\n}\n\n// If we somehow found no b-roll segments, pass through\nif (segmentsBySegId.size === 0) {\n  return [\n    ...upstream,\n    { json: { __trace: { narration: { added: false, reason: \"no_broll_segments\" } } } }\n  ];\n}\n\n// ---------- 3) Choose the single narration source to stretch across segments ----------\n/**\n * Strategy:\n * - Prefer the longest explicit narration voice (route/track broll) so it comfortably covers all shots.\n * - If multiple, pick the max duration.\n */\nconst bestVoice = voices.reduce((best, v) => {\n  if (!v.audio_url) return best;\n  if (!best) return v;\n  return (v.duration_sec > best.duration_sec) ? v : best;\n}, null);\n\n// ---------- 4) Attach voice_url to every b-roll segment & compute per-segment clip ranges ----------\nconst narrationClips = [];\nconst updated = upstream.map(item => {\n  const obj = JSON.parse(JSON.stringify(item.json || {}));\n\n  // strip upstream audio EDLs — we will emit a canonical narration EDL below\n  if (obj?.edl?.tracks?.audio) {\n    delete obj.edl.tracks.audio;\n  }\n\n  if (Array.isArray(obj?.segments)) {\n    obj.segments = obj.segments.map(s => {\n      const segId = S(s.segment?.segId || s.segId || \"\");\n      const isBroll = lower(s.track) === \"broll\" || lower(s?.segment?.track) === \"broll\";\n      if (!segId || !isBroll) return s;\n\n      // Determine this segment's visual duration\n      const start = N(s.segment?.startSec ?? s.startSec) ?? 0;\n      const end   = N(s.segment?.endSec ?? s.endSec);\n      const fallbackDur = N(s.segment?.durationSec ?? s.totalDuration ?? s.targetDuration);\n      let visualDur;\n      if (end !== undefined && end >= start) visualDur = end - start;\n      else {\n        const sum = (Array.isArray(s.shots) ? s.shots : []).reduce((acc, sh) => acc + (N(sh.durationSec) || 0), 0);\n        visualDur = sum || fallbackDur || 0;\n      }\n\n      // Attach the voice to the segment (voice_url + ids)\n      s.voice_url = bestVoice?.audio_url || null;\n      s.voiceId = bestVoice?.id || null;\n      s.voiceIn = 0;\n      // Clip to visual duration (we only need to cover the shots)\n      s.voiceOut = Math.min(bestVoice?.duration_sec || 0, visualDur || (bestVoice?.duration_sec || 0));\n\n      // Add a narration clip for this segment (id = segId) covering its visual duration\n      narrationClips.push({\n        id: segId,\n        segId,\n        src: bestVoice?.audio_url || null,\n        in: 0,\n        out: Math.min(bestVoice?.duration_sec || 0, s.voiceOut || visualDur || 0),\n        _meta: {\n          voiceId: bestVoice?.id || null,\n          role: \"narration\",\n          route: \"broll\",\n          requestId: S(s.requestId || obj.requestId || \"\"),\n          orchestratorId: S(s.orchestratorId || s?.source?.segment?.orchestratorId || obj.orchestratorId || \"\")\n        }\n      });\n\n      return s;\n    });\n  }\n\n  return { json: obj };\n});\n\n// ---------- 5) Build canonical audio EDL (one narration clip per b-roll segment) ----------\nconst validClips = narrationClips.filter(c => c.src && Number(c.out) > 0);\nconst length_sec = validClips.reduce((acc, c) => acc + (Number(c.out) - Number(c.in)), 0);\n\nreturn [\n  ...updated,\n  {\n    json: {\n      kind: \"NarrationEDL\",\n      edl: { tracks: { audio: [{ name: \"narration\", clips: validClips }] } },\n      length_sec,\n      __trace: {\n        narration: {\n          added: true,\n          clips: validClips.length,\n          picked_voice_id: bestVoice?.id || null,\n          picked_voice_url: bestVoice?.audio_url || null,\n          voice_duration_sec: bestVoice?.duration_sec || 0,\n          canonical: true,\n          note: \"voice_url attached per b-roll segment; each narration clip spans its segment’s visual duration\"\n        }\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -16
+      ],
+      "id": "93aa1b38-a42b-49cf-abc6-f1ee75b6c634",
+      "name": "Build Narration EDL"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Script EDL → Jobs (B-roll aware, IDs surfaced)\n// Emits:\n//  - 1 VO job per segment (for TTS)\n//  - 1 job per shot/beat (for image/video gen)\n// Guarantees top-level IDs on each job: { shotKey, segId, beatId, shotId }\n\nconst toN = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };\nconst S = (v) => (v == null ? \"\" : String(v));\nconst clean = s => (typeof s === \"string\"\n  ? s.replace(/\\s*\\n\\s*/g, \" \")\n      .replace(/\\s+\\(Word count:\\s*\\d+\\)\\s*$/i, \"\")\n      .replace(/\\s+/g, \" \")\n      .trim()\n  : \"\" );\n\n// ---- helpers ----\n\n// Prefer existing shotKey; else synthesize from segId/beatId/shotId if all exist.\nfunction synthShotKey(segId, beatId, shotId, existing) {\n  const k = S(existing || \"\");\n  if (k) return k;\n  const a = S(segId || \"\").trim();\n  const b = S(beatId || \"\").trim();\n  const c = S(shotId || \"\").trim();\n  return (a && b && c) ? `${a}-${b}-${c}` : \"\";\n}\n\n// For legacy keys that only had beat/shot, form a stable fallback index key\nfunction makeLegacyKey(o = {}) {\n  const k = S(o.shotKey || \"\");\n  if (k) return k;\n  const beat = S(o.beatId || o.origBeatId || \"\");\n  const shot = S(o.shotId || o.origShotId || \"\");\n  return (beat && shot) ? `${beat}::${shot}` : \"\";\n}\n\n// ---- VO job (one per segment) ----\nfunction buildVoJob(src) {\n  const seg       = src.segment || {};\n  const segId     = seg.segId || src.segId || src.source?.segment?.segId || null;\n\n  const start     = toN(seg.startSec ?? src.startSec ?? src.source?.segment?.startSec, 0);\n  const end       = toN(\n    seg.endSec ?? src.endSec ?? src.source?.segment?.endSec,\n    start + toN(seg.durationSec ?? src.durationSec ?? src.source?.segment?.durationSec, 0)\n  );\n  const duration  = Math.max(0, end - start);\n\n  const text = clean(\n    (src.outputs && src.outputs.script) ||\n    (typeof src.script === \"string\" ? src.script : src.script?.text || \"\")\n  );\n\n  const speech = src.speech || src.source?.planMeta?.speech || src.source?.speech || null;\n\n  // VO rows are segment-level; keep IDs present so downstream logic can rely on shapes.\n  const shotId = S(src.shotId || \"S01\");\n  const beatId = S(src.beatId || \"\"); // often not applicable at segment level\n  const shotKey = synthShotKey(segId, beatId, shotId, src.shotKey);\n\n  return {\n    json: {\n      kind: \"vo\",\n      // ---- essential IDs on top level ----\n      segId,\n      beatId: beatId || null,\n      shotId,\n      shotKey: shotKey || null,\n\n      // identity / timing\n      id: src.id || segId || null,\n      text,\n      start_sec: start,\n      end_sec: end,\n      duration_sec: duration,\n      duration,\n\n      // passthrough\n      meta: src.meta || null,\n      source: src.source || null,\n      speech\n    }\n  };\n}\n\n// ---- per-shot jobs ----\nfunction buildShotJobs(src) {\n  const segId = src.segment?.segId || src.segId || src.source?.segment?.segId || null;\n\n  // Index shotPrompts by shotKey, then by (beatId::shotId)\n  const sp = Array.isArray(src.shotPrompts) ? src.shotPrompts : [];\n  const spIndex = new Map();\n  for (const p of sp) {\n    const k1 = S(p.shotKey || \"\");\n    const k2 = makeLegacyKey(p);\n    if (k1) spIndex.set(k1, p);\n    if (k2 && k2 !== k1) spIndex.set(k2, p);\n  }\n\n  const shots = Array.isArray(src.shots) ? src.shots : [];\n  const out = [];\n\n  for (const sh of shots) {\n    const shotId   = S(sh.shotId || sh.origShotId || \"S01\");\n    const beatId   = S(sh.beatId  || sh.origBeatId || \"\");\n    const start    = toN(sh.startSec, 0);\n    const end      = toN(sh.endSec, start + toN(sh.durationSec, 0));\n    const duration = Math.max(0, end - start);\n\n    // Lookup prompts: prefer shotKey, then legacy beat::shot\n    const k1 = S(sh.shotKey || \"\");\n    const k2 = makeLegacyKey(sh);\n    const p  = (k1 && spIndex.get(k1)) || (k2 && spIndex.get(k2)) || {};\n\n    const t2i = p.t2i || null;\n    const i2v = p.i2v || null;\n\n    // Ensure shotKey on top-level (do not overwrite if already present)\n    const shotKey = synthShotKey(segId, beatId, shotId, k1) || k2;\n\n    out.push({\n      json: {\n        kind: \"shot\",\n\n        // ---- essential IDs on top level ----\n        segId,\n        beatId: beatId || null,\n        shotId,\n        shotKey: shotKey || null,\n\n        // descriptive / timing\n        subject: sh.subject || null,\n        tags: Array.isArray(sh.tags) ? sh.tags : null,\n        notes: sh.notes || null,\n        setting: sh.setting || null,\n        start_sec: start,\n        end_sec: end,\n        duration_sec: duration,\n        duration,\n\n        // prompts passthrough\n        t2i,\n        i2v,\n\n        // provenance for QA\n        source: {\n          segId,\n          shotKey: k1 || null,\n          origShotId: sh.origShotId || null,\n          origBeatId: sh.origBeatId || null\n        }\n      }\n    });\n  }\n\n  return out;\n}\n\n// -------- MAIN --------\nconst items = $input.all();\nconst OUT = [];\n\nfor (const it of items) {\n  const root = it?.json || {};\n\n  // Top-level item with segment/script?\n  if (root.script || root.outputs?.script || root.segment || root.segId) {\n    OUT.push(buildVoJob(root));\n  }\n  if (Array.isArray(root.shots) || Array.isArray(root.shotPrompts)) {\n    OUT.push(...buildShotJobs(root));\n  }\n\n  // TrackEDL payload: iterate segments\n  const edl = (root && root.kind === \"TrackEDL\") ? root\n            : (root?.edl?.kind === \"TrackEDL\" ? root.edl : null);\n  if (edl?.segments && Array.isArray(edl.segments)) {\n    for (const s of edl.segments) {\n      if (s.script || s.outputs?.script || s.segment || s.segId) {\n        OUT.push(buildVoJob(s));\n      }\n      if (s.shots || s.shotPrompts) {\n        OUT.push(...buildShotJobs(s));\n      }\n    }\n  }\n}\n\nreturn OUT;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        -96
+      ],
+      "id": "24dbbb93-dc3e-49f2-ac3f-156ea55323b3",
+      "name": "Parse Script EDL -> Jobs"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        -304
+      ],
+      "id": "fd68cd4b-d07d-4d91-be7a-7e3cf45a1eb3",
+      "name": "Set Script EDL"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Script Prompts (B-roll with narrated VO)\n * Input:  { planner, planMeta, envelope }\n * Output: { prompts, guardrails, ...meta }\n */\n\nconst { planner = {}, planMeta = {}, envelope = {} } = $json;\n\n// --- Helpers ---\nconst pick = (v, ...alts) => {\n  for (const x of [v, ...alts]) if (x !== undefined && x !== null && x !== '') return x;\n  return '';\n};\nconst join = arr => arr.map(s => String(s).trim()).filter(Boolean).join('; ');\n\n// --- pull fields from envelope.source (with safe fallbacks) ---\nconst src = (envelope && envelope.source) || {};\nconst ui  = src.ui || {};\n\n// ** NEW: voice ref url passthrough **\nconst voiceRefUrl = pick(\n  src.voice_ref_url,\n  ui.voice_ref_url,\n  planner.voice_ref_url,\n  src.voiceUrl, \n  ui.voiceUrl,\n  ''\n);\n\n// Derived flags\nconst isBroll = String(planner.videoType || '').toLowerCase() === 'broll'\n  || String(planner.driver || '').toLowerCase() === 'narrator'\n  || planner.wantsCutaways === true;\n\n// Guardrails for visuals (not rendered as on-screen text)\nconst guardrails = [\n  'no on-camera host, interviews, or talking heads',\n  'no on-screen text, subtitles, logos, watermarks, or readable signage',\n  'keep faces incidental only (background extras ok); no close-up identifiable faces',\n  'avoid jerky motion: no whip-pans, heavy motion blur, or rapid zooms',\n  'use cinematic but natural movement; keep shots stable or gently motivated',\n  'respect title-safe margins for any future overlays (do not burn in graphics)'\n];\n\nconst durSec = Number(planner.durationSec || 30) || 30;\nconst wps    = Number(planMeta?.constraints?.wps ?? planMeta?.speech?.wps ?? 2.5) || 2.5;\nconst wordCap = Math.max(30, Math.round(durSec * wps)); // simple cap\n\nconst wantsMusic    = !!planner.wantsMusic;\nconst wantsCaptions = !!planner.wantsCaptions;\n\n// Inherit visual style (planner first, then planMeta; default Photorealistic)\nconst style = (String(planner.style || planMeta.style || '').trim()) || 'Photorealistic';\n\n// ---------------- Prompts ----------------\n\n// 1) The VO SCRIPT prompt (continuous narration; no bullets)\nconst script =\n`TASK: Write a ${durSec}s narrated voiceover script for a B-ROLL montage.\nROLE: Off-screen narrator (not seen on camera).\nSCENE: ${planner.scene}\nSETTING: ${planner.setting}\nVISUAL FOCUS: ${planner.action}\nREFERENCE CONTEXT: ${planner.referenceText}\nTONE & STYLE: ${planner.directorsNotes}\nVISUAL STYLE: ${style}\nMUSIC: ${wantsMusic ? (planner.musicDesc || 'light underscore that supports pacing') : 'no music referenced; keep pacing natural'}.\nLENGTH: Aim for ~${wordCap} words (continuous prose). Do not exceed ${Math.round(wordCap * 1.1)} words.\n\nWRITING RULES:\n- Continuous narration only. No lists, no bullet points, no numbered beats, no stage directions.\n- Natural, conversational cadence that matches the visuals.\n- Avoid calling out camera moves or edit cuts.\n- Do not include on-screen text, hashtags, or directives to the viewer.\n- Keep names and signage generic (no identifiable brands or readable signs).\n\nOUTPUT: The final script as flowing sentences/short lines ready for TTS. No headings or bullets.`;\n\n// 2) Setting prompt (for background/motifs generation – visual-only)\nconst setting =\n`ROLE: Describe succinct visual motifs/locations to support the narrated montage.\nSETTING: ${planner.setting}\nLOOK: ${style} visuals aligned with the scene and action; cohesive palette; clean composition.\nAVOID: readable signage and brand logos; crowded close-ups of faces.\nHARD RULES: ${join(guardrails)}\nOUTPUT: Purely visual description (no camera jargon).`;\n\n// 3) Direction prompt (editorial feel; supports b-roll planner)\nconst direction =\n`ROLE: Editorial guidance for a ${durSec}s B-roll montage that the VO rides over.\nPACE: unhurried, rhythmic; begin with an establishing wide, weave mediums and details, end on a resolving wide or contemplative hold.\nMOTION: gentle gimbal walks, slow pushes, lateral drifts; a few locked detail shots; avoid whip pans or rapid zooms.\nTRANSITIONS: mostly straight cuts; allow a motivated match cut on natural motion or sound when tasteful.\nMUSIC: ${wantsMusic ? 'Cut softly on downbeats; leave breaths at phrase ends for reveals.' : 'Edit to natural ambience; favor motivated visual continuity.'}\nVISUAL STYLE: ${style}\nHARD RULES: ${join(guardrails)}\nOUTPUT: 3–5 sentences in plain English (no shot list).`;\n\n// 4) Negative prompt (for image/video gen safety)\nconst negative =\n'talking head, interview, on-camera host, subtitles, lower thirds, logos, watermarks, readable text/signage, license plates, whip pan, heavy motion blur, rapid zoom, face close-up, distorted anatomy';\n\n// Emit\nreturn [{\n  json: {\n    planner,\n    planMeta,\n    prompts: { script, setting, direction, negative },\n    guardrails,\n    \n    // Pass through for downstream use\n    voice_ref_url: voiceRefUrl\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        -304
+      ],
+      "id": "06491873-c015-4815-bd53-fb0cb3c50035",
+      "name": "Script Prompts"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -512,
+        -112
+      ],
+      "id": "176e51ac-5ab2-4593-937f-138737f1a74b",
+      "name": "Merge Plan + Script"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build B-Roll Video EDL (canonical schema)\n//\n// Purpose:\n// - Immediately downstream of Build Narration EDL.\n// - Assemble a single EDL object with:\n//     • video:broll  (from BRollEDL1.clips)\n//     • audio:narration (from narration track if present; else synth from voices[]/loose wavs)\n//     • images:kf (from any upstream images 'kf' track)\n// - Render geometry from any piggybank.render (fallback 1024x576@30).\n// - Timeline master: AUDIO when narration exists; else VIDEO.\n// - length_sec = **VOICE (per-seg) if present**, else sum of broll. // [CHANGED]\n// - Always returns an array with one { json: { edl: {...} } }.\n//\n// Notes:\n// - No stretching/compressing here; composer upstream already aligned/trimmed.\n// - This node is schema-only assembly and master-length selection.\n\nconst upstream = $input.all().map(i => i.json || {});\n\n// ---------- helpers ----------\nconst lower = s => String(s || '').toLowerCase();\nconst S = v => (v == null ? \"\" : String(v));\nconst N = v => (Number.isFinite(+v) ? +v : 0);\n\nconst dur = (c) => {\n  const inn = N(c.in);\n  const outAbs = N(c.out);\n  const durField = N(c.durationSec || c.duration);\n  if (outAbs > 0 && inn >= 0) return Math.max(0, outAbs - inn) || outAbs;\n  if (durField > 0) return durField;\n  return 0;\n};\nconst sumDur = (clips=[]) => clips.reduce((s,c)=>s + dur(c), 0);\n\nconst getTrack = (edl, kind, name) =>\n  edl?.tracks?.[kind]?.find(t => lower(t?.name) === lower(name));\n\nconst getImagesTrack = (edl, name='kf') => getTrack(edl, 'images', name);\nconst getAudioTrack  = (edl, name='narration') => getTrack(edl, 'audio', name);\n\n// Pull some common IDs if present anywhere upstream (best-effort)\nfunction findAny(fn) {\n  for (const x of upstream) { const v = fn(x); if (v) return v; }\n  return null;\n}\nconst anyRequestId      = findAny(x => x.requestId || x.envelope?.requestId);\nconst anyOrchestratorId = findAny(x => x.orchestratorId || x.planMeta?.ids?.orchestratorId || x.envelope?.source?.requestId);\nconst anyRoute          = findAny(x => x.route || x.routeUsed);\nconst anyVideoType      = findAny(x => x.videoType || x.envelope?.videoType);\n\n// ---------- 1) Collect B-roll clips (from BRollEDL1.clips) ----------\nlet brollClips = [];\n{\n  const brollEdl = upstream.find(x => x?.kind === 'BRollEDL1');\n  if (Array.isArray(brollEdl?.clips)) {\n    brollClips = brollEdl.clips.map(c => ({\n      // IDs (ensure presence) // [CHANGED]\n      id:            c.clipId || c.id || c.shotId || c.shotKey,\n      shotId:        c.shotId || c.clipId || c.id,\n      shotKey:       c.shotKey || null,\n      segId:         S(c.segId || c.sceneId || \"\"),\n      beatId:        S(c.beatId || \"\"),\n      sceneId:       S(c.sceneId || c.segId || \"\"),\n      requestId:     S(c.requestId || anyRequestId || \"\"),\n      orchestratorId:S(c.orchestratorId || anyOrchestratorId || \"\"),\n      route:         S(c.route || anyRoute || \"broll\"),\n      videoType:     S(c.videoType || anyVideoType || \"broll\"),\n\n      // Media\n      src:      c.src,\n      in:       N(c.in) || 0,\n      out:      N(c.out) || N(c.durationSec) || 0,\n      type:     'broll',\n\n      // Carry-through\n      label:    c.label || \"\",\n      poster:   c.poster || \"\",\n      jobId:    c.jobId || \"\",\n      clipId:   c.clipId || \"\",\n      baseShotId: c.baseShotId || \"\",\n      firstShotId: c.firstShotId || \"\",\n      characterId: c.characterId ?? null,\n      characterName: c.characterName ?? null,\n      voiceId:  c.voiceId ?? null,\n\n      _meta: {\n        ...(c._meta || {}),\n        segIndex: N(c.segIndex || 1) || 1\n      }\n    })).filter(c => c.shotId && c.src);\n  }\n}\n\n// ---------- 2) Collect images (keyframes) if present ----------\nlet imagesTrack = null;\n{\n  const imageSources = upstream\n    .map(x => getImagesTrack(x.edl, 'kf'))\n    .filter(Boolean);\n\n  if (imageSources.length) {\n    const imgClips = imageSources.flatMap(kf => kf.clips || []).map(c => ({\n      ...c,\n      // IDs (ensure presence) // [CHANGED]\n      shotId:  c.shotId || c.id || null,\n      shotKey: c.shotKey || null,\n      segId:   S(c.segId || \"\"),\n      beatId:  S(c.beatId || \"\"),\n      in: N(c.in) || 0,\n      out: N(c.out) || 0\n    }));\n\n    // Dedup by shotKey→shotId to avoid repeats\n    const seen = new Set();\n    const merged = [];\n    for (const c of imgClips) {\n      const key = c.shotKey || c.shotId || c.id;\n      if (!key || seen.has(key)) continue;\n      seen.add(key);\n      merged.push(c);\n    }\n    if (merged.length) imagesTrack = { name: 'kf', clips: merged };\n  }\n}\n\n// ---------- 3) Gather narration audio (VOICE is source of truth) ----------\n// Priority: explicit narration EDL ➜ voices[] list ➜ loose audio rows\nconst canonicalBySeg = new Map(); // segId -> chosen duration\nconst breakdown = { fromNarrationEDL: {}, fromVoicesList: {}, fromLooseAudio: {} };\n\nlet narrationTrack = null; // final audio track we’ll emit\n\n// 3a) Prefer the explicit audio EDL produced upstream\n{\n  const narrItem = upstream.find(x => getAudioTrack(x.edl, 'narration'));\n  if (narrItem) {\n    const tr = getAudioTrack(narrItem.edl, 'narration');\n    if (tr?.clips?.length) {\n      // Normalize clip structure and record per-seg sums // [CHANGED]\n      const clips = tr.clips.map(c => {\n        const segId = S(c.segId || c.segmentId || \"\");\n        const clip = {\n          name: 'narration',\n          id:   c.id || c.clipId || segId || 'VO',\n          src:  c.src,\n          in:   N(c.in) || 0,\n          out:  (N(c.out) || N(c.durationSec) || 0),\n          // IDs\n          segId,\n          shotId:  S(c.shotId || c.id || \"\"),\n          shotKey: S(c.shotKey || \"\"),\n          beatId:  S(c.beatId || \"\"),\n          requestId:     S(c.requestId || anyRequestId || \"\"),\n          orchestratorId:S(c.orchestratorId || anyOrchestratorId || \"\"),\n          role:  S(c._meta?.role || 'narration'),\n          route: S(c._meta?.route || anyRoute || 'broll'),\n          _meta: { ...(c._meta || {}) }\n        };\n        const d = dur(clip);\n        if (segId) {\n          breakdown.fromNarrationEDL[segId] = N(breakdown.fromNarrationEDL[segId]) + d || d;\n        }\n        return clip;\n      });\n\n      // Sum per seg and seed canonicalBySeg\n      for (const [segId, sum] of Object.entries(breakdown.fromNarrationEDL)) {\n        if (sum > 0) canonicalBySeg.set(segId, +sum.toFixed(3));\n      }\n\n      narrationTrack = { name: 'narration', clips };\n    }\n  }\n}\n\n// 3b) Voices list fallback / augmentation\n{\n  const voicesHolder = upstream.find(x => Array.isArray(x.voices));\n  const voices = Array.isArray(voicesHolder?.voices) ? voicesHolder.voices : [];\n  for (const v of voices) {\n    const segId = S(v.segId || \"\");\n    const url   = S(v.audio_url || v.src || \"\");\n    const d     = N(v.duration_sec || v.duration || 0);\n    if (!segId || !url || d <= 0) continue;\n\n    breakdown.fromVoicesList[segId] = N(breakdown.fromVoicesList[segId]) + d || d;\n\n    // If narrationTrack missing, synth one; else only use duration for canonical if we lack a seg sum\n    if (!narrationTrack) narrationTrack = { name: 'narration', clips: [] };\n\n    // Only add a clip if we don't already have one for this segId with same url (avoid dupes)\n    const already = narrationTrack.clips?.some(c => S(c.segId) === segId && S(c.src) === url);\n    if (!already) {\n      narrationTrack.clips.push({\n        name: 'narration',\n        id: v.id || `${segId}-VO`,\n        src: url,\n        in: 0,\n        out: d,\n        segId,\n        // IDs // [CHANGED]\n        shotId:  S(v.shotId || \"\"),\n        shotKey: S(v.shotKey || \"\"),\n        beatId:  S(v.beatId || \"\"),\n        requestId:     S(v.requestId || anyRequestId || \"\"),\n        orchestratorId:S(v.orchestratorId || anyOrchestratorId || \"\"),\n        role: 'narration',\n        route: S(v.route || anyRoute || 'broll'),\n        videoType: S(v.videoType || anyVideoType || 'broll')\n      });\n    }\n\n    if (!canonicalBySeg.has(segId)) canonicalBySeg.set(segId, +d.toFixed(3));\n  }\n}\n\n// 3c) Loose audio rows fallback (rare)\n{\n  for (const x of upstream) {\n    const url = S(x.audio_url || x.audioUrl || \"\");\n    const segId = S(x.segId || x.sceneId || \"\");\n    const d = N(x.duration_sec || x.duration || (N(x.end_sec) - N(x.start_sec)));\n    if (!url || !segId || d <= 0) continue;\n    breakdown.fromLooseAudio[segId] = N(breakdown.fromLooseAudio[segId]) + d || d;\n    if (!canonicalBySeg.has(segId)) canonicalBySeg.set(segId, +d.toFixed(3));\n\n    if (!narrationTrack) narrationTrack = { name: 'narration', clips: [] };\n    const already = narrationTrack.clips?.some(c => S(c.segId) === segId && S(c.src) === url);\n    if (!already) {\n      narrationTrack.clips.push({\n        name: 'narration',\n        id: `${segId}-VO2`,\n        src: url,\n        in: 0,\n        out: d,\n        segId,\n        // IDs // [CHANGED]\n        shotId:  S(x.shotId || \"\"),\n        shotKey: S(x.shotKey || \"\"),\n        beatId:  S(x.beatId || \"\"),\n        requestId:     S(x.requestId || anyRequestId || \"\"),\n        orchestratorId:S(x.orchestratorId || anyOrchestratorId || \"\"),\n        role: 'narration',\n        route: S(x.route || anyRoute || 'broll'),\n        videoType: S(x.videoType || anyVideoType || 'broll')\n      });\n    }\n  }\n}\n\n// ---------- 4) Render geometry selection ----------\nfunction pickRender() {\n  const withPB =\n    upstream.find(x => x?.piggybank?.render) ||\n    upstream.find(x => x?.meta?.piggybank?.render) ||\n    upstream.find(x => x?.envelope?.settings); // fallback from envelope\n  if (withPB?.piggybank?.render) {\n    const r = withPB.piggybank.render;\n    const width  = N(r.width)  || 1024;\n    const height = N(r.height) || 576;\n    const fps    = N(r.fps)    || 30;\n    return { resolution: { width, height }, fps };\n  }\n  const env = upstream.find(x => x?.envelope?.settings)?.envelope?.settings;\n  if (env?.resolution) {\n    const width  = N(env.resolution.width)  || 1024;\n    const height = N(env.resolution.height) || 576;\n    const fps    = N(env.fps) || 30;\n    return { resolution: { width, height }, fps };\n  }\n  return { resolution: { width: 1024, height: 576 }, fps: 30 };\n}\nconst { resolution, fps } = pickRender();\n\n// ---------- 5) Master length & tracks assembly ----------\nconst brollDur = sumDur(brollClips);\nconst hasNarr  = narrationTrack && narrationTrack.clips && narrationTrack.clips.length > 0;\n\n// [CHANGED] Audio master length is sum of canonical per-seg VO lengths (if any found)\nconst canonicalAudioTotal = [...canonicalBySeg.values()].reduce((a,b)=>a+b, 0);\n\n// If narration clips exist but canonicalBySeg is empty, fall back to track sum\nconst narrDurFallback = hasNarr ? sumDur(narrationTrack.clips) : 0;\n\n// Choose master length\nconst length_sec = (canonicalAudioTotal > 0 ? canonicalAudioTotal : narrDurFallback) || brollDur;\nconst timeline_master = (canonicalAudioTotal > 0 || hasNarr) ? 'audio' : 'video';\n\n// Assemble tracks\nconst tracks = {};\nif (brollClips.length) tracks.video  = [{ name: 'broll', clips: brollClips }];\nif (imagesTrack)       tracks.images = [imagesTrack];\nif (hasNarr)           tracks.audio  = [narrationTrack];\n\n// Mismatch check (diagnostic only; no retiming here)\nconst mismatchSec = +(Math.abs(length_sec - brollDur).toFixed(3));\n\n// ---------- Emit ----------\nreturn [{\n  json: {\n    edl: {\n      tracks,\n      resolution,\n      fps,\n      length_sec,\n      // [CHANGED] Optional IDs & routing context bubbled to EDL root for downstreams\n      requestId:      S(anyRequestId || \"\"),\n      orchestratorId: S(anyOrchestratorId || \"\"),\n      route:          S(anyRoute || \"broll\"),\n      videoType:      S(anyVideoType || \"broll\"),\n      _meta: {\n        timeline_master,\n        durations: {\n          broll: brollDur,\n          narration_track_sum: narrDurFallback,\n          canonical_audio_total: canonicalAudioTotal\n        },\n        id_fields_included: [\"shotKey\",\"segId\",\"beatId\",\"shotId\",\"sceneId\",\"requestId\",\"orchestratorId\"], // [CHANGED]\n        mismatch_to_broll_sec: mismatchSec\n      }\n    },\n    __trace: {\n      // [CHANGED] Full transparency about how audio master was chosen\n      canonicalAudio: {\n        bySeg: Object.fromEntries([...canonicalBySeg.entries()].map(([k,v]) => [k, +v.toFixed(3)])),\n        breakdown\n      }\n    }\n  }\n}];"
+      },
+      "name": "Build B-Roll Video EDL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        -16
+      ],
+      "id": "406a06b5-8e29-410a-8ebe-a3cf79c80a96"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "482BZDMXNzBO21PF",
+          "mode": "list",
+          "cachedResultName": "B-Roll Script Builder"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        -304
+      ],
+      "id": "e784f08b-e225-455b-add0-fb0aa76f7b1a",
+      "name": "Exec B-Roll Script Builder"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "kind": "RenderPlanV2",
+          "requestId": "77369",
+          "title": "Halloween!",
+          "route": "broll",
+          "routeUsed": "broll",
+          "videoType": "broll",
+          "totalDurationSec": 60,
+          "flags": {
+            "captions": true,
+            "music": true
+          },
+          "speech": {
+            "wps": 2.5,
+            "wpm": 150,
+            "voiceId": "7a3d02a7-05dc-4626-9bac-4346d15ea945"
+          },
+          "settings": {
+            "resolution": {
+              "width": 1024,
+              "height": 576
+            },
+            "fps": 30,
+            "aspect": "16:9",
+            "respectKeyframes": false,
+            "strictness": 0.6,
+            "seedLock": false
+          },
+          "constraints": {
+            "rounding": 3,
+            "paddingSec": 0.05,
+            "toleranceSec": 0.033
+          },
+          "dispatch": {
+            "index": 2,
+            "map": {
+              "aroll": 1,
+              "broll": 2,
+              "podcast": 3,
+              "combo": 4,
+              "music": 5
+            }
+          },
+          "source": {
+            "ui": {
+              "scene": "A short, 60 second scary story on Halloween, set in a dark sleepy haunted Halloween town",
+              "driver": "narrator",
+              "character": null,
+              "setting": "A campfire at the edge of the woods beside a dark sleepy old haunted town on Halloween",
+              "action": "B-Roll cutaways of scenes that support the story outlined in refenceText.",
+              "wantsMusic": true,
+              "musicCategoryLabel": "Orchestral / Cinematic",
+              "wantsCaptions": true,
+              "durationSec": 60,
+              "referenceText": "Generate a 60 second scary story that is short but thrilling, fitting for a Halloween campfire story. Script should be fitting for a 7 year old child",
+              "voiceId": "7a3d02a7-05dc-4626-9bac-4346d15ea945",
+              "characterGender": "male",
+              "title": "Halloween!",
+              "characterName": "narrator",
+              "userEmail": "jerick.sebree@gmail.com",
+              "userFirstName": "Jerick",
+              "userLastName": "Sebree",
+              "advanced": {
+                "enabled": true,
+                "style": "Pixar-style",
+                "musicVolume": 0.1,
+                "voiceVolume": 1,
+                "includeVocals": false,
+                "seed": 603815177
+              }
+            },
+            "characterGender": "male",
+            "characterName": "narrator"
+          },
+          "_meta": {
+            "receivedAt": "2025-10-05T17:35:10.055Z",
+            "requestId": "77369"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Mark Voice Roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Character Voice Builder": {
+      "main": [
+        [
+          {
+            "node": "Set Character Voice EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Keyframe Image Builder": {
+      "main": [
+        [
+          {
+            "node": "Set Keyframe Images EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec B-Roll Builder": {
+      "main": [
+        [
+          {
+            "node": "Set B-Roll EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Character Voice EDL": {
+      "main": [
+        [
+          {
+            "node": "Parse Voice EDL -> Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Set Keyframe Images EDL": {
+      "main": [
+        [
+          {
+            "node": "Parse Keyframe EDL -> Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Set B-Roll EDL": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Character Voice Prompts": {
+      "main": [
+        [
+          {
+            "node": "Exec Character Voice Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Planner Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Voice EDL -> Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge Plan + Voice",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Planner Payload": {
+      "main": [
+        [
+          {
+            "node": "Script Prompts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Plan + Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Keyframe EDL -> Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge Plan + Keyframes",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Plan + Voice": {
+      "main": [
+        [
+          {
+            "node": "Keyframe-Prompt Composer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Plan + Keyframes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Plan + Keyframes": {
+      "main": [
+        [
+          {
+            "node": "B-Roll-Prompt Composer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B-Roll-Prompt Composer": {
+      "main": [
+        [
+          {
+            "node": "Exec B-Roll Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyframe-Prompt Composer": {
+      "main": [
+        [
+          {
+            "node": "Exec Keyframe Image Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Voice Roles": {
+      "main": [
+        [
+          {
+            "node": "Build Narration EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Narration EDL": {
+      "main": [
+        [
+          {
+            "node": "Build B-Roll Video EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Script EDL -> Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge Plan + Script",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Set Script EDL": {
+      "main": [
+        [
+          {
+            "node": "Parse Script EDL -> Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Script Prompts": {
+      "main": [
+        [
+          {
+            "node": "Exec B-Roll Script Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Plan + Script": {
+      "main": [
+        [
+          {
+            "node": "Character Voice Prompts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Plan + Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec B-Roll Script Builder": {
+      "main": [
+        [
+          {
+            "node": "Set Script EDL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "OMsZG24WeF2YbuO6"
+  },
+  "versionId": "5baa55de-933a-4a6e-8b85-1232dfd6ce36",
+  "meta": {
+    "instanceId": "46eff0d2c88fe6211d71052d4f59ef615c9804dfa61784c64b70e2dfd97395dd"
+  },
+  "id": "SeRiGT3xn6jlPaJL",
+  "tags": [
+    {
+      "createdAt": "2025-08-06T22:48:41.565Z",
+      "updatedAt": "2025-08-06T22:48:41.565Z",
+      "id": "8SyPTainN0DHJgb9",
+      "name": "Sub_Flow"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:27.480Z",
+      "updatedAt": "2025-08-06T22:51:27.480Z",
+      "id": "BJFll7L0beOxmfug",
+      "name": "Faceless"
+    },
+    {
+      "createdAt": "2025-08-06T22:46:44.898Z",
+      "updatedAt": "2025-08-06T22:46:44.898Z",
+      "id": "Fx3HZ4h0zLNrZrsf",
+      "name": "Clip0"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:39.172Z",
+      "updatedAt": "2025-08-06T22:51:39.172Z",
+      "id": "GZCCJX14sms6Bt1x",
+      "name": "Storytelling"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:45.236Z",
+      "updatedAt": "2025-08-06T22:51:45.236Z",
+      "id": "eifwPO0fsiM5axDD",
+      "name": "Explainer"
+    },
+    {
+      "createdAt": "2025-08-06T22:48:15.867Z",
+      "updatedAt": "2025-08-06T22:48:15.867Z",
+      "id": "lRzQwQcNU2q4zzyp",
+      "name": "Video"
+    },
+    {
+      "createdAt": "2025-08-06T22:51:19.190Z",
+      "updatedAt": "2025-08-06T22:51:19.190Z",
+      "id": "sMtJ7F5avoY8zMs5",
+      "name": "B_Roll"
+    }
+  ]
+}

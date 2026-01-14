@@ -40,12 +40,12 @@ export const API_CONFIG = {
     UPLOAD_REFERENCE_IMAGE: "https://n8n.simplifies.click/webhook/upload-reference-image",
 
     // Scene Studio
-    GENERATE_SCENE_PREVIEW: "https://n8n.simplifies.click/webhook/generate-scene-preview",
+    GENERATE_SCENE_PREVIEW: "/api/generate-keyframe",
 
     // Clip Studio
-    GENERATE_VOICE_PREVIEW: "https://n8n.simplifies.click/webhook/generate-voice-preview",
-    GENERATE_VIDEO_PREVIEW: "https://n8n.simplifies.click/webhook/generate-video-preview",
-    GENERATE_LIPSYNC_PREVIEW: "https://n8n.simplifies.click/webhook/generate-lipsync-preview",
+    GENERATE_VOICE_PREVIEW: "/api/generate-voice",
+    GENERATE_VIDEO_PREVIEW: "/api/generate-video",
+    GENERATE_LIPSYNC_PREVIEW: "/api/generate-lipsync",
 
     // Production (Render)
     GENERATE_RENDER_SCENE: "https://n8n.simplifies.click/webhook/render-scene",

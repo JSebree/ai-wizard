@@ -220,7 +220,11 @@ export default function ExpressAccordionView({
     characterGender,
     onReset,
     savedCharacters = [],
-    savedSettings = []
+    savedSettings = [],
+    // New Props for Polling
+    jobProgress = 0,
+    jobStatus = 'idle',
+    jobError = null,
 }) {
     const { user } = useAuth();
     const [openSection, setOpenSection] = useState(1);
@@ -1063,16 +1067,34 @@ export default function ExpressAccordionView({
 
             {/* GENERATE ACTIONS */}
             <div className="mt-4 pt-8 border-t border-gray-100 flex flex-col-reverse md:flex-row gap-6 items-center justify-end animate-in fade-in slide-in-from-bottom-4 duration-700">
+
+                {/* Error Message */}
+                {jobError && (
+                    <div className="text-red-500 font-medium text-sm">
+                        Error: {jobError}
+                    </div>
+                )}
+
                 <button
                     onClick={onGenerate}
                     disabled={!isGeneratable || isDeploying}
-                    className="w-full py-4 text-base font-bold uppercase tracking-widest rounded-xl shadow-xl transition-all disabled:bg-slate-400 disabled:text-gray-100 disabled:shadow-none disabled:cursor-not-allowed bg-black text-white hover:bg-gray-900 group"
+                    className="w-full py-4 text-base font-bold uppercase tracking-widest rounded-xl shadow-xl transition-all disabled:bg-slate-400 disabled:text-gray-100 disabled:shadow-none disabled:cursor-not-allowed bg-black text-white hover:bg-gray-900 group relative overflow-hidden"
                 >
                     {isDeploying ? (
-                        <span className="flex items-center justify-center gap-3">
-                            <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                            Production in Progress...
-                        </span>
+                        <>
+                            {/* Progress Bar Background */}
+                            <div
+                                className="absolute left-0 top-0 bottom-0 bg-gray-700 transition-all duration-500 ease-out"
+                                style={{ width: `${jobProgress || 0}%`, opacity: 0.3 }}
+                            />
+
+                            <span className="relative z-10 flex items-center justify-center gap-3">
+                                {jobProgress < 100 && (
+                                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                )}
+                                Production {jobProgress ? `${Math.round(jobProgress)}%` : 'in Progress...'}
+                            </span>
+                        </>
                     ) : (
                         <span className="flex items-center justify-center gap-2">
                             Start Production <span className="text-white/50 group-hover:translate-x-1 transition-transform">→</span>
