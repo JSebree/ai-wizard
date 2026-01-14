@@ -138,17 +138,18 @@ export default function ExpressVideoCard({ vod, onClose, onDelete, onUseTemplate
 
                     {/* Actions Footer */}
                     <div className="p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
-                        <div className="flex gap-3">
-                            {/* Use Template */}
-                            {onUseTemplate && (
-                                <button
-                                    onClick={() => { onUseTemplate(vod); onClose(); }} // Close after selecting template? checking workflow
-                                    className="flex-1 bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 text-sm"
-                                >
-                                    <span>📄</span> Use Template
-                                </button>
-                            )}
+                        {/* Row 1: Primary Action */}
+                        {onUseTemplate && (
+                            <button
+                                onClick={() => { onUseTemplate(vod); onClose(); }}
+                                className="w-full bg-black text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                            >
+                                <span>📄</span> Use Template
+                            </button>
+                        )}
 
+                        {/* Row 2: Secondary Actions */}
+                        <div className="flex gap-3 w-full">
                             {/* Download EDL */}
                             {settings.edl && (
                                 <button

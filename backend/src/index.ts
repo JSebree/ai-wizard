@@ -203,9 +203,31 @@ server.get('/api/status/:id', async (req: any, reply) => {
 
 const start = async () => {
     try {
-        setupWorker(); // Start the background worker
+        const worker = setupWorker(); // Start the background worker
         await server.listen({ port: Number(CONFIG.PORT), host: '0.0.0.0' });
         console.log(`Server listening on port ${CONFIG.PORT}`);
+
+        // Graceful Shutdown Logic
+        const shutdown = async (signal: string) => {
+            console.log(`Received ${signal}. Shutting down gracefully...`);
+
+            // 1. Stop accepting new API requests
+            await server.close();
+            console.log('HTTP Server closed.');
+
+            // 2. Stop accepting new Queue jobs & wait for active ones
+            if (worker) {
+                console.log('Closing worker (waiting for active jobs)...');
+                await worker.close();
+                console.log('Worker closed.');
+            }
+
+            process.exit(0);
+        };
+
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+        process.on('SIGINT', () => shutdown('SIGINT'));
+
     } catch (err) {
         server.log.error(err);
         process.exit(1);

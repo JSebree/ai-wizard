@@ -57,7 +57,7 @@ export default function VodCard({ vod, onUseTemplate, onDelete, isOwner = true, 
 
                 {/* Duration Badge */}
                 <div style={{ position: "absolute", bottom: 4, right: 4, background: "rgba(0,0,0,0.7)", color: "white", fontSize: 10, padding: "1px 4px", borderRadius: 4 }}>
-                    {settings?.ui?.durationSec || 0}s
+                    {settings?.actualDuration ? Number(settings.actualDuration).toFixed(1) : (settings?.ui?.durationSec || 0)}s
                 </div>
             </div>
 

@@ -137,150 +137,71 @@ export class CompositionEngine {
             return inputCount++;
         };
 
-        // --- Process Main Video Track ---
-        // We will concat all video clips into one stream [vBase]
+        // --- Process Main Video & Embedded Audio Tracks ---
         const videoTrack = edl.tracks.video[0]; // Assume single track for MVP
+        let concatInputs: string[] = [];
 
-        videoTrack.clips.forEach(clip => {
+        for (const [i, clip] of videoTrack.clips.entries()) {
             const idx = addInput(clip);
             const duration = clip.out - clip.in;
 
-            // Scaling and Setsar to ensure uniformity
-            // Also fps=30
-            // trim if video, loop if image (handled in inputOptions)
-
-            // We need to give each input a label to concat
-            const streamLabel = `[v${idx}]`;
-
-            // Force resolution and fps normalization
+            // Video Filter Part
             const w = edl.resolution.width;
             const h = edl.resolution.height;
+            const streamLabel = `[v${idx}]`;
 
             complexFilter.push(`[${idx}:v]scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${edl.fps},format=yuv420p${streamLabel}`);
             videoStreams.push(streamLabel);
-        });
 
-        // Concat video
-        const concatFilter = `${videoStreams.join('')}concat=n=${videoStreams.length}:v=1:a=0[vMain]`;
-        complexFilter.push(concatFilter);
+            // Audio Filter Part (Embedded)
+            // Check if this input has audio
+            const localPath = assetMap.get(clip.src);
+            let hasAudio = false;
+            if (clip.type === 'video' && localPath) {
+                hasAudio = await this.probeClip(localPath);
+            }
 
-        // --- Process Audio Tracks ---
-        // We have 'narration' and 'music'.
-        // Narration usually aligns with clips (A-Roll) or is separate track (B-Roll).
-        // Music is a background track.
-
-        // Strategy: 
-        // 1. Gather all dialogue/narration clips, normalize, offset delay, and mix into [aSpeech]
-        // 2. Add Music track as [aMusic] with volume adaptation
-        // 3. Mix [aSpeech] + [aMusic] -> [aFinal]
-
-        // Actually simpler:
-        // Use `amix` to mix all audio inputs.
-        // We need to position them on the timeline using `adelay`.
-
-        let audioOutputLabel = "[aMain]";
-        let audioMixInputs: string[] = [];
-        let audioInputIdxStart = inputCount;
-
-        // Narration (if any separate inputs)
-        // Note: For A-roll video clips, their audio IS the narration. 
-        // The current Orchestrator seems to produce separate audio clips only for B-Roll voice?
-        // Let's check Orchestrator logic: 
-        // "If A-Roll... assume embedded audio".
-        // "If B-Roll... audioClips.push(...)".
-
-        // Wait, if we are doing complex filter concat for video, we stripped audio (a=0 in concat).
-        // We need to extract audio from video clips too if they are A-roll!
-
-        // REVISED Video Concat:
-        // If clip is 'video', we should include its audio in the concat?
-        // A-Roll videos have lipsync audio.
-        // Image clips have no audio.
-
-        // Let's refine the Video Concat to be Audio-Aware.
-        // But some clips (Images) have no audio stream, so standard concat v=1:a=1 fails if a segment has no audio.
-        // We must generate silent audio for image clips to keep streams aligned, OR handle audio separately.
-
-        // Better Logic:
-        // 1. Video Track: Concat all Video Only -> [vMain]
-        // 2. Audio Track: Construct from:
-        //    a. A-Roll Video keys (extract audio)
-        //    b. B-Roll Narration keys (separate files)
-        //    c. Music keys (separate files)
-
-        // OR simply rely on the Orchestrator's `edl.tracks.audio`?
-        // Orchestrator logic: 
-        // "If A-Roll... don't push to audio clips (embedded)". -> This is a problem for the renderer if we process tracks separately.
-        // The Renderer needs to know everything.
-
-        // FIX: If A-Roll, we need to treat the Video File as an Audio Source as well.
-        // But `edl.tracks.audio` currently doesn't include A-Roll audio.
-
-        // Let's auto-detect:
-        // Iterate timeline. If video track clip is 'video', use its audio as a 'speech' clip.
-        // If 'audio' track clip exists, use it.
-
-        // Implementation for MVP: 
-        // We will build a unified list of Audio Clips with start times.
-        // 1. From Video Track (if type='video')
-        // 2. From Audio Track (Narration)
-        // 3. From Music Track
-
-        const audiolayerInputs: { idx: number, start: number, duration: number, volume: number }[] = [];
-
-        // 1. Main Speech (from A-Roll video or Audio Clips)
-        // We iterate the timeline of the MAIN video track.
-        for (const [i, clip] of videoTrack.clips.entries()) {
-            const inputIdx = i; // Corresponds to the video inputs we added earlier
-            if (clip.type === 'video') {
-                const localPath = assetMap.get(clip.src);
-                if (localPath) {
-                    const hasAudio = await this.probeClip(localPath);
-                    if (hasAudio) {
-                        audiolayerInputs.push({
-                            idx: inputIdx,
-                            start: clip.timelineStart,
-                            duration: clip.out - clip.in,
-                            volume: 1.0
-                        });
-                    } else {
-                        console.log(`[Composition] Skipping silent video audio for clip ${clip.id}`);
-                    }
-                }
+            if (hasAudio) {
+                // Use the video's audio stream
+                concatInputs.push(`${streamLabel}[${idx}:a]`);
+            } else {
+                // Generate Silence matching duration
+                // Using anullsrc. Note: simple 'anullsrc' produces infinite stream, strictly need 'd' or 't'
+                const silentLabel = `[s${idx}]`;
+                complexFilter.push(`anullsrc=r=44100:cl=stereo:d=${duration}[${silentLabel}]`);
+                concatInputs.push(`${streamLabel}${silentLabel}`);
             }
         }
 
-        // For A-Roll, the audio is contiguous usually.
-        // Let's just blindly take `[i:a]` for every video clip? No, images fail.
+        // Concat: v=1:a=1
+        // [v0][a0][v1][s1]...concat
+        // Result is [vMain] and [aEmbedded]
+        const concatFilter = `${concatInputs.join('')}concat=n=${videoTrack.clips.length}:v=1:a=1[vMain][aEmbedded]`;
+        complexFilter.push(concatFilter);
 
-        // 2. Explicit Audio Tracks
-        edl.tracks.audio.forEach(track => {
-            console.log(`[Composition] Processing Audio Track with ${track.clips.length} clips.`);
-            track.clips.forEach(clip => {
-                console.log(`[Composition] Adding Audio Input: ${clip.id}, Type=${clip.type}, Src=${clip.src}`);
+        // --- Process Audio Tracks (Mixing) ---
+        // Strategy:
+        // 1. [aEmbedded] is our Base Speech Track (sync locked to video)
+        // 2. Add [aNarration] and [aMusic] as layers
+        // 3. Mix all
+
+        let audioMixParts: string[] = ['[aEmbedded]'];
+
+        edl.tracks.audio.forEach((track, trackIdx) => {
+            console.log(`[Composition] Processing Audio Track '${track.name}' with ${track.clips.length} clips.`);
+            track.clips.forEach((clip, clipIdx) => {
                 const idx = addInput(clip);
-                audiolayerInputs.push({
-                    idx,
-                    start: clip.timelineStart,
-                    duration: clip.out - clip.in,
-                    volume: track.name === 'music' ? 0.15 : 1.0
-                });
+                // adelay uses milliseconds
+                const delayMs = Math.floor(clip.timelineStart * 1000);
+                const label = `aT${trackIdx}C${clipIdx}`;
+
+                // Determine volume (track level or clip level)
+                const vol = clip.volume ?? (track.name === 'music' ? 0.3 : 1.0);
+
+                // Apply volume & delay
+                complexFilter.push(`[${idx}:a]volume=${vol},adelay=${delayMs}|${delayMs}[${label}]`);
+                audioMixParts.push(`[${label}]`);
             });
-        });
-
-        // Now build the audio mix filter
-        let audioMixParts: string[] = [];
-
-        audiolayerInputs.forEach((item, i) => {
-            // [idx:a] -> delay -> [aPartN]
-            // Note: adelay uses milliseconds
-            const delayMs = Math.floor(item.start * 1000);
-            const label = `aPart${i}`; // Label without brackets for cleaner variable
-
-            // adelay=3000|3000 for stereo.
-            // map label [aPartN]
-            complexFilter.push(`[${item.idx}:a]volume=${item.volume},adelay=${delayMs}|${delayMs}[${label}]`);
-            audioMixParts.push(`[${label}]`);
         });
 
         if (audioMixParts.length > 0) {

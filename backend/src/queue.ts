@@ -36,4 +36,6 @@ export const setupWorker = () => {
     });
 
     console.log('Worker started for queue: video-generation');
+    return worker;
 };
+

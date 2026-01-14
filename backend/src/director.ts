@@ -58,6 +58,9 @@ async function updateStatus(job: Job<ProjectPayload>, status: GenerationStatus, 
                 settings: newSettings
             };
 
+            // Ensure job_id is linked (idempotent update)
+            updatePayload.job_id = job.id;
+
             if (status.stage === 'completed' && status.output?.videoUrl) {
                 updatePayload.video_url = status.output.videoUrl;
             }
@@ -186,7 +189,7 @@ export async function processVideoJob(job: Job<ProjectPayload>, onStatusUpdate?:
                         timelineStart: 0,
                         timelineEnd: musicOut.duration_sec,
                         // Adjust volume
-                        volume: 0.05, // Lowered from 0.08 to 0.05 per user request
+                        volume: 0.05, // Set to 5% (was 15% hardcoded, user found excessive)
                         type: 'audio'
                     }]
                 });
@@ -271,11 +274,26 @@ export async function processVideoJob(job: Job<ProjectPayload>, onStatusUpdate?:
 function mapMusicStyle(style: string | undefined): string | null {
     if (!style) return null;
     const map: Record<string, string> = {
-        'Cinematic': 'Epic cinematic orchestral score, hans zimmer style, deep and emotional',
-        'Upbeat': 'Energetic upbeat pop corporate background music, happy and positive',
-        'Lo-Fi': 'Chill lo-fi hip hop beats to relax/study to, smooth jazz vibes',
-        'Rock': 'High energy rock background track, electric guitars and drums',
-        'Ambient': 'Deep ambient soundscape, Eno-style drone, atmospheric, meditative, no drums'
+        "Rock Instrumental": "rock instrumental, electric guitar riffs, distorted guitar, bass guitar, drums, energetic, 140 bpm, live concert feel",
+        "Jazz Instrumental": "jazz instrumental, acoustic piano, upright bass, saxophone, brush drums, swing rhythm, smooth, 90 bpm, lounge vibe",
+        "Hip-Hop / Trap Beat": "hip hop instrumental, trap beat, 808 bass, hi hats, snare, kick drum, synth pads, 140 bpm, dark, atmospheric, street vibe",
+        "Orchestral / Cinematic": "orchestral instrumental, strings, violins, cellos, brass, woodwinds, timpani, cinematic, majestic, 70 bpm, dramatic",
+        "Lo-Fi / Chillhop": "lofi instrumental, chillhop, jazzy chords, dusty vinyl crackle, mellow piano, soft synths, laid-back drums, 80 bpm, relaxing, study vibe",
+        "EDM / House": "edm instrumental, deep house, synth bass, kick drum four on the floor, hi hats, synth plucks, 128 bpm, dance club, hypnotic",
+        "Ambient / Soundscape": "ambient instrumental, drones, evolving textures, synth pads, slow tempo, atmospheric, meditative, 60 bpm, ethereal",
+        "Reggae / Dub": "reggae instrumental, dub groove, offbeat guitar skank, bass groove, drums, echo effects, relaxed, 85 bpm, island vibe",
+        "Funk / Groove": "funk instrumental, slap bass, electric guitar, clavinet, brass stabs, groovy drums, upbeat, 110 bpm, danceable",
+        "Country / Folk": "country instrumental, acoustic guitar, banjo, fiddle, upright bass, light percussion, warm, 95 bpm, rustic, storytelling vibe",
+        "Blues": "blues instrumental, electric guitar, walking bass, harmonica, shuffle drums, soulful, 85 bpm, smoky bar vibe",
+        "Metal": "metal instrumental, distorted guitars, double kick drums, bass, aggressive riffs, fast tempo, 180 bpm, heavy and dark",
+        "Techno": "techno instrumental, pounding kick, arpeggiated synths, dark bassline, industrial, 125 bpm, underground rave vibe",
+        "Latin / Salsa": "latin instrumental, salsa rhythm, congas, bongos, brass, piano montuno, bass, upbeat, 95 bpm, lively",
+        "R&B / Soul": "r&b instrumental, electric piano, smooth bass, soulful guitar, mellow drums, romantic, 85 bpm, groovy",
+        "Gospel": "gospel instrumental, organ, piano, choir pads, clapping rhythm, uplifting, 80 bpm, soulful, church vibe",
+        "Indian Classical / Sitar": "indian instrumental, sitar, tabla, tanpura drone, meditative, 70 bpm, spiritual, raga inspired",
+        "African Percussion": "african instrumental, djembe, talking drum, congas, rhythmic ensemble, tribal, 100 bpm, primal, energetic",
+        "Celtic / Folk": "celtic instrumental, flute, bagpipes, fiddle, harp, bodhran, traditional, 95 bpm, mystical",
+        "Synthwave / Retro": "synthwave instrumental, retro synths, arpeggios, electronic drums, nostalgic, 100 bpm, 1980s vibe"
     };
     return map[style] || style;
 }
