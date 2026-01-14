@@ -13,3 +13,136 @@ Worker started for queue: video-generation
 Server listening on port 3001
 {"level":30,"time":1768370228725,"pid":97234,"hostname":"Jericks-MacBook-Air.local","msg":"Server listening at http://192.168.1.164:3001"}
 {"level":30,"time":1768370228725,"pid":97234,"hostname":"Jericks-MacBook-Air.local","msg":"Server listening at http://192.168.64.1:3001"}
+{"level":30,"time":1768410185708,"pid":97234,"hostname":"Jericks-MacBook-Air.local","reqId":"req-1","req":{"method":"POST","url":"/api/generate","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":49944},"msg":"incoming request"}
+{"level":30,"time":1768410185767,"pid":97234,"hostname":"Jericks-MacBook-Air.local","reqId":"req-1","res":{"statusCode":200},"responseTime":50.51212501525879,"msg":"request completed"}
+Processing job 1: {
+  userId: '3ad0105d-7dfd-4790-b1c5-9bade4fb2406',
+  title: 'Baby Zuck part 4',
+  driver: 'character',
+  route: 'combo',
+  sceneDescription: 'A newscast about the future of AI tech hosted by Mark Zuckerberg as a cute cherubic infant. Cutaway scenes of AI hardware and robotics in line with the topics of the day',
+  actionDescription: 'the infant Mark Zuckerberg is sitting at the evening news anchor desk, moving naturally as if in a live conversation as he breaks news. ',
+  durationSec: 30,
+  characterDescription: 'Mark Zuckerberg as a cute cherubic infant with cute chubby cheeks and expressive eyes, sitting in an evening news anchor table and dressed in an anchor host',
+  settingDescription: 'Infant Mark Zuckerberg sits at an evening news anchor desk, studio lit room as he discusses breaking AI news topics of the day.',
+  voiceId: '4080632d-4364-44f2-9e27-451574f1b96f',
+  wantsMusic: true,
+  wantsCaptions: true,
+  stylePreset: 'Pixar-style',
+  doUpscale: true,
+  vodId: '7a1c99ad-cc8d-4209-a45e-37dd89e9868f'
+}
+[JobStatus] scripting (10%): Starting AI Director...
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[ScriptGen] Generating script for route: combo
+[ScriptGen] Combo Attempt 1/3...
+[ScriptGen] Validation Passed on attempt 1.
+[JobStatus] visuals (30%): Script generated. Visualizing scenes...
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[Orchestrator] Starting job for session: 1
+[JobStatus] visuals (35%): Analyzing script segments...
+[Orchestrator] Segment SEG-01: track=aroll, dialogue="Welcome to the future of AI tech, where groundbrea..." (154 chars)
+[Orchestrator] Segment SEG-02: track=broll, dialogue="We're seeing incredible advancements in AI hardwar..." (134 chars)
+[Orchestrator] Segment SEG-03: track=aroll, dialogue="In summary, the future of AI is bright and full of..." (196 chars)
+[Orchestrator] Processing 5 shots (from 3 segments)...
+[Voice] Generating TTS: "Welcome to the future of AI te..."
+[Voice] Glitch Check Attempt 1/5...
+[Voice] Generating TTS: "We're seeing incredible advanc..."
+[Voice] Glitch Check Attempt 1/5...
+[Voice] Generating TTS: "In summary, the future of AI i..."
+[Voice] Glitch Check Attempt 1/5...
+[Orchestrator] Generating Master A-Roll image from Shot S01...
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+Supabase fetch failed for 7a1c99ad-cc8d-4209-a45e-37dd89e9868f: JSON object requested, multiple (or no) rows returned
+[Voice] Job started: 02bf1f11-fa5a-42f0-90a5-ea79ef989b4d-u1
+[Image] Job started (T2I): 634082dd-8341-4ccd-8a44-8b77e9a0a79b-u2
+[Voice] Job started: f0ec809b-6fd3-4832-8b70-640b83fc574c-u1
+[Voice] Job started: 8ada91bd-b607-46bf-8042-901c9b38693c-u1
+[Orchestrator] Voice Gen Complete for S01: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/96de336a0e9343ea8c960e9613de3002.wav, voiceDur=7.84
+[Orchestrator] Voice Gen Complete for S03: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/cb643850249f4c6dbf8d168084054171.wav, voiceDur=10.48
+[Orchestrator] Voice Gen Complete for S02-1: voiceUrl=https://nyc3.digitaloceanspaces.com/zonos-speakers/higgs/1c93d2c546cc4091ac5510915f52e6db.wav, voiceDur=13.76
+[Orchestrator] Master A-Roll Generated: https://nyc3.digitaloceanspaces.com/image-generations/Catalog/scenes/unnamed/unnamed_634082dd-8341-4ccd-8a44-8b77e9a0a79b-u2.png
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+[Image] Job started (T2I): 690e8581-3f78-4978-a451-230442f1fd9d-u1
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+[Image] Job started (T2I): c9266520-1a6b-4259-b891-51e1c03769e2-u2
+[Image] Generating keyframe: "Style: 3D animation style, Pixar-inspired, smooth ..."
+[Image] Job started (T2I): fd063851-88ea-47a4-a478-302d5715c80e-u2
+[Orchestrator] Phase 1 complete.
+[Orchestrator] Phases 1 complete. Starting Phase 2 (Video Generation)...
+[Orchestrator] Generating A-Roll LipSync for S01...
+[Video] Generating A-Roll (I2V/LipSync)...
+[Orchestrator] Generating B-Roll Video for S02-1...
+[Video] Generating B-Roll (LTX/Hunyuan)...
+[Orchestrator] Generating B-Roll Video for S02-2...
+[Video] Generating B-Roll (LTX/Hunyuan)...
+[Orchestrator] Generating B-Roll Video for S02-3...
+[Video] Generating B-Roll (LTX/Hunyuan)...
+[Orchestrator] Generating A-Roll LipSync for S03...
+[Video] Generating A-Roll (I2V/LipSync)...
+[Video] A-Roll Job started: ab137170-9515-46b3-904b-d37989056b34-u1
+[Video] A-Roll Job started: 49ed1e36-d217-43d9-b674-da75ec804f22-u2
+[Video] B-Roll Job started: b753bda8-1cc5-4697-aa87-8aa8afb45272-u2
+[Video] B-Roll Job started: a1e36c82-0ed7-4fdb-9101-013d90d10196-u2
+[Video] B-Roll Job started: dca5374f-51a0-48f0-b1c4-993ee70a653d-u1
+[Video] Poll 6/400: IN_PROGRESS (elapsed: 60s)
+[Video] Poll 6/400: IN_PROGRESS (elapsed: 60s)
+[Video] Poll 6/400: IN_PROGRESS (elapsed: 60s)
+[Video] Poll 6/400: IN_QUEUE (elapsed: 60s)
+[Video] Poll 6/400: IN_QUEUE (elapsed: 60s)
+[Video] Poll 12/400: IN_PROGRESS (elapsed: 120s)
+[Video] Poll 12/400: IN_QUEUE (elapsed: 120s)
+[Video] Poll 18/400: IN_PROGRESS (elapsed: 180s)
+[Video] Poll 18/400: IN_QUEUE (elapsed: 180s)
+[Video] Poll 24/400: IN_PROGRESS (elapsed: 240s)
+[Video] Poll 24/400: IN_QUEUE (elapsed: 240s)
+[Video] Poll 30/400: IN_PROGRESS (elapsed: 300s)
+[Video] Poll 30/400: IN_QUEUE (elapsed: 300s)
+[Video] Poll 36/400: IN_PROGRESS (elapsed: 360s)
+[Video] Poll 36/400: IN_QUEUE (elapsed: 360s)
+[Video] Poll 42/400: IN_PROGRESS (elapsed: 420s)
+[Video] Poll 42/400: IN_QUEUE (elapsed: 420s)
+[Video] Poll 48/400: IN_QUEUE (elapsed: 480s)
+[Video] Poll 48/400: IN_PROGRESS (elapsed: 480s)
+[Video] Poll 54/400: IN_QUEUE (elapsed: 540s)
+[Video] Poll 54/400: IN_PROGRESS (elapsed: 540s)
+[Video] Poll 60/400: IN_QUEUE (elapsed: 600s)
+[Video] Poll 60/400: IN_PROGRESS (elapsed: 600s)
+[Video] Raw A-Roll Output Type: object
+[Video] Raw A-Roll Output: {
+  "artifacts": {
+    "format": "mp4",
+    "video_base64": null,
+    "video_url": "https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_b33e83c5-803f-426d-b454-97e9c0c92aac.mp4"
+  },
+  "debug": {
+    "height": 544,
+    "input_type": "image",
+    "max_frame": 277,
+    "person_count": "single",
+    "prompt_id": "2f9199df-353e-4273-9980-a3e5e677ebd0",
+    "width": 960,
+    "workflow": "/I2V_single.json"
+  },
+  "id": "task_b33e83c5-803f-426d-b454-97e9c0c92aac",
+  "metrics": {
+    "gpu": "unknown",
+    "latency_ms": 588463
+  },
+  "model": "InfiniteTalk/ComfyUI",
+  "status": "succeeded",
+  "warnings": []
+}
+[Video] Extracted A-Roll URL: https://nyc3.digitaloceanspaces.com/a-roll-output/infinitetalk_out/task_b33e83c5-803f-426d-b454-97e9c0c92aac.mp4
+[Video] Poll 66/400: IN_PROGRESS (elapsed: 660s)
+[Video] Poll 72/400: IN_PROGRESS (elapsed: 720s)
+[Video] Poll 78/400: IN_PROGRESS (elapsed: 780s)
+[Video] Poll 84/400: IN_PROGRESS (elapsed: 840s)
+[Video] Poll 90/400: IN_PROGRESS (elapsed: 900s)
+[Video] Poll 96/400: IN_PROGRESS (elapsed: 960s)
+[Video] Poll 102/400: IN_PROGRESS (elapsed: 1020s)
+[Video] Poll 108/400: IN_PROGRESS (elapsed: 1080s)
+[Video] Poll 114/400: IN_PROGRESS (elapsed: 1140s)
+[Video] Poll 120/400: IN_PROGRESS (elapsed: 1200s)
+[Video] Poll 126/400: IN_PROGRESS (elapsed: 1260s)
+[Video] Poll 132/400: IN_PROGRESS (elapsed: 1320s)

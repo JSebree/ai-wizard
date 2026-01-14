@@ -114,47 +114,75 @@ export class CompositionEngine {
         const command = ffmpeg();
 
         // --- Video Inputs ---
-        let complexFilter: string[] = [];
+        // Refactoring to Object-based syntax for safety
+        let complexFilter: any[] = [];
         let inputCount = 0;
-        let videoStreams: string[] = [];
-        // let audioStreams: string[] = []; // If video has audio
+        let videoStreams: string[] = []; // This is no longer used in the new object-based approach
+        let audioMixedStreams: string[] = []; // Streams to go into concat (audio part)
 
-        // Helper to add input
         const addInput = (clip: Clip) => {
             const localPath = assetMap.get(clip.src);
             if (!localPath) throw new Error(`Missing local path for ${clip.src}`);
-
             command.input(localPath);
-
-            // If image, loop it
             if (clip.type === 'image') {
                 command.inputOptions(['-loop 1', `-t ${clip.out - clip.in}`]);
-            } else if (clip.type === 'video') {
-                // If we need to trim?
-                // For now assuming source matches target duration generally
-                // But safer to add trim filter
             }
             return inputCount++;
         };
 
         // --- Process Main Video & Embedded Audio Tracks ---
-        const videoTrack = edl.tracks.video[0]; // Assume single track for MVP
-        let concatInputs: string[] = [];
+        const videoTrack = edl.tracks.video[0];
+
+        let concatInputs: string[] = []; // Strings like '[v0][a0]' for the concat filter inputs
 
         for (const [i, clip] of videoTrack.clips.entries()) {
             const idx = addInput(clip);
             const duration = clip.out - clip.in;
-
-            // Video Filter Part
             const w = edl.resolution.width;
             const h = edl.resolution.height;
-            const streamLabel = `[v${idx}]`;
 
-            complexFilter.push(`[${idx}:v]scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${edl.fps},format=yuv420p${streamLabel}`);
-            videoStreams.push(streamLabel);
+            // Video Filter
+            complexFilter.push({
+                filter: 'scale',
+                options: { w, h, force_original_aspect_ratio: 'decrease' },
+                inputs: `${idx}:v`,
+                outputs: `vBase${idx}`
+            });
 
-            // Audio Filter Part (Embedded)
-            // Check if this input has audio
+            complexFilter.push({
+                filter: 'pad',
+                options: { w, h, x: '(ow-iw)/2', y: '(oh-ih)/2' },
+                inputs: `vBase${idx}`,
+                outputs: `vPad${idx}`
+            });
+
+            // Setsar/FPS chain
+            // We can chain them or make separate objects. Separate is clearer.
+            complexFilter.push({
+                filter: 'setsar',
+                options: '1',
+                inputs: `vPad${idx}`,
+                outputs: `vSar${idx}`
+            });
+
+            complexFilter.push({
+                filter: 'fps',
+                options: edl.fps,
+                inputs: `vSar${idx}`,
+                outputs: `vFps${idx}`
+            });
+
+            const finalVLabel = `v${idx}`;
+            complexFilter.push({
+                filter: 'format',
+                options: 'yuv420p',
+                inputs: `vFps${idx}`,
+                outputs: finalVLabel
+            });
+
+            concatInputs.push(`[${finalVLabel}]`);
+
+            // Audio Logic
             const localPath = assetMap.get(clip.src);
             let hasAudio = false;
             if (clip.type === 'video' && localPath) {
@@ -162,53 +190,76 @@ export class CompositionEngine {
             }
 
             if (hasAudio) {
-                // Use the video's audio stream
-                concatInputs.push(`${streamLabel}[${idx}:a]`);
+                concatInputs.push(`[${idx}:a]`);
             } else {
-                // Generate Silence matching duration
-                // Using anullsrc. Note: simple 'anullsrc' produces infinite stream, strictly need 'd' or 't'
-                const silentLabel = `[s${idx}]`;
-                complexFilter.push(`anullsrc=r=44100:cl=stereo:d=${duration}${silentLabel}`);
-                concatInputs.push(`${streamLabel}${silentLabel}`);
+                const silentLabel = `s${idx}`;
+                // Using anullsrc as a filter source
+                complexFilter.push({
+                    filter: 'anullsrc',
+                    options: { r: 44100, cl: 'stereo', d: duration },
+                    outputs: silentLabel
+                });
+                concatInputs.push(`[${silentLabel}]`);
             }
         }
 
-        // Concat: v=1:a=1
-        // [v0][a0][v1][s1]...concat
-        // Result is [vMain] and [aEmbedded]
-        const concatFilter = `${concatInputs.join('')}concat=n=${videoTrack.clips.length}:v=1:a=1[vMain][aEmbedded]`;
-        complexFilter.push(concatFilter);
+        // Concat Filter
+        complexFilter.push({
+            filter: 'concat',
+            options: { n: videoTrack.clips.length, v: 1, a: 1 },
+            inputs: concatInputs.map(s => s.replace(/[\[\]]/g, '')), // Strip brackets for inputs array
+            outputs: ['vMain', 'aEmbedded']
+        });
 
         // --- Process Audio Tracks (Mixing) ---
-        // Strategy:
-        // 1. [aEmbedded] is our Base Speech Track (sync locked to video)
-        // 2. Add [aNarration] and [aMusic] as layers
-        // 3. Mix all
 
-        let audioMixParts: string[] = ['[aEmbedded]'];
+        let audioMixParts: string[] = ['aEmbedded'];
 
         edl.tracks.audio.forEach((track, trackIdx) => {
             console.log(`[Composition] Processing Audio Track '${track.name}' with ${track.clips.length} clips.`);
             track.clips.forEach((clip, clipIdx) => {
                 const idx = addInput(clip);
-                // adelay uses milliseconds
                 const delayMs = Math.floor(clip.timelineStart * 1000);
                 const label = `aT${trackIdx}C${clipIdx}`;
 
-                // Determine volume (track level or clip level)
                 const vol = clip.volume ?? (track.name === 'music' ? 0.3 : 1.0);
 
-                // Apply volume & delay
-                complexFilter.push(`[${idx}:a]volume=${vol},adelay=${delayMs}|${delayMs}[${label}]`);
-                audioMixParts.push(`[${label}]`);
+                // Volume Filter
+                const volLabel = `${label}Vol`;
+                complexFilter.push({
+                    filter: 'volume',
+                    options: { volume: vol },
+                    inputs: `${idx}:a`,
+                    outputs: volLabel
+                });
+
+                // ADelay Filter
+                complexFilter.push({
+                    filter: 'adelay',
+                    options: { delays: `${delayMs}|${delayMs}` },
+                    inputs: volLabel,
+                    outputs: label
+                });
+
+                audioMixParts.push(label);
             });
         });
 
         if (audioMixParts.length > 0) {
-            complexFilter.push(`${audioMixParts.join('')}amix=inputs=${audioMixParts.length}:duration=longest[aMain]`);
+            complexFilter.push({
+                filter: 'amix',
+                options: { inputs: audioMixParts.length, duration: 'longest' },
+                inputs: audioMixParts,
+                outputs: 'aMain'
+            });
         } else {
-            // No audio? generated silence
-            complexFilter.push(`anullsrc=channel_layout=stereo:sample_rate=44100[aMain]`);
+            // Fallback silence if no audio at all?
+            // Usually aEmbedded exists, so this path is rare
+            complexFilter.push({
+                filter: 'anullsrc',
+                options: { r: 44100, cl: 'stereo' },
+                outputs: 'aMain'
+            });
         }
 
         // --- Execute ---
