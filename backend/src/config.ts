@@ -13,7 +13,7 @@ console.log("Supabase Keys found:", Object.keys(process.env).filter(k => k.inclu
 export const CONFIG = {
     PORT: process.env.PORT || 3001,
     SUPABASE_URL: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-    SUPABASE_KEY: process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY, // Backend usually needs SERVICE_ROLE, but anon works for public tables
+    SUPABASE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY, // Prefer Service Role for Backend ops
     REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     RUNPOD_API_KEY: process.env.RUNPOD_API_KEY || process.env.VITE_RUNPOD_API_KEY,
