@@ -853,6 +853,11 @@ export default function ClipStudioDemo() {
             if (supabase) {
                 // DATA CLEANUP: Remove fields not in DB schema
                 const dbPayload = { ...payload };
+
+                // [Fix] Don't send temporary IDs to DB (uuid mismatch)
+                if (dbPayload.id && (String(dbPayload.id).startsWith('local_') || String(dbPayload.id).startsWith('reshoot_'))) {
+                    delete dbPayload.id;
+                }
                 delete dbPayload.audio_url;
                 delete dbPayload.raw_video_url;
                 delete dbPayload.scene_name;
