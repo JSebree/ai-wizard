@@ -92,6 +92,19 @@ export async function processVideoJob(job: Job<ProjectPayload>, onStatusUpdate?:
     const jobId = job.id || 'unknown';
     const vodId = payload.vodId; // UUID from Frontend
 
+    // ============================================================
+    // FIELD MAPPING: Frontend → Backend Canonical Names
+    // 
+    // Frontend (ProductionStudioDemo) sends: burn_captions
+    // Backend (director.ts) uses:            wantsCaptions
+    // 
+    // This mapping normalizes field names at the entry point.
+    // To change caption behavior, update this mapping.
+    // ============================================================
+    if ((payload as any).burn_captions !== undefined) {
+        payload.wantsCaptions = (payload as any).burn_captions;
+    }
+
     try {
         await updateStatus(job, { stage: 'scripting', progress: 10, message: 'Starting AI Director...' }, onStatusUpdate);
 
