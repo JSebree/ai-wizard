@@ -66,7 +66,9 @@ export class VideoOrchestrator {
             // AUTO-SPLIT: Long B-Roll segments without visuals array
             // ONLY for pure 'broll' route - do NOT touch 'combo' route logic
             if (route === 'broll' && !isARoll && segDuration > 4 && (!seg.visuals || seg.visuals.length <= 1)) {
-                const targetShotDuration = 3; // Target ~3s per B-Roll shot
+                // LTX V2 has minimum ~3.3s per clip (81 frames at 24fps)
+                // Use 3.5s minimum to ensure we don't go below model constraints
+                const targetShotDuration = 3.5; // Above LTX minimum to prevent audio/video mismatch
                 const numShots = Math.max(2, Math.ceil(segDuration / targetShotDuration));
                 const subDur = segDuration / numShots;
                 const baseVisual = seg.visual || "Cinematic b-roll";
