@@ -1118,7 +1118,8 @@ export default function ClipStudioDemo() {
                 video_url: videoUrl,
                 videoUrl: videoUrl,
                 last_frame_url: lastFrameUrl,
-                thumbnail_url: lastFrameUrl, // [v72] Sync thumbnail
+                // [v73] Only update thumbnail if lastFrameUrl exists, otherwise preserve original keyframe
+                ...(lastFrameUrl ? { thumbnail_url: lastFrameUrl } : {}),
                 status: "rendering",
                 error: "Adding Foley SFX..."
             };
@@ -1127,11 +1128,13 @@ export default function ClipStudioDemo() {
                 setPreviewShot(prev => ({ ...prev, ...intermediateData }));
             }
             if (supabase) {
-                await supabase.from('clips').update({
+                const dbUpdate = {
                     video_url: videoUrl,
-                    last_frame_url: lastFrameUrl,
-                    thumbnail_url: lastFrameUrl // [v72] Update DB thumbnail
-                }).eq('id', dbId);
+                    last_frame_url: lastFrameUrl
+                };
+                // [v73] Only update DB thumbnail if lastFrameUrl exists
+                if (lastFrameUrl) dbUpdate.thumbnail_url = lastFrameUrl;
+                await supabase.from('clips').update(dbUpdate).eq('id', dbId);
             }
 
             // --- [v67] FOLEY SFX CHAINING ---
@@ -1213,7 +1216,8 @@ export default function ClipStudioDemo() {
                 video_url: finalVideoUrl, // snake_case for DB style object
                 videoUrl: finalVideoUrl,  // camelCase for local state
                 last_frame_url: lastFrameUrl,
-                thumbnail_url: lastFrameUrl, // [v72] Sync thumbnail
+                // [v73] Only update thumbnail if lastFrameUrl exists, otherwise preserve original keyframe
+                ...(lastFrameUrl ? { thumbnail_url: lastFrameUrl } : {}),
                 status: 'completed',
                 manualDuration: shot.isAudioLocked ? shot.totalAudioDuration : shot.manualDuration
             };
@@ -1235,14 +1239,17 @@ export default function ClipStudioDemo() {
             // OR even better, we just call supabase update here since we know it exists.
 
             if (supabase) {
+                const finalDbUpdate = {
+                    video_url: finalVideoUrl,
+                    last_frame_url: lastFrameUrl,
+                    status: 'completed'
+                };
+                // [v73] Only update DB thumbnail if lastFrameUrl exists
+                if (lastFrameUrl) finalDbUpdate.thumbnail_url = lastFrameUrl;
+
                 const { error: updateError } = await supabase
                     .from('clips')
-                    .update({
-                        video_url: finalVideoUrl,
-                        last_frame_url: lastFrameUrl,
-                        thumbnail_url: lastFrameUrl, // [v72] Sync thumbnail
-                        status: 'completed'
-                    })
+                    .update(finalDbUpdate)
                     .eq('id', dbId);
 
                 if (updateError) {
