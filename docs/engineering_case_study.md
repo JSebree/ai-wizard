@@ -2,12 +2,12 @@
 
 **Role:** Lead Creative AI Engineer
 **Tech Stack:** React, Node.js (Express/Fastify), BullMQ (Redis), PostgreSQL (Supabase), n8n, Cloudflare Pages.
-**Key Models:** LTX, ElevenLabs, SDXL (Model Agnostic Architecture).
+**Key Models:** A Modular Ensemble of 11+ SOTA Models (LTX, Qwen, Hunyuan, etc.).
 
 ---
 
 ## 1. The Challenge: Orchestrating Chaos
-Generative AI models (LLMs, Diffusion, TTS) are powerful but isolated. They produce "raw materials," not products. To build a coherent video, one must manually pipeline data through 5+ disconnected APIs, managing context, timing, and consistency.
+Generative AI models (LLMs, Diffusion, TTS) are powerful but isolated. They produce "raw materials," not products. To build a coherent video, one must manually pipeline data through 11+ disconnected APIs, managing context, timing, and consistency.
 
 **The Mission:** Build an **Autonomous Director System**. A platform that accepts a high-level intent (e.g., *"A 60s noir detective story"*) and orchestrates the entire production pipeline—scripting, casting, shooting (generating), and editing—without human intervention.
 
@@ -20,22 +20,26 @@ The brain of the system is the **Orchestration Layer**, built on a scalable Node
 *   **State Machine:** The `Orchestrator` breaks a linear script into parallelizable jobs. It manages the global state (Character Consistency, Pacing, Tone) and injects it into every atomic generation task.
 *   **Deterministic Timing:** An algorithm calculates TTS read-rates to ensure generated video clips match audio duration to the millisecond, solving the "lip-flap" sync issue common in AI video.
 
-### 2.2 The "Low-Code" Worker Layer (n8n API Gateway)
-**Architectural Decision:** Instead of hardcoding Python handlers for every volatile AI model, I utilized **n8n** as an abstraction layer.
-*   **Velocity:** When a new SOTA model drops (e.g., LTX), I update the n8n workflow in minutes. The core backend remains stable and untouched.
-*   **Abstraction:** The backend requests a *"Viral Style Video"*; the n8n layer resolves *how* to fulfill it (Model A vs Model B) based on current performance/cost.
+### 2.2 The "Ensemble" Worker Layer (n8n API Gateway)
+**Architectural Decision:** Instead of relying on a single monolith model, I orchestrated a "Best-in-Class" Ensemble using **n8n** as a low-code gateway.
+
+**The 11-Model Stack:**
+*   **Visuals:** LTX-2 (Video), Qwen Image 2512 (Keyframes), Qwen Edit 2511 (In-painting).
+*   **World:** WorldGen (3D Environments), InfCam (Camera Trajectory).
+*   **Audio:** InfiniteTalk (Lipsync), Higgs Audio V2 (Voice), SeedVC (Style Transfer), Hunyuan Foley (SFX), Ace Step (Music).
+*   **Utility:** Real-ESRGAN (Upscaling).
 
 ### 2.3 Async Job Queue (Solving the Timeout Constraint)
-**Problem:** High-quality video generation is slow (2-5 mins). Standard Serverless functions (Cloudflare/Vercel) timeout after ~100s.
+**Problem:** High-quality video generation with this many models takes minutes. Serverless functions timeout after ~100s.
 **Solution:** I implemented a decoupled **Job Queue Pattern** using **BullMQ on Redis**.
-1.  **Ingest:** API accepts request -> Pushes to Redis -> Returns `job_id` immediately (50ms latency).
-2.  **Process:** Distributed Workers pick up jobs, managing long-running generation & rendering tasks independently of the HTTP cycle.
-3.  **Poll:** Client polls a lightweight status endpoint, enabling a snappy UI even during heavy rendering loads.
+1.  **Ingest:** API accepts request -> Pushes to Redis -> Returns `job_id`.
+2.  **Process:** Distributed Workers pick up jobs, managing long-running generation tasks.
+3.  **Poll:** Client polls a lightweight status endpoint for updates.
 
 ## 3. Operational Philosophy: The "AI-Native" Team
 I designed the system to be maintained by a "Cyborg" team—lean, high-leverage, and AI-assisted—rather than a traditional army of engineers.
 *   **NoOps Mentalty:** By offloading model inference to serverless endpoints (RunPod/ElevenLabs) and logic to n8n, we eliminated the need for a dedicated ML Ops team.
-*   **Leverage:** The "Coordinator" pattern allows a single engineer to manage the complexity of what would typically require 5 backend developers and 3 ML engineers.
+*   **Leverage:** The "Coordinator" pattern allows a single engineer to manage the complexity of stacking 11 different models into a coherent product.
 
 ## 4. Key Technical Innovations
 
@@ -47,7 +51,7 @@ I moved beyond "Session-based" generation to "asset-based" persistence.
 ### B. "Model Agnostic" Infrastructure
 The system is unopinionated about the underlying models, preventing vendor lock-in.
 *   **Interface Segregation:** The `assets/video.ts` module defines a strict contract.
-*   **Hot-Swapping:** We can route valid jobs to OpenAI Sora or Luma Dream Machine based on cost/availability without deploying new code.
+*   **Hot-Swapping:** We can route valid jobs to other models based on cost/availability without deploying new code.
 
 ### C. Narrative Consistency Logic
 To solve "Hallucination Drift" (where characters morph between shots), I engineered a ** Context Injection** pipeline.
@@ -57,4 +61,4 @@ To solve "Hallucination Drift" (where characters morph between shots), I enginee
 ## 5. Impact & Results
 *   **Engineering Velocity:** "Hybrid" architecture allowed the team to integrate new models (like LTX) in <24 hours.
 *   **User Experience:** "Express Mode" generates a full unique video in <2 minutes, a 100x speedup over manual workflows.
-*   **Scalability:** The decoupled Queue architecture allows for horizontal scaling of Workers to handle traffic bursts without affecting API availability.
+*   **Scalability:** The decoupled Queue architecture allows for horizontal scaling.
