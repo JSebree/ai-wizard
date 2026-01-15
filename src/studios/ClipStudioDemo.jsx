@@ -197,7 +197,7 @@ export default function ClipStudioDemo() {
             }
 
             // Fetch Settings [New]
-            const { data: settingsData } = await supabase.from('settings').select('*');
+            const { data: settingsData } = await supabase.from('setting').select('*');
             if (settingsData) {
                 setSettings(settingsData);
             }
