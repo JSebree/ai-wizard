@@ -71,27 +71,37 @@ export class VideoOrchestrator {
                 const subDur = segDuration / numShots;
                 const baseVisual = seg.visual || "Cinematic b-roll";
 
+                // Use seed from settings for visual consistency across shots
+                const baseSeed = this.plan.settings.seed || Math.floor(Math.random() * 1000000);
+
                 console.log(`[Orchestrator] Auto-splitting ${segDuration}s B-Roll into ${numShots} shots (~${subDur.toFixed(1)}s each)`);
 
-                // Generate varied prompts for each sub-shot
+                // Subtle story-driven variations (not jarring shot type changes)
+                // These add narrative progression while keeping visual consistency
                 const shotVariants = [
-                    "establishing wide shot",
-                    "medium shot, detailed view",
-                    "close-up, intimate detail",
-                    "dynamic angle, movement",
-                    "atmospheric mood shot"
+                    "opening moment,",
+                    "continuing the scene,",
+                    "building the atmosphere,",
+                    "adding depth,",
+                    "moment of focus,",
+                    "environmental context,",
+                    "subtle detail,",
+                    "narrative beat,"
                 ];
 
                 return Array.from({ length: numShots }, (_, subIndex) => {
                     const variant = shotVariants[subIndex % shotVariants.length];
+                    // Use sequential seeds for consistency within the segment
+                    const shotSeed = baseSeed + subIndex;
                     return {
                         id: `S${(index + 1).toString().padStart(2, '0')}-${subIndex + 1}`,
                         segId: seg.segId || `SEG-${(index + 1).toString().padStart(2, '0')}`,
                         shotKey: `${seg.segId || 'SEG01'}-S${index}-sub${subIndex}`,
-                        prompt: `Style: ${mapStyle(this.plan.settings.style)}. ${variant} of ${baseVisual}`,
-                        dialogue: subIndex === 0 ? seg.dialogue : undefined, // Only first sub-shot owns audio
+                        prompt: `Style: ${mapStyle(this.plan.settings.style)}. ${variant} ${baseVisual}`,
+                        dialogue: subIndex === 0 ? seg.dialogue : undefined, // Audio handled at segment level
                         durationSec: subDur,
-                        type: 'broll'
+                        type: 'broll',
+                        seed: shotSeed // Pass seed for visual consistency
                     };
                 });
             }

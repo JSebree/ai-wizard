@@ -51,6 +51,7 @@ export interface RenderSettings {
     style?: string; // e.g. "Cinematic", "Anime"
     cameraAngle?: string; // e.g. "Close Up"
     route?: 'aroll' | 'broll' | 'combo' | string;
+    seed?: number; // For visual consistency in auto-split B-Roll
 }
 
 export interface Shot {
