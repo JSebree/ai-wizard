@@ -359,11 +359,7 @@ export default function CharacterStudioDemo() {
       }
 
       // Trigger Expansion (Include voice data to prevent overwrite)
-      const expansionEndpoint =
-        import.meta.env.VITE_CHARACTER_EXPANSION_URL ||
-        API_CONFIG.GENERATE_CHARACTER_EXPANSION;
-
-      void fetch(expansionEndpoint, {
+      void fetch(API_CONFIG.GENERATE_CHARACTER_EXPANSION, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // [v68] BUGFIX: Include voice_id and audio_url so n8n update doesn't wipe them
