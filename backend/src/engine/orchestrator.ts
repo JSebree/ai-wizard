@@ -64,8 +64,8 @@ export class VideoOrchestrator {
             }
 
             // AUTO-SPLIT: Long B-Roll segments without visuals array
-            // Split into ~3 second chunks to ensure multiple keyframes
-            if (!isARoll && segDuration > 4 && (!seg.visuals || seg.visuals.length <= 1)) {
+            // ONLY for pure 'broll' route - do NOT touch 'combo' route logic
+            if (route === 'broll' && !isARoll && segDuration > 4 && (!seg.visuals || seg.visuals.length <= 1)) {
                 const targetShotDuration = 3; // Target ~3s per B-Roll shot
                 const numShots = Math.max(2, Math.ceil(segDuration / targetShotDuration));
                 const subDur = segDuration / numShots;
