@@ -502,24 +502,47 @@ Describe the main visual theme/action for this video.`;
 export async function generateScript(input: ScriptInput): Promise<ScriptOutput> {
     console.log(`[ScriptGen] Generating script for route: ${input.route}`);
 
-    let script: ScriptOutput;
     const route = input.route || 'aroll';
+    const maxRetries = 3;
 
-    if (route === 'combo') {
-        script = await generateComboScript(input);
-    } else if (route === 'broll') {
-        script = await generateBRollScript(input);
-    } else {
-        // Default to A-Roll
-        script = await generateARollScript(input);
+    // Helper to generate script based on route
+    const generateForRoute = async (): Promise<ScriptOutput> => {
+        if (route === 'combo') {
+            return await generateComboScript(input);
+        } else if (route === 'broll') {
+            return await generateBRollScript(input);
+        } else {
+            // Default to A-Roll
+            return await generateARollScript(input);
+        }
+    };
+
+    let script: ScriptOutput;
+    let lastValidation: { valid: boolean; errors: string[] } = { valid: false, errors: [] };
+
+    // Retry loop: regenerate script if dialogue validation fails
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        console.log(`[ScriptGen] Attempt ${attempt}/${maxRetries} for route: ${route}`);
+
+        script = await generateForRoute();
+
+        // Validate dialogue for all routes (all videos are audio-driven)
+        lastValidation = validateDialogue(script, route);
+
+        if (lastValidation.valid) {
+            console.log(`[ScriptGen] Dialogue validation passed on attempt ${attempt}`);
+            return script;
+        }
+
+        // Log validation failure and retry if attempts remain
+        console.warn(`[ScriptGen] Attempt ${attempt} failed validation:`, lastValidation.errors);
+
+        if (attempt < maxRetries) {
+            console.log(`[ScriptGen] Retrying script generation...`);
+        }
     }
 
-    // Validate dialogue for all routes (all videos are audio-driven)
-    const validation = validateDialogue(script, route);
-    if (!validation.valid) {
-        // Log but don't throw - allow job to continue with warning
-        console.warn(`[ScriptGen] Dialogue validation issues for ${route}:`, validation.errors);
-    }
-
-    return script;
+    // All retries exhausted - log final warning but return the script anyway
+    console.warn(`[ScriptGen] All ${maxRetries} attempts failed dialogue validation. Proceeding with best effort.`, lastValidation.errors);
+    return script!;
 }
