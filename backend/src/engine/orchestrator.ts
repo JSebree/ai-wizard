@@ -333,6 +333,12 @@ export class VideoOrchestrator {
             // Only add audio clip if this shot actually OWNS the voice file (Shot 1 of N)
             // AND (It's B-Roll OR It's A-Roll Fallback/Image-Only)
             const isARollFallback = shot.type === 'aroll' && !shot.videoUrl;
+
+            // DEBUG: Log all B-Roll shots to understand audio assignment
+            if (shot.type === 'broll') {
+                console.log(`[Orchestrator] buildEDL DEBUG: B-Roll ${shot.id} | dialogue: ${shot.dialogue ? 'YES' : 'NO'} | voiceUrl: ${shot.voiceUrl ? 'YES' : 'NO'} | voiceDur: ${shot.voiceDurationSec}`);
+            }
+
             if ((shot.type === 'broll' || isARollFallback) && shot.voiceUrl && shot.voiceDurationSec) {
                 console.log(`[Orchestrator] buildEDL: Adding Audio Clip for ${shot.id} (Type=${shot.type}, Voice=${shot.voiceUrl}, Dur=${shot.voiceDurationSec})`);
                 audioClips.push({
@@ -348,7 +354,7 @@ export class VideoOrchestrator {
             } else if (shot.type === 'aroll') {
                 // A-Roll audio is embedded; usually don't need separate audio track
                 // unless we want to normalize volume etc.
-            } else if (shot.type === 'broll') {
+            } else if (shot.type === 'broll' && !shot.voiceUrl) {
                 // Debug: Why was B-Roll audio not added?
                 console.log(`[Orchestrator] buildEDL: Skipping Audio for B-Roll ${shot.id}: voiceUrl=${shot.voiceUrl}, voiceDur=${shot.voiceDurationSec}`);
             }
