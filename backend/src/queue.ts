@@ -25,7 +25,14 @@ export const setupWorker = () => {
             console.error(`Job ${job.id} failed inside worker:`, err);
             throw err;
         }
-    }, { connection, concurrency: 50 });
+    }, {
+        connection,
+        concurrency: 50,
+        // Prevent stalling for long FFmpeg jobs
+        lockDuration: 600000, // 10 minutes lock
+        lockRenewTime: 300000, // Renew lock every 5 minutes
+        stalledInterval: 120000 // Check for stalled jobs every 2 minutes
+    });
 
     worker.on('completed', job => {
         console.log(`Job ${job.id} completed!`);
