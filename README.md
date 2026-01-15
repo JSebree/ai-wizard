@@ -1,81 +1,45 @@
-# React + Vite
+# SceneMe: The AI Director Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**SceneMe** is an autonomous narrative orchestration engine. It transforms high-level intent (e.g., *"A 60s noir film"*) into fully produced video assets by coordinating a hybrid pipeline of LLMs, Diffusion Models, and TTS engines.
 
-Currently, two official plugins are available:
+> 🚀 **Engineering Case Study:** [Read how we built the Hybrid Orchestrator](./docs/engineering_case_study.md)  
+> 🦄 **Product Vision:** [The "Operating System" for Generative Video](./docs/product_tech_brief.md)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## 🏗 System Architecture
+This project implements a **Hybrid Architecture** balancing velocity and reliability:
+*   **The Director (Node.js/Express):** State management, Intent Routing, and "Lip-Sync" timing logic.
+*   **The Worker Layer (n8n/BullMQ):** Asynchronous job queues leveraging SOTA models (LTX, ElevenLabs, SDXL) via a Model-Agnostic interface.
+*   **Persistence (Supabase):** "Asset-based" storage allowing for **Episodic Templates** and Character Consistency across sessions.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 📂 Documentation (Strategic)
+*   [**Engineering Case Study:**](./docs/engineering_case_study.md) A deep dive into the "Orchestrator Pattern" and solving the Cloudflare Timeout constraint with Async Queues.
+*   [**Product Brief:**](./docs/product_tech_brief.md) How SceneMe solves the "Innovator's Dilemma" for AI video tools.
+*   [**Artifacts Roadmap:**](./docs/strategic_artifacts_roadmap.md) Plan for future system diagrams and whitepapers.
 
-## Release Process
+---
 
-The following is the full release workflow used for promoting changes from development → main → stable, tagging releases, and ensuring reproducible builds.
+## 🚀 Release Process
+*(Standard dev notes below)*
 
 ### **1. Commit All Local Changes**
-
 ```bash
 git add .
 git commit -m "your message here"
 ```
 
 ### **2. Push to `main`**
-
 ```bash
 git push -u origin main
 ```
 
 ### **3. Tag the Stable Release**
-
-Choose the next version number (semantic versioning):
-
 ```bash
-git tag -a v0.3.0 -m "Stable release: character & setting studios wired to Supabase"
-git push origin v0.3.0
-```
-
-### **4. Create / Update the `stable` Branch**
-
-If the branch does not yet exist:
-
-```bash
-git checkout -b stable
-git push -u origin stable
-```
-
-If it already exists and you want to update it to the newest main:
-
-```bash
-git checkout stable
-git merge main
-git push
-```
-
-### **5. (Optional) Open a Pull Request**
-
-If you prefer PR-based merging, GitHub will suggest a PR link:
-
-```
-https://github.com/<your-username>/<repo>/pull/new/stable
+git tag -a v0.7.1 -m "Stable release: Express Mode + Studio Hybrid"
+git push origin v0.7.1
 ```
 
 ### **6. Deployment Notes**
-
 - Cloudflare Pages will deploy whatever branch you configure (usually `main` or `stable`).
 - Environment variables (`.env`, `.env.local`) are NOT committed—update them manually in Cloudflare.
-- Supabase client changes require updating Cloudflare env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-
-### **7. Summary**
-
-1. Develop locally  
-2. Commit → push to **main**  
-3. Tag release (`v0.x.x`)  
-4. Push tag  
-5. Update/create **stable** branch  
-6. Push stable  
-7. Deployment picks up automatically  
-
-This ensures a clean deployment pipeline with predictable stable releases.
