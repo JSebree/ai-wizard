@@ -1,0 +1,61 @@
+graph TD
+    %% Styling
+    classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef backend fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef worker fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+    classDef db fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px;
+    classDef models fill:#212121,stroke:#000,stroke-width:2px,color:#fff;
+
+    subgraph User Interaction
+        UI[💻 React Frontend<br/>"The Independent Director"]:::frontend
+    end
+
+    subgraph "SceneMe Orchestration Engine (Node.js)"
+        API[API Gateway<br/>Express/Fastify]:::backend
+        Director[🎬 The Director<br/>Intent Routing]:::backend
+        Orchestrator[🎼 The Orchestrator<br/>State Machine & Timing]:::backend
+        Queue[⚡ BullMQ<br/>Redis Job Queue]:::backend
+    end
+
+    subgraph "Persistence Layer"
+        DB[(Supabase PostgreSQL)]:::db
+        S3[(Object Storage<br/>Assets & Ephemerals)]:::db
+    end
+
+    subgraph "The Worker Ensemble (n8n & RunPod)"
+        Dispatcher[📡 Asset Dispatcher]:::worker
+        
+        %% The 11 Model Ensemble
+        Video[🎥 LTX-2 / InfCam<br/>Video Gen]:::models
+        Visuals[🖼️ Qwen Image 2512<br/>Keyframes & Editing]:::models
+        World[🌍 WorldGen<br/>3D Settings]:::models
+        Speech[🗣️ InfiniteTalk / Higgs<br/>LipSync & TTS]:::models
+        Audio[🎵 Ace Step / Hunyuan<br/>Music & Foley]:::models
+        Polish[✨ Real-ESRGAN<br/>4K Upscale]:::models
+    end
+
+    %% Flows
+    UI -- "Intent: 'Noir Film'" --> API
+    API -- "Job #123" --> Queue
+    API -.-> UI
+    Queue -- "Async Job" --> Director
+    
+    Director -- "Context & Script" --> Orchestrator
+    Orchestrator -- "Shot List" --> Dispatcher
+    
+    Dispatcher --> Video
+    Dispatcher --> Visuals
+    Dispatcher --> World
+    Dispatcher --> Speech
+    Dispatcher --> Audio
+    Dispatcher --> Polish
+    
+    %% Database Links
+    Director -.-> DB
+    Video -.-> S3
+    Visuals -.-> S3
+    
+    %% Return Flow
+    Dispatcher -- "Generated Assets" --> Orchestrator
+    Orchestrator -- "Final MP4" --> DB
+    UI -- "Poll Status" --> API
