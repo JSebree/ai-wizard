@@ -42,13 +42,13 @@ export class VideoOrchestrator {
             else if (route === 'combo') shotType = (seg.track?.toLowerCase() || 'broll') as 'aroll' | 'broll';
 
             const isARoll = shotType === 'aroll';
+            const segDuration = seg.duration || 4;
 
             // Check for Sub-Segmentation (Visual Fan-out)
             if (!isARoll && seg.visuals && seg.visuals.length > 1) {
-                // B-Roll Fan-out
+                // B-Roll Fan-out (LLM provided multiple visuals)
                 const subCount = seg.visuals.length;
-                const totalDur = seg.duration || 10;
-                const subDur = totalDur / subCount;
+                const subDur = segDuration / subCount;
 
                 return seg.visuals.map((visualPrompt, subIndex) => {
                     return {
@@ -56,6 +56,39 @@ export class VideoOrchestrator {
                         segId: seg.segId || `SEG-${(index + 1).toString().padStart(2, '0')}`,
                         shotKey: `${seg.segId}-S${index}-sub${subIndex}`,
                         prompt: `Style: ${mapStyle(this.plan.settings.style)}. ` + (visualPrompt || "Cinematic b-roll"),
+                        dialogue: subIndex === 0 ? seg.dialogue : undefined, // Only first sub-shot owns audio
+                        durationSec: subDur,
+                        type: 'broll'
+                    };
+                });
+            }
+
+            // AUTO-SPLIT: Long B-Roll segments without visuals array
+            // Split into ~3 second chunks to ensure multiple keyframes
+            if (!isARoll && segDuration > 4 && (!seg.visuals || seg.visuals.length <= 1)) {
+                const targetShotDuration = 3; // Target ~3s per B-Roll shot
+                const numShots = Math.max(2, Math.ceil(segDuration / targetShotDuration));
+                const subDur = segDuration / numShots;
+                const baseVisual = seg.visual || "Cinematic b-roll";
+
+                console.log(`[Orchestrator] Auto-splitting ${segDuration}s B-Roll into ${numShots} shots (~${subDur.toFixed(1)}s each)`);
+
+                // Generate varied prompts for each sub-shot
+                const shotVariants = [
+                    "establishing wide shot",
+                    "medium shot, detailed view",
+                    "close-up, intimate detail",
+                    "dynamic angle, movement",
+                    "atmospheric mood shot"
+                ];
+
+                return Array.from({ length: numShots }, (_, subIndex) => {
+                    const variant = shotVariants[subIndex % shotVariants.length];
+                    return {
+                        id: `S${(index + 1).toString().padStart(2, '0')}-${subIndex + 1}`,
+                        segId: seg.segId || `SEG-${(index + 1).toString().padStart(2, '0')}`,
+                        shotKey: `${seg.segId || 'SEG01'}-S${index}-sub${subIndex}`,
+                        prompt: `Style: ${mapStyle(this.plan.settings.style)}. ${variant} of ${baseVisual}`,
                         dialogue: subIndex === 0 ? seg.dialogue : undefined, // Only first sub-shot owns audio
                         durationSec: subDur,
                         type: 'broll'
@@ -81,7 +114,7 @@ export class VideoOrchestrator {
                 shotKey: `${seg.segId || 'SEG01'}-S${(index + 1).toString().padStart(2, '0')}`,
                 prompt: isARoll ? arollPrompt : (seg.visual || "Cinematic b-roll"),
                 dialogue: seg.dialogue,
-                durationSec: seg.duration || 4,
+                durationSec: segDuration,
                 type: isARoll ? 'aroll' : 'broll'
             }];
         });
