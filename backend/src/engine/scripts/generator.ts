@@ -14,6 +14,41 @@ const cleanJson = (text: string) => {
     }
 };
 
+// Dialogue Validation for all routes (A-Roll, B-Roll, Combo)
+// All video types are audio-driven and MUST have spoken dialogue
+function validateDialogue(script: ScriptOutput, route: string): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    for (const seg of script.segments) {
+        const dialogue = seg.dialogue || '';
+        const trimmedDialogue = dialogue.trim();
+
+        // Check if dialogue exists
+        if (!trimmedDialogue || trimmedDialogue.length < 10) {
+            errors.push(`[${route}] Segment ${seg.segId} is missing spoken dialogue. All videos require voiceover/spoken text.`);
+            continue;
+        }
+
+        // Check dialogue length (150 wpm = 2.5 words/sec)
+        const actualWords = trimmedDialogue.split(/\s+/).length;
+        const expectedWords = (seg.duration || 10) * 2.5;
+
+        // Warn if dialogue is too short (less than 50% of expected)
+        if (actualWords < expectedWords * 0.5) {
+            errors.push(`[${route}] Segment ${seg.segId} dialogue may be too short (${actualWords} words for ${seg.duration}s). Expected ~${Math.round(expectedWords)} words.`);
+        }
+    }
+
+    // Log validation result
+    if (errors.length > 0) {
+        console.warn(`[ScriptGen] Dialogue validation warnings:`, errors);
+    } else {
+        console.log(`[ScriptGen] Dialogue validation passed for ${route} (${script.segments.length} segments)`);
+    }
+
+    return { valid: errors.length === 0, errors };
+}
+
 // --- A-Roll Pipeline ---
 
 async function generateARollVisuals(context: {
@@ -466,12 +501,25 @@ Describe the main visual theme/action for this video.`;
 
 export async function generateScript(input: ScriptInput): Promise<ScriptOutput> {
     console.log(`[ScriptGen] Generating script for route: ${input.route}`);
-    if (input.route === 'combo') {
-        return generateComboScript(input);
-    } else if (input.route === 'broll') {
-        return generateBRollScript(input);
+
+    let script: ScriptOutput;
+    const route = input.route || 'aroll';
+
+    if (route === 'combo') {
+        script = await generateComboScript(input);
+    } else if (route === 'broll') {
+        script = await generateBRollScript(input);
     } else {
         // Default to A-Roll
-        return generateARollScript(input);
+        script = await generateARollScript(input);
     }
+
+    // Validate dialogue for all routes (all videos are audio-driven)
+    const validation = validateDialogue(script, route);
+    if (!validation.valid) {
+        // Log but don't throw - allow job to continue with warning
+        console.warn(`[ScriptGen] Dialogue validation issues for ${route}:`, validation.errors);
+    }
+
+    return script;
 }
