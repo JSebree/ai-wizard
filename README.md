@@ -1,6 +1,6 @@
 # SceneMe: The AI Director Platform
 
-**SceneMe** is an autonomous narrative orchestration engine. It transforms high-level intent (e.g., *"A 60s noir film"*) into fully produced video assets by coordinating a hybrid pipeline of **11+ SOTA Models**.
+**[SceneMe](https://sceneme.ai)** is an autonomous narrative orchestration engine. It transforms high-level intent (e.g., *"A 60s noir film"*) into fully produced video assets by coordinating a hybrid pipeline of **11+ SOTA Models**.
 
 > 🚀 **Engineering Case Study:** [Read how we built the Hybrid Orchestrator](./docs/engineering_case_study.md)  
 > 🦄 **Product Vision:** [The "Operating System" for Generative Video](./docs/product_tech_brief.md)
