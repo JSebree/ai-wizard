@@ -518,7 +518,7 @@ export default function ProductionStudioDemo() {
         setCurrentSceneId(scene.id);
         setCurrentClipIndex(0); // Reset player
         setIsPlaying(false);
-        alert(`Scene "${scene.name}" loaded!`);
+        console.log(`Scene "${scene.name}" loaded.`); // Removed alert popup
     };
 
     return (
