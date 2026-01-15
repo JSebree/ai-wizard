@@ -22,6 +22,7 @@ This project implements a **Hybrid Architecture** balancing velocity and reliabi
 *   [**Engineering Case Study:**](./docs/engineering_case_study.md) A deep dive into the "Orchestrator Pattern" and solving context management for 11 distinct models.
 *   [**Product Brief:**](./docs/product_tech_brief.md) How SceneMe solves the "Innovator's Dilemma" for AI video tools.
 *   [**Artifacts Roadmap:**](./docs/strategic_artifacts_roadmap.md) Plan for future system diagrams and whitepapers.
+*   [**Architecture Diagram:**](./docs/architecture.mmd) Visual map of the 11-Model Ensemble data flow.
 
 ---
 
