@@ -25,7 +25,26 @@
     *   *Middle:* **SceneMe (The OS: Orchestration, IP, Consistency).**
     *   *Top:* High-Value Assets (Episodes, Ads).
 
-## 2. Deep-Dive Documentation (The "Trust Builder")
+## 2. Experiential Assets (The "Truth Builder")
+*Complementing static docs with proof-of-life video demos.*
+
+### A. The "Loom" Walkthrough (3 Mins)
+*   **Purpose:** Prove Velocity & Workflow.
+*   **Narrative:** "Intent-First isn't a buzzword; it's a 2-minute workflow."
+*   **Script:**
+    1.  Start with a blank screen.
+    2.  Type a high-level intent (e.g., "Cyberpunk City").
+    3.  Click Generate.
+    4.  Talk through the "Orchestration" architecture while it loads (voiceover).
+    5.  Show the final result playing immediately.
+
+### B. The "Sizzle Reel" (30 Secs)
+*   **Purpose:** Prove Quality (The "Wow" Factor).
+*   **Narrative:** "We generate Hollywood-grade assets, not just glitchy GIFs."
+*   **Content:** Fast cuts of your best 10 generations. No UI. Just music and visuals.
+*   **Distribution:** Pinned Tweet, LinkedIn Header, Investor Cold Emails.
+
+## 3. Deep-Dive Documentation (The "Trust Builder")
 
 ### A. "Scaling SceneMe" Technical Roadmap
 *   **Purpose:** Show foresight. "I know how to spend your money wisely."
@@ -42,7 +61,7 @@
     *   *The SceneMe Way (Intent):* 2 minutes. Type concept, review "Dailies," Publish.
     *   *Message:* We sell Time and Story, not Tools.
 
-## 3. The "Secret Weapon" Artifacts
+## 4. The "Secret Weapon" Artifacts
 
 ### A. The "Prompt Algorithms" Whitepaper (Lite)
 *   **Purpose:** AI Expertise.
@@ -53,8 +72,3 @@
 *   **Purpose:** Data-driven decision making (Model Agnosticism).
 *   **Content:** A comparison table of why we chose LTX vs. SVD vs. Runway (Cost/Speed/Quality trade-offs).
 *   **Message:** "We aren't married to a model. We date the winner."
-
----
-
-## Recommendation
-I recommend priority execution on **1.A (System Diagram)** next. It is the strongest visual proof of your "AI-Native" architectural philosophy.
