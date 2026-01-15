@@ -45,8 +45,7 @@ export const API_CONFIG = {
     // Clip Studio
     GENERATE_VOICE_PREVIEW: "/api/generate-voice",
     GENERATE_VIDEO_PREVIEW: "/api/generate-video",
-    // LipSync goes directly to n8n (long-running, needs async/callback handling)
-    GENERATE_LIPSYNC_PREVIEW: "https://n8n.simplifies.click/webhook/generate-lipsync-preview",
+    GENERATE_LIPSYNC_PREVIEW: "/api/generate-lipsync",
 
     // Production (Render)
     GENERATE_RENDER_SCENE: "https://n8n.simplifies.click/webhook/render-scene",
