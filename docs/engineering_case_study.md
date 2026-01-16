@@ -19,6 +19,7 @@ The brain of the system is the **Orchestration Layer**, built on a scalable Node
 *   **Semantic Routing:** The `Director` analyzes user intent to determine the "Route" (A-Roll vs B-Roll vs Combo), dynamically selecting the optimal pipeline.
 *   **State Machine:** The `Orchestrator` breaks a linear script into parallelizable jobs. It manages the global state (Character Consistency, Pacing, Tone) and injects it into every atomic generation task.
 *   **Deterministic Timing:** An algorithm calculates TTS read-rates to ensure generated video clips match audio duration to the millisecond, solving the "lip-flap" sync issue common in AI video.
+*   **EDL Preservation:** The Orchestrator constructs a professional Edit Decision List (EDL) alongside the MP4 render, allowing filmmakers to export the AI-generated rough cut directly into **Adobe Premiere** or **DaVinci Resolve** for fine-tuning.
 
 ### 2.2 The "Ensemble" Worker Layer (n8n API Gateway)
 **Architectural Decision:** Instead of relying on a single monolith model, I orchestrated a "Best-in-Class" Ensemble using **n8n** as a low-code gateway.

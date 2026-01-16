@@ -27,6 +27,14 @@ SceneMe replaces the current fragmented workflow (Prompt -> Generate Clip -> Out
 | **SFX** | **Hunyuan Foley** | Audio-visual correlated sound effects. |
 | **Polish** | **Real-ESRGAN** | 4K Upscaling. |
 
+**Result:** A publish-ready video in < 2 Minutes.
+
+### **Professional Hand-off: The "Bridge" Feature**
+Unlike "Walled Garden" apps, SceneMe treats the professional editor as a first-class citizen.
+*   **Outputs:** We export not just a flat MP4, but a **Standard EDL (Edit Decision List)**.
+*   **Workflow:** Creators can use SceneMe for the "Rough Cut" (generating 50 shots in 2 minutes) and then export the timeline directly to **Adobe Premiere** or **DaVinci Resolve** for final polish.
+*   **Value:** This bridges the gap between "AI Toys" and "Pro Tools."
+
 **The Workflow:** The Engine routes a user's intent (*"A 60s noir film"*) through this complex dependency graph automatically.
 
 ## 3. The Moat: The "Episodic Engine"

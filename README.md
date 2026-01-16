@@ -17,6 +17,7 @@ This project implements a **Hybrid Architecture** balancing velocity and reliabi
     *   🎵 **Audio:** Ace Step (Music), Hunyuan Foley (SFX)
     *   ✨ **Polish:** Real-ESRGAN (Upscaling)
 *   **Persistence (Supabase):** "Asset-based" storage allowing for **Episodic Templates** and Character Consistency across sessions.
+*   **Outputs:** Delivers both **Master MP4** and **Raw EDL (Edit Decision List)** for professional post-production in Premiere/Resolve.
 
 ## 📂 Documentation (Strategic)
 *   [**Engineering Case Study:**](./docs/engineering_case_study.md) A deep dive into the "Orchestrator Pattern" and solving context management for 11 distinct models.
