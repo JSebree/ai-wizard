@@ -275,9 +275,60 @@ export default function CharacterStudioDemo() {
     }
   };
 
+  // PREVIEW PERSISTENCE STATE
+  // Restore preview context from LocalStorage to allow "put phone down and come back"
+  const [activePreviewId, setActivePreviewId] = useState(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sceneme.activePreview");
+      if (stored) {
+        const { id, prompt, name: savedName, url, voiceId: savedVoiceId } = JSON.parse(stored);
+
+        // Restore Form State if empty (don't overwrite if user typed new stuff?) 
+        // Actually, if we are restoring a session, we should restore everything.
+        if (prompt) setBasePrompt(prompt);
+        if (savedName) setName(savedName);
+        if (savedVoiceId) setVoiceId(savedVoiceId);
+
+        // Restore Preview State
+        if (url && url !== "PENDING") {
+          setPreviewUrl(url);
+          setIsGeneratingPreview(false);
+        } else if (url === "PENDING") {
+          setIsGeneratingPreview(true);
+          setPreviewUrl("");
+          setActivePreviewId(id); // Trigger Polling (Visual only since backend is sync)
+        }
+      }
+    } catch (e) { console.error("Restore failed", e); }
+  }, []);
+
   const handleGeneratePreview = async () => {
-    if (!basePrompt.trim()) return;
+    if (!basePrompt.trim()) { setError("Description required"); return; }
+
     setIsGeneratingPreview(true);
+    setError("");
+
+    setPreviewUrl(""); // Clear old preview
+
+    // 1. Create a "Shadow Context" locally for persistence
+    const tempId = `preview_${Date.now()}`;
+    const context = {
+      id: tempId,
+      prompt: basePrompt,
+      name: name,
+      voiceId: voiceId,
+      url: "PENDING",
+      createdAt: Date.now()
+    };
+    localStorage.setItem("sceneme.activePreview", JSON.stringify(context));
+    setActivePreviewId(tempId);
+
+    // Clear Form immediately (UX preference)
+    // setName(""); 
+    // setBasePrompt(""); 
+
     try {
       const res = await fetch(API_CONFIG.GENERATE_ASSET_PREVIEW, {
         method: "POST",
@@ -290,12 +341,33 @@ export default function CharacterStudioDemo() {
           mood: null
         })
       });
+
+      if (!res.ok) throw new Error(`Generation failed: ${res.status}`);
+
       const data = await res.json();
       const url = data.image_url || data.url;
-      if (url) setPreviewUrl(url);
+
+      if (url) {
+        setPreviewUrl(url); // Update specific preview box
+
+        setPreviewUrl(url);
+        setIsGeneratingPreview(false);
+        setActivePreviewId(null);
+        localStorage.setItem("sceneme.activePreview", JSON.stringify({ ...context, url: url }));
+
+        // Optional: Auto-save to Supabase? 
+        // For now, we leave it as "Draft" until user clicks "Save Character" to register it formally.
+      } else {
+        throw new Error("No image URL returned");
+      }
+
     } catch (e) {
       console.error(e);
       setError("Preview generation failed.");
+
+      setIsGeneratingPreview(false);
+      localStorage.removeItem("sceneme.activePreview");
+      alert("Generation failed. Please try again.");
     } finally {
       setIsGeneratingPreview(false);
     }
@@ -381,9 +453,14 @@ export default function CharacterStudioDemo() {
       }).catch(console.error);
 
       // Refresh list multiple times to ensure we catch the DB write
+      // Refresh list multiple times to ensure we catch the DB write
       setTimeout(fetchSupabase, 1000);
       setTimeout(fetchSupabase, 3000);
       setTimeout(fetchSupabase, 5000);
+
+      // Cleanup Preview Persistence
+      localStorage.removeItem("sceneme.activePreview");
+      setActivePreviewId(null);
 
     } catch (e) {
       console.error("Registration failed", e);
