@@ -280,28 +280,37 @@ export default function CharacterStudioDemo() {
   const [activePreviewId, setActivePreviewId] = useState(null);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("sceneme.activePreview");
-      if (stored) {
-        const { id, prompt, name: savedName, url, voiceId: savedVoiceId } = JSON.parse(stored);
+    const restore = () => {
+      try {
+        const stored = localStorage.getItem("sceneme.activePreview");
+        if (stored) {
+          const { id, prompt, name: savedName, url, voiceId: savedVoiceId } = JSON.parse(stored);
 
-        // Restore Form State if empty (don't overwrite if user typed new stuff?) 
-        // Actually, if we are restoring a session, we should restore everything.
-        if (prompt) setBasePrompt(prompt);
-        if (savedName) setName(savedName);
-        if (savedVoiceId) setVoiceId(savedVoiceId);
+          if (prompt) setBasePrompt(prompt);
+          if (savedName) setName(savedName);
+          if (savedVoiceId) setVoiceId(savedVoiceId);
 
-        // Restore Preview State
-        if (url && url !== "PENDING") {
-          setPreviewUrl(url);
-          setIsGeneratingPreview(false);
-        } else if (url === "PENDING") {
-          setIsGeneratingPreview(true);
-          setPreviewUrl("");
-          setActivePreviewId(id); // Trigger Polling (Visual only since backend is sync)
+          if (url && url !== "PENDING") {
+            setPreviewUrl(url);
+            setIsGeneratingPreview(false);
+            setError("");
+          } else if (url === "PENDING") {
+            setIsGeneratingPreview(true);
+            setPreviewUrl("");
+            setActivePreviewId(id);
+          }
         }
-      }
-    } catch (e) { console.error("Restore failed", e); }
+      } catch (e) { console.error("Restore failed", e); }
+    };
+
+    restore();
+
+    // Cross-tab auto-refresh
+    const handleStorage = (e) => {
+      if (e.key === "sceneme.activePreview") restore();
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   const handleGeneratePreview = async () => {

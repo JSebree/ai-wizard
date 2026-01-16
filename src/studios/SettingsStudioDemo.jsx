@@ -379,6 +379,10 @@ export default function SettingsStudioDemo() {
       console.error("Unexpected error while triggering setting expansion workflow", err);
     }
 
+    // Cleanup Context
+    localStorage.removeItem("sceneme.activeSettingPreview");
+    setActivePreviewId(null);
+
     resetForm();
   };
 
@@ -451,6 +455,50 @@ export default function SettingsStudioDemo() {
     }
   };
 
+  // PREVIEW PERSISTENCE STATE
+  const [activePreviewId, setActivePreviewId] = useState(null);
+
+  // Restore & Auto-Refresh Hook
+  useEffect(() => {
+    const restore = () => {
+      try {
+        const stored = localStorage.getItem("sceneme.activeSettingPreview");
+        if (stored) {
+          const { id, prompt, name: savedName, url, mood: savedMood } = JSON.parse(stored);
+
+          // Restore Form Context
+          if (prompt) setBasePrompt(prompt);
+          if (savedName) setName(savedName);
+          if (savedMood) setMood(savedMood);
+
+          // Restore Preview Context
+          if (url && url !== "PENDING") {
+            setPreviewImageUrl(url);
+            setIsGenerating(false);
+            // Clear error if we have a success
+            setPreviewError("");
+          } else if (url === "PENDING") {
+            setIsGenerating(true);
+            setPreviewImageUrl("");
+            setActivePreviewId(id);
+          }
+        }
+      } catch (e) { console.error("Restore failed", e); }
+    };
+
+    // 1. Initial Restore
+    restore();
+
+    // 2. Cross-Tab / Auto-Refresh Listener
+    const handleStorage = (e) => {
+      if (e.key === "sceneme.activeSettingPreview") {
+        restore();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   const handleGeneratePreview = useCallback(async () => {
     setPreviewError("");
 
@@ -460,6 +508,21 @@ export default function SettingsStudioDemo() {
     }
 
     setIsGenerating(true);
+    setPreviewImageUrl(""); // Clear old
+
+    // 1. Create Context
+    const tempId = `preview_set_${Date.now()}`;
+    const context = {
+      id: tempId,
+      prompt: basePrompt,
+      name: name,
+      mood: mood,
+      url: "PENDING",
+      createdAt: Date.now()
+    };
+    localStorage.setItem("sceneme.activeSettingPreview", JSON.stringify(context));
+    setActivePreviewId(tempId);
+
     try {
       const endpoint = "https://n8n.simplifies.click/webhook/generate-character-preview";
       // import.meta.env.VITE_SETTINGS_PREVIEW_URL ||
@@ -475,7 +538,8 @@ export default function SettingsStudioDemo() {
           name: name,
           reference_image_url: referenceImageUrl || null,
           asset_type: "setting",
-          mood: mood || null
+          mood: mood || null,
+          id: tempId
         }),
       });
 
@@ -494,11 +558,18 @@ export default function SettingsStudioDemo() {
         throw new Error("Preview response did not include an image_url.");
       }
 
+      // Success
       setPreviewImageUrl(url);
+      localStorage.setItem("sceneme.activeSettingPreview", JSON.stringify({
+        ...context,
+        url: url
+      }));
+
     } catch (err) {
       console.error(err);
       setPreviewError(err instanceof Error ? err.message : "Failed to generate preview.");
       setPreviewImageUrl("");
+      localStorage.removeItem("sceneme.activeSettingPreview");
     } finally {
       setIsGenerating(false);
     }
