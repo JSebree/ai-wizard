@@ -318,10 +318,9 @@ export default function CharacterStudioDemo() {
 
     setIsGeneratingPreview(true);
     setError("");
+    setPreviewUrl("");
 
-    setPreviewUrl(""); // Clear old preview
-
-    // 1. Create a "Shadow Context" locally for persistence
+    // 1. Create Context
     const tempId = `preview_${Date.now()}`;
     const context = {
       id: tempId,
@@ -332,54 +331,61 @@ export default function CharacterStudioDemo() {
       createdAt: Date.now()
     };
     localStorage.setItem("sceneme.activePreview", JSON.stringify(context));
+    // Provide visual feedback immediately
     setActivePreviewId(tempId);
 
-    // Clear Form immediately (UX preference)
-    // setName(""); 
-    // setBasePrompt(""); 
+    // 2. Detached Generation (Backgroundable)
+    // We define this OUTSIDE the try/catch block of the component render cycle if possible, 
+    // but here we just fire-and-forget the promise so React doesn't kill it.
+    const runBackground = async () => {
+      try {
+        const res = await fetch(API_CONFIG.GENERATE_ASSET_PREVIEW, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: basePrompt,
+            name: name,
+            reference_image_url: referenceImageUrl || null,
+            asset_type: "character",
+            mood: null,
+            id: tempId
+          })
+        });
 
-    try {
-      const res = await fetch(API_CONFIG.GENERATE_ASSET_PREVIEW, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: basePrompt,
-          name: name,
-          reference_image_url: referenceImageUrl || null,
-          asset_type: "character",
-          mood: null
-        })
-      });
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = await res.json();
+        const url = data.image_url || data.url;
 
-      if (!res.ok) throw new Error(`Generation failed: ${res.status}`);
-
-      const data = await res.json();
-      const url = data.image_url || data.url;
-
-      if (url) {
-        setPreviewUrl(url); // Update specific preview box
-
-        setPreviewUrl(url);
-        setIsGeneratingPreview(false);
-        setActivePreviewId(null);
-        localStorage.setItem("sceneme.activePreview", JSON.stringify({ ...context, url: url }));
-
-        // Optional: Auto-save to Supabase? 
-        // For now, we leave it as "Draft" until user clicks "Save Character" to register it formally.
-      } else {
-        throw new Error("No image URL returned");
+        if (url) {
+          // Background Success: Write to LS
+          const current = JSON.parse(localStorage.getItem("sceneme.activePreview") || "{}");
+          if (current.id === tempId) {
+            localStorage.setItem("sceneme.activePreview", JSON.stringify({ ...current, url }));
+            // Dispatch event for same-tab updates
+            window.dispatchEvent(new Event("storage"));
+          }
+        }
+      } catch (err) {
+        console.error("Background Gen Error:", err);
+        // Optional: Write error state to LS so user sees it
       }
+    };
 
-    } catch (e) {
-      console.error(e);
-      setError("Preview generation failed.");
+    // Fire & Forget
+    runBackground();
+  };
 
-      setIsGeneratingPreview(false);
-      localStorage.removeItem("sceneme.activePreview");
-      alert("Generation failed. Please try again.");
-    } finally {
-      setIsGeneratingPreview(false);
-    }
+  const handleClear = () => {
+    setName("");
+    setBasePrompt("");
+    setReferenceImageUrl("");
+    setPreviewUrl("");
+    setVoiceId("");
+    setVoicePreviewUrl("");
+    setVoiceKind("preset");
+    setActivePreviewId(null);
+    localStorage.removeItem("sceneme.activePreview");
+    setError("");
   };
 
   const handleSave = async () => {
@@ -468,8 +474,7 @@ export default function CharacterStudioDemo() {
       setTimeout(fetchSupabase, 5000);
 
       // Cleanup Preview Persistence
-      localStorage.removeItem("sceneme.activePreview");
-      setActivePreviewId(null);
+      handleClear();
 
     } catch (e) {
       console.error("Registration failed", e);
@@ -575,16 +580,7 @@ export default function CharacterStudioDemo() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Create Character</h3>
             {(name || basePrompt || voiceId || previewUrl) && (
-              <button onClick={() => {
-                setName("");
-                setBasePrompt("");
-                setReferenceImageUrl("");
-                setPreviewUrl("");
-                setVoiceId("");
-                setVoicePreviewUrl("");
-                setVoiceKind("preset");
-                setActiveCharacter(null); // Clear editing context if any
-              }} style={{ fontSize: 11, color: "#64748B", background: "none", border: "1px solid #E2E8F0", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}>
+              <button onClick={handleClear} style={{ fontSize: 11, color: "#64748B", background: "none", border: "1px solid #E2E8F0", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}>
                 Reset
               </button>
             )}

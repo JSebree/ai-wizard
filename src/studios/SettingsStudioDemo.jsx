@@ -128,8 +128,11 @@ export default function SettingsStudioDemo() {
     setPreviewError("");
     setError("");
     setRegisterError("");
-    // Note: we intentionally do NOT clear registerSuccess here so the user
-    // can still see the "logged" confirmation after the form resets.
+    setIsGenerating(false);
+    setActivePreviewId(null);
+    localStorage.removeItem("sceneme.activeSettingPreview");
+
+    // Note: we intentionally do NOT clear registerSuccess here
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -523,56 +526,48 @@ export default function SettingsStudioDemo() {
     localStorage.setItem("sceneme.activeSettingPreview", JSON.stringify(context));
     setActivePreviewId(tempId);
 
-    try {
-      const endpoint = "https://n8n.simplifies.click/webhook/generate-character-preview";
-      // import.meta.env.VITE_SETTINGS_PREVIEW_URL ||
-      // "https://n8n.simplifies.click/webhook/generate-character-preview";
+    // 2. Detached Generation (Backgroundable)
+    const runBackground = async () => {
+      try {
+        const endpoint = "https://n8n.simplifies.click/webhook/generate-character-preview";
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: basePrompt,
+            name: name,
+            reference_image_url: referenceImageUrl || null,
+            asset_type: "setting",
+            mood: mood || null,
+            id: tempId
+          }),
+        });
 
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: basePrompt,
-          name: name,
-          reference_image_url: referenceImageUrl || null,
-          asset_type: "setting",
-          mood: mood || null,
-          id: tempId
-        }),
-      });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Preview request failed: ${resp.status} ${text}`);
+        }
 
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Preview request failed: ${resp.status} ${text}`);
+        const data = await resp.json();
+        const url = data?.image_url || data?.preview_url || (Array.isArray(data?.images) ? data.images[0] : null);
+
+        if (!url) throw new Error("No image_url returned");
+
+        // Background Success: Write to LS
+        const current = JSON.parse(localStorage.getItem("sceneme.activeSettingPreview") || "{}");
+        if (current.id === tempId) {
+          localStorage.setItem("sceneme.activeSettingPreview", JSON.stringify({ ...current, url }));
+          // Dispatch for same-tab updates
+          window.dispatchEvent(new Event("storage"));
+        }
+      } catch (err) {
+        console.error(err);
+        // Optionally log error to LS
       }
+    };
 
-      const data = await resp.json();
-      const url =
-        data?.image_url ||
-        data?.preview_url ||
-        (Array.isArray(data?.images) ? data.images[0] : null);
+    runBackground();
 
-      if (!url) {
-        throw new Error("Preview response did not include an image_url.");
-      }
-
-      // Success
-      setPreviewImageUrl(url);
-      localStorage.setItem("sceneme.activeSettingPreview", JSON.stringify({
-        ...context,
-        url: url
-      }));
-
-    } catch (err) {
-      console.error(err);
-      setPreviewError(err instanceof Error ? err.message : "Failed to generate preview.");
-      setPreviewImageUrl("");
-      localStorage.removeItem("sceneme.activeSettingPreview");
-    } finally {
-      setIsGenerating(false);
-    }
   }, [name, basePrompt, negativePrompt, mood, referenceImageUrl]);
 
   return (
