@@ -307,55 +307,35 @@ export default function SettingsStudioDemo() {
     const next = [...settings, newSetting];
     persistSettings(next);
 
-    // 1) Register this setting in the shared registry (Supabase)
+    // 1. Direct Supabase Insert (Immediate)
     try {
-      // Note: registerSettingInRegistry helper might need refactoring to return ID, or we modify it here.
-      // Actually, let's verify registerSettingInRegistry implementation below. 
-      // It calls fetch but doesn't return the ID. 
-      // I will inline the fetch here or modify the helper. 
-      // Inlining is safer for this specific fix.
+      if (!supabase) throw new Error("Supabase client not initialized");
 
-      const endpoint = import.meta.env.VITE_REGISTER_SETTING_URL || API_CONFIG.REGISTER_SETTING;
-      const payload = {
-        id,
-        name: safeName,
-        core_prompt: rawPrompt,
-        mood: rawMood || null,
+      const { data, error } = await supabase.from('setting').insert({
+        id: id.trim(),
+        name: safeName,             // Maps to 'name' or 'settings_name' depending on DB (std is name)
+        base_prompt: rawPrompt,
+        base_hero: imageUrl,        // Ensure base_hero is set 
         base_image_url: imageUrl,
-        kind: "setting",
-        user_id: user?.id || null,
-      };
+        mood: rawMood || null,
+        user_id: user?.id || null,  // EXPLICIT
+        status: "ready"
+      }).select().single();
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      if (error) throw error;
 
-      if (!res.ok) throw new Error("Registry call failed");
-
-      const data = await res.json().catch(() => ({}));
-      const realId = data.id || data.uuid || data.setting_id;
-
-      if (realId) {
-        console.log("Received real ID from registry:", realId);
-        setSettings(prev => prev.map(s => s.id === id ? { ...s, id: realId } : s));
+      // Use real ID
+      const realId = data?.id || id;
+      if (data?.id) {
+        setSettings(prev => prev.map(s => s.id === id ? { ...s, ...data, id: realId } : s));
       }
 
-      setRegisterSuccess("Setting successfully added.");
+      setRegisterSuccess("Setting successfully saved.");
 
-    } catch (err) {
-      console.error("Registry registration failed:", err);
-    }
-
-    // 2) Fire-and-forget expansion workflow
-    try {
-      const expansionEndpoint =
-        import.meta.env.VITE_SETTING_EXPANSION_URL ||
-        API_CONFIG.GENERATE_SETTING_EXPANSION;
-
+      // 2. Trigger Expansion (Fire & Forget)
+      const expansionEndpoint = import.meta.env.VITE_SETTING_EXPANSION_URL || API_CONFIG.GENERATE_SETTING_EXPANSION;
       const expansionPayload = {
-        id,
+        id: realId,
         name: safeName,
         base_prompt: rawPrompt,
         negative_prompt: negativePrompt.trim() || "",
@@ -364,22 +344,24 @@ export default function SettingsStudioDemo() {
         kind: "setting",
         user_id: user?.id || null,
       };
-
       void fetch(expansionEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(expansionPayload),
-      }).catch((err) => {
-        console.error("Failed to trigger setting expansion workflow", err);
-      });
+      }).catch(err => console.error("Expansion trigger failed", err));
 
-      // Refresh list multiple times
+      // Refresh List
       setTimeout(fetchSettings, 1000);
       setTimeout(fetchSettings, 3000);
-      setTimeout(fetchSettings, 5000);
+
+      // Cleanup
+      resetForm();
 
     } catch (err) {
-      console.error("Unexpected error while triggering setting expansion workflow", err);
+      console.error("Save failed:", err);
+      // Revert optimistic if hard failure
+      // setSettings(prev => prev.filter(s => s.id !== id)); (Optional, but safer to keep it)
+      setRegisterError("Failed to save setting.");
     }
 
     // Cleanup Context

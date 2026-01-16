@@ -415,37 +415,33 @@ export default function CharacterStudioDemo() {
     persistCharacters(next);
 
     // Supabase Register
+    // Supabase Direct Register (Immediate Persistence)
     try {
-      const res = await fetch(API_CONFIG.REGISTER_CHARACTER, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          name,
-          base_prompt: basePrompt,
-          base_image_url: imageUrl,
-          voice_id: finalVoiceId,
-          // [v69] STRICT: Only send voice_ref_url if it's a clone. Registry voices don't need it.
-          voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
-          kind: "character",
-          user_id: user?.id || null
-        })
-      });
+      if (!supabase) throw new Error("Supabase client not initialized");
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Registration failed (${res.status}): ${errText}`);
+      // 1. Direct Insert
+      const { data, error } = await supabase.from('characters').insert({
+        id: id.trim(),
+        name: name,
+        display_name: name,
+        base_prompt: basePrompt,
+        base_image_url: imageUrl,
+        base_hero: imageUrl,
+        voice_id: finalVoiceId,
+        voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
+        user_id: user?.id || null, // EXPLICIT USER ID
+        status: "ready"
+      }).select().single();
+
+      if (error) throw error;
+
+      // Update local state with real ID
+      const realId = data?.id || id;
+      if (data?.id) {
+        setCharacters(prev => prev.map(c => c.id === id ? { ...c, ...data, id: realId } : c));
       }
 
-      // Attempt to retrieve real UUID from response
-      const data = await res.json().catch(() => ({}));
-      const realId = data.id || data.uuid || data.character_id;
-      if (realId) {
-        console.log("Received real ID from registry:", realId);
-        setCharacters(prev => prev.map(c => c.id === id ? { ...c, id: realId } : c));
-      }
-
-      // Trigger Expansion (Include voice data to prevent overwrite)
+      // Trigger Expansion (Fire & Forget)
       const expansionEndpoint =
         import.meta.env.VITE_CHARACTER_EXPANSION_URL ||
         API_CONFIG.GENERATE_CHARACTER_EXPANSION;
@@ -455,7 +451,7 @@ export default function CharacterStudioDemo() {
         headers: { "Content-Type": "application/json" },
         // [v68] BUGFIX: Include voice_id and audio_url so n8n update doesn't wipe them
         body: JSON.stringify({
-          id,
+          id: realId,
           name,
           base_prompt: basePrompt,
           base_image_url: imageUrl,
