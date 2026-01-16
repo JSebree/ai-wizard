@@ -61,7 +61,5 @@ To solve "Hallucination Drift" (where characters morph between shots), I enginee
 
 ## 5. Impact & Results
 *   **Engineering Velocity:** "Hybrid" architecture allowed the team to integrate new models (like LTX) in <24 hours.
-*   **Engineering Velocity:** "Hybrid" architecture allowed the team to integrate new models (like LTX) in <24 hours.
 *   **Time Arbitrage:** While end-to-end rendering takes 20-40 minutes (due to high-fidelity generation), the **Active User Time** is reduced to minutes, freeing creators from the "Editor's Chair."
-*   **Scalability:** The decoupled Queue architecture allows for horizontal scaling.
 *   **Scalability:** The decoupled Queue architecture allows for horizontal scaling.
