@@ -432,7 +432,7 @@ export default function CharacterStudioDemo() {
         display_name: name,
         base_prompt: basePrompt,
         base_image_url: imageUrl,
-        base_hero: imageUrl,
+        // base_hero: imageUrl, // Removed per schema error
         voice_id: finalVoiceId,
         voice_ref_url: voiceKind === "clone" ? (voicePreviewUrl || null) : null,
         user_id: user?.id || null, // EXPLICIT USER ID

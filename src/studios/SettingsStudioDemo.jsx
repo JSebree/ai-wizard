@@ -315,7 +315,7 @@ export default function SettingsStudioDemo() {
         id: id.trim(),
         name: safeName,             // Maps to 'name' or 'settings_name' depending on DB (std is name)
         base_prompt: rawPrompt,
-        base_hero: imageUrl,        // Ensure base_hero is set 
+        // base_hero: imageUrl,        // Removed per schema safety 
         base_image_url: imageUrl,
         mood: rawMood || null,
         user_id: user?.id || null,  // EXPLICIT
