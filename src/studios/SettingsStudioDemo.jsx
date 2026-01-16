@@ -313,12 +313,11 @@ export default function SettingsStudioDemo() {
 
       const { data, error } = await supabase.from('setting').insert({
         id: id.trim(),
-        name: safeName,             // Maps to 'name' or 'settings_name' depending on DB (std is name)
-        base_prompt: rawPrompt,
-        // base_hero: imageUrl,        // Removed per schema safety 
+        name: safeName,
+        core_prompt: rawPrompt,      // FIXED: Schema uses core_prompt
         base_image_url: imageUrl,
         mood: rawMood || null,
-        user_id: user?.id || null,  // EXPLICIT
+        user_id: user?.id || null,
         status: "ready"
       }).select().single();
 
