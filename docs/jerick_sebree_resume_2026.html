@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jerick Sebree - Resume</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', Helvetica, Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #1F2937;
+            /* Gray-900 */
+            margin: 0;
+            padding: 40px;
+            /* Screen padding, ignored by print */
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 24pt;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+            color: #000;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 12pt;
+            font-weight: 700;
+            border-bottom: 2px solid #E5E7EB;
+            padding-bottom: 4px;
+            margin-top: 16px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #374151;
+            /* Gray-700 */
+        }
+
+        /* Contact Info Line */
+        p.contact-info strong {
+            font-weight: 400;
+            color: #4B5563;
+            /* Gray-600 */
+            font-size: 10pt;
+        }
+
+        a {
+            color: #2563EB;
+            /* Blue-600 */
+            text-decoration: none;
+        }
+
+        ul {
+            margin-top: 6px;
+            margin-bottom: 12px;
+            padding-left: 18px;
+        }
+
+        li {
+            margin-bottom: 4px;
+            color: #374151;
+            /* Gray-700 */
+        }
+
+        strong {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        /* Role Date Helper */
+        .role-date {
+            float: right;
+            font-style: normal;
+            font-weight: 400;
+            color: #6B7280;
+        }
+
+        .role-line {
+            margin-bottom: 2px;
+        }
+
+        /* Print Optimization */
+        @media print {
+            body {
+                padding: 0;
+                margin: 0;
+            }
+
+            @page {
+                margin: 1cm;
+                size: auto;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>JERICK SEBREE</h1>
+    <p class="contact-info">
+        <strong>(770) 733-8653 | Smyrna, GA | jerick.sebree@gmail.com | <a
+                href="https://www.linkedin.com/in/jerick-sebree">linkedin.com/in/jerick-sebree</a> | <a
+                href="https://jericksebree.com">jericksebree.com</a> | <a
+                href="https://sceneme.ai">sceneme.ai</a></strong>
+    </p>
+
+    <p>
+        <strong>Lead Creative AI Engineer & Systems Architect</strong><br>
+        <em>Product-Minded Engineer with 12+ years of experience bridging Data Engineering and Product Strategy. Expert
+            in orchestrating complex AI ensembles (LLMs, Diffusion, TTS) into autonomous production systems. Proven
+            track record of automating enterprise workflows at scale (Zillow, Intuit, Home Depot).</em>
+    </p>
+
+    <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 16px 0;">
+
+    <h2>RELEVANT WORK EXPERIENCE</h2>
+
+    <div style="margin-bottom: 16px;">
+        <div class="role-line">
+            <strong>SceneMe (Stealth AI Startup)</strong> | Remote <span class="role-date"></span><br>
+            <strong>Lead Creative AI Engineer / Founder</strong> <span class="role-date">April 2024 – Present</span>
+        </div>
+        <p style="margin-top: 8px; margin-bottom: 8px;"><em>Architecting the "Operating System" for Generative Narrative
+                Video. Building a cloud-native platform that orchestrates 11+ distinct AI models to generate
+                broadcast-ready episodic content.</em></p>
+        <ul>
+            <li><strong>AI System Architecture:</strong> Designed a decoupled <strong>Async Job Queue
+                    architecture</strong> (Node.js, BullMQ, Redis) to manage long-running GPU inference tasks (40m+)
+                across distributed serverless workers, solving the "timeout problem" inherent in generative media.</li>
+            <li><strong>Ensemble Engineering:</strong> Built a "Director" agent that autonomously orchestrates
+                specialized SOTA models (LTX Video, Qwen VL, ElevenLabs, Hunyuan Audio) into a cohesive narrative
+                pipeline, achieving a <strong>100x reduction in active production time</strong>.</li>
+            <li><strong>Pipeline Automation:</strong> Leveraged <strong>n8n</strong> as a "Low-Code API Gateway" to
+                abstract complex model providers, enabling rapid hot-swapping of under-the-hood models (e.g., LTX to
+                Sora) without frontend refactors.</li>
+            <li><strong>Data Consistency:</strong> Developed a "Master Keyframe" context injection system to eliminate
+                generic hallucinations, ensuring character and scene consistency across multi-shot sequences.</li>
+        </ul>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+        <div class="role-line">
+            <strong>Intuit</strong> | Remote <span class="role-date"></span><br>
+            <strong>Senior Product Analyst</strong> <span class="role-date">March 2022 – April 2024</span>
+        </div>
+        <p style="margin-top: 8px; margin-bottom: 8px;"><em>Drove product strategy and data engineering initiatives for
+                high-volume financial products (QuickBooks ecosystem).</em></p>
+        <ul>
+            <li><strong>Data Pipeline Engineering:</strong> Designed and maintained robust ETL pipelines using
+                <strong>SQL</strong> and internal orchestration tools to process petabyte-scale clickstream data,
+                ensuring high-availability telemetry for product teams.</li>
+            <li><strong>Experimentation Platform:</strong> Engineered the tracking schemas and data structures for
+                large-scale A/B tests, enabling precise measurement of feature impact across millions of users.</li>
+            <li><strong>Automated Insights:</strong> Developed automated custom dashboard reporting workflows that
+                reduced manual analyst hours by <strong>30%</strong>, allowing the team to focus on strategic "Why"
+                questions rather than "What" reporting.</li>
+            <li><strong>Cross-Functional Leadership:</strong> Acted as the technical bridge between Data Engineering,
+                Product Management, and Engineering, translating complex business requirements into precise data
+                specifications.</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <div style="margin-bottom: 16px;">
+        <div class="role-line">
+            <strong>Zillow</strong> | Atlanta, GA (Remote) <span class="role-date"></span><br>
+            <strong>Senior Business Analyst</strong> <span class="role-date">January 2021 – March 2022</span>
+        </div>
+        <ul>
+            <li><strong>Analytics Engineering:</strong> Streamlined business processes by leveraging advanced SQL and
+                Tableau to create standardized "Source of Truth" datasets, reducing data fragmentation across the
+                Rentals organization.</li>
+            <li><strong>Strategic Analysis:</strong> Lead analysis for an $11M project expanding multi-family housing
+                footprints; pioneered new market segmentation views using geospatial data layers.</li>
+            <li><strong>Team Leadership:</strong> Created the Analytics Leaders Team (ALT) to standardize best practices
+                across Data Science, Visualization Engineering, and Sales Operations.</li>
+        </ul>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+        <div class="role-line">
+            <strong>The Home Depot</strong> | Atlanta, GA <span class="role-date"></span><br>
+            <strong>Senior Data Analyst</strong> <span class="role-date">August 2019 – January 2021</span>
+        </div>
+        <ul>
+            <li><strong>Workflow Automation:</strong> Decreased warehouse inventory replenishment processing time by
+                <strong>20%</strong> by engineering custom workflow automations (Python/SQL/VBA).</li>
+            <li><strong>ETL Development:</strong> Created custom data pipelines executing efficient ETL solutions using
+                <strong>GCP (BigQuery)</strong> and Tableau to modernizing legacy Excel-based workflows.</li>
+        </ul>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 16px 0;">
+
+    <h2>SKILLS & TOOLS</h2>
+    <ul>
+        <li><strong>AI & Engineering:</strong> Node.js, TypeScript, Python, React, n8n (Workflow Automation), Docker,
+            Redis, BullMQ, PostgreSQL.</li>
+        <li><strong>Generative AI:</strong> Diffusion Models (Stable Diffusion, LTX), LLM Orchestration (OpenAI,
+            Anthropic), RAG pipelines, Prompt Engineering.</li>
+        <li><strong>Data Engineering:</strong> Advanced SQL, Google BigQuery, ETL Design, Data Modeling, Tableau, Power
+            BI, A/B Testing.</li>
+        <li><strong>Core:</strong> Agile/Scrum, Product Strategy, System Architecture, API Design.</li>
+    </ul>
+
+    <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 16px 0;">
+
+    <h2>EDUCATION</h2>
+
+    <p>
+        <strong>The University of Massachusetts</strong> <span class="role-date">May 2019</span><br>
+        Bachelor of Science in Information Technology (Magna Cum Laude)
+    </p>
+
+    <p>
+        <strong>The University of Georgia</strong> <span class="role-date">May 2011</span><br>
+        Bachelor of Business Administration in Banking & Finance
+    </p>
+
+</body>
+
+</html>
