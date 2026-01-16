@@ -64,4 +64,17 @@ Building the "Operating System" for Generative Narrative Video. Architected a cl
 *   **System Design** (Async Architectures)
 *   **TypeScript / Node.js**
 *   **Diffusion Models** (Stable Diffusion, LTX)
-*   **Prompt Engineering** (Context Context Windows)
+*   **Prompt Engineering**
+
+---
+
+## 5. The "Featured" Section (The Visuals)
+*This is the first thing people see after your headshot. Make it count.*
+
+1.  **Link 1: SceneMe.ai**
+    *   **Thumbnail:** (Will auto-fetch from site)
+    *   **Title:** SceneMe - The OS for Generative Narrative
+    *   **Description:** "Autonomous Director Agent orchestrating 11+ AI models to generate episodic video."
+2.  **Link 2: Your Resume**
+    *   **Action:** Upload the `jerick_sebree_resume_2026.pdf` (Print version) directly.
+    *   **Title:** Jerick Sebree - Creative AI Architect Resume (2026)
