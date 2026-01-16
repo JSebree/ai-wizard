@@ -7,31 +7,31 @@ graph TD
     classDef models fill:#212121,stroke:#000,stroke-width:2px,color:#fff;
 
     subgraph User Interaction
-        UI[💻 React Frontend<br/>"The Independent Director"]:::frontend
+        UI["💻 React Frontend<br/>'The Independent Director'"]:::frontend
     end
 
     subgraph "SceneMe Orchestration Engine (Node.js)"
-        API[API Gateway<br/>Express/Fastify]:::backend
-        Director[🎬 The Director<br/>Intent Routing]:::backend
-        Orchestrator[🎼 The Orchestrator<br/>State Machine & Timing]:::backend
-        Queue[⚡ BullMQ<br/>Redis Job Queue]:::backend
+        API["API Gateway<br/>Express/Fastify"]:::backend
+        Director["🎬 The Director<br/>Intent Routing"]:::backend
+        Orchestrator["🎼 The Orchestrator<br/>State Machine & Timing"]:::backend
+        Queue["⚡ BullMQ<br/>Redis Job Queue"]:::backend
     end
 
     subgraph "Persistence Layer"
-        DB[(Supabase PostgreSQL)]:::db
-        S3[(Object Storage<br/>Assets & Ephemerals)]:::db
+        DB[("Supabase PostgreSQL")]:::db
+        S3[("Object Storage<br/>Assets & Ephemerals")]:::db
     end
 
     subgraph "The Worker Ensemble (n8n & RunPod)"
-        Dispatcher[📡 Asset Dispatcher]:::worker
+        Dispatcher["📡 Asset Dispatcher"]:::worker
         
         %% The 11 Model Ensemble
-        Video[🎥 LTX-2 / InfCam<br/>Video Gen]:::models
-        Visuals[🖼️ Qwen Image 2512<br/>Keyframes & Editing]:::models
-        World[🌍 WorldGen<br/>3D Settings]:::models
-        Speech[🗣️ InfiniteTalk / Higgs<br/>LipSync & TTS]:::models
-        Audio[🎵 Ace Step / Hunyuan<br/>Music & Foley]:::models
-        Polish[✨ Real-ESRGAN<br/>4K Upscale]:::models
+        Video["🎥 LTX-2 / InfCam<br/>Video Gen"]:::models
+        Visuals["🖼️ Qwen Image 2512<br/>Keyframes & Editing"]:::models
+        World["🌍 WorldGen<br/>3D Settings"]:::models
+        Speech["🗣️ InfiniteTalk / Higgs<br/>LipSync & TTS"]:::models
+        Audio["🎵 Ace Step / Hunyuan<br/>Music & Foley"]:::models
+        Polish["✨ Real-ESRGAN<br/>4K Upscale"]:::models
     end
 
     %% Flows
