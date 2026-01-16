@@ -27,7 +27,13 @@ SceneMe replaces the current fragmented workflow (Prompt -> Generate Clip -> Out
 | **SFX** | **Hunyuan Foley** | Audio-visual correlated sound effects. |
 | **Polish** | **Real-ESRGAN** | 4K Upscaling. |
 
-**Result:** A publish-ready video in < 2 Minutes.
+**Result:** A publish-ready narrative video (1-2 mins) in **20-40 Minutes** (Background Render).
+
+**The "Time Arbitrage" Value:**
+While the total compute time is significant (due to high-fidelity generation), the **Active User Time** is < 5 minutes.
+*   *Old Way:* User spends 4 hours manually editing.
+*   *SceneMe Way:* User spends 2 minutes directing -> Machine spends 40 minutes rendering.
+*   *Benefit:* We give the creator back their day.
 
 ### **Professional Hand-off: The "Bridge" Feature**
 Unlike "Walled Garden" apps, SceneMe treats the professional editor as a first-class citizen.
