@@ -361,7 +361,13 @@ export default function CharacterStudioDemo() {
           const current = JSON.parse(localStorage.getItem("sceneme.activePreview") || "{}");
           if (current.id === tempId) {
             localStorage.setItem("sceneme.activePreview", JSON.stringify({ ...current, url }));
-            // Dispatch event for same-tab updates
+
+            // FIX: Manually trigger state update for THIS tab, since storage event doesn't fire locally
+            setPreviewUrl(url);
+            setIsGeneratingPreview(false);
+            setActivePreviewId(null);
+
+            // Dispatch event for OTHER tabs
             window.dispatchEvent(new Event("storage"));
           }
         }

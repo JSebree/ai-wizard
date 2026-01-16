@@ -539,7 +539,13 @@ export default function SettingsStudioDemo() {
         const current = JSON.parse(localStorage.getItem("sceneme.activeSettingPreview") || "{}");
         if (current.id === tempId) {
           localStorage.setItem("sceneme.activeSettingPreview", JSON.stringify({ ...current, url }));
-          // Dispatch for same-tab updates
+
+          // FIX: Manually trigger state update for THIS tab
+          setPreviewImageUrl(url);
+          setIsGenerating(false);
+          setActivePreviewId(null);
+
+          // Dispatch for OTHER tabs
           window.dispatchEvent(new Event("storage"));
         }
       } catch (err) {
