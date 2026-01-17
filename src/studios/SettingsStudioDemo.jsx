@@ -510,18 +510,22 @@ export default function SettingsStudioDemo() {
     // 2. Detached Generation (Backgroundable)
     const runBackground = async () => {
       try {
-        const endpoint = "https://n8n.simplifies.click/webhook/generate-character-preview";
+        // [Fix] Correct Endpoint for Settings
+        const endpoint = "https://n8n.simplifies.click/webhook/generate-setting-preview";
+        const payload = {
+          prompt: basePrompt,
+          name: name,
+          reference_image_url: referenceImageUrl || null,
+          asset_type: "setting",
+          mood: mood || null,
+          id: tempId
+        };
+        console.log("[SettingsStudio] Sending Preview Request:", endpoint, payload);
+
         const resp = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: basePrompt,
-            name: name,
-            reference_image_url: referenceImageUrl || null,
-            asset_type: "setting",
-            mood: mood || null,
-            id: tempId
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
@@ -530,9 +534,17 @@ export default function SettingsStudioDemo() {
         }
 
         const data = await resp.json();
-        const url = data?.image_url || data?.preview_url || (Array.isArray(data?.images) ? data.images[0] : null);
+        // [Fix] Robust Parsing: Check common keys including 'output_url' and nested 'output'
+        const url = data?.image_url ||
+          data?.preview_url ||
+          data?.output_url ||
+          data?.output?.output_url ||
+          (Array.isArray(data?.images) ? data.images[0] : null);
 
-        if (!url) throw new Error("No image_url returned");
+        if (!url) {
+          console.error("Preview failed. Response data:", data);
+          throw new Error("No image_url returned from webhook");
+        }
 
         // Background Success: Write to LS
         const current = JSON.parse(localStorage.getItem("sceneme.activeSettingPreview") || "{}");
@@ -549,7 +561,8 @@ export default function SettingsStudioDemo() {
         }
       } catch (err) {
         console.error(err);
-        // Optionally log error to LS
+        setPreviewError("Preview failed. Check console.");
+        setIsGenerating(false);
       }
     };
 
