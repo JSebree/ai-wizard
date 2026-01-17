@@ -399,7 +399,8 @@ export default function CharacterStudioDemo() {
     const imageUrl = previewUrl || referenceImageUrl;
     if (!imageUrl) { setError("Image required"); return; }
 
-    const id = `char_${Date.now()} `;
+    // [Fix] Use standard UUID to prevent RLS type errors
+    const id = crypto.randomUUID();
 
     // STRICT VOICE LOGIC:
     // 1. Library: ID = UUID from registry

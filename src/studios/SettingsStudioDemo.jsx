@@ -291,7 +291,8 @@ export default function SettingsStudioDemo() {
     // Replace spaces with underscores for workflow-safe naming
     const safeName = rawName.replace(/\s+/g, "_");
     const now = new Date().toISOString();
-    const id = `setting_${Date.now()}`;
+    // [Fix] Use standard UUID to prevent "invalid input syntax for type uuid" in n8n/Supabase
+    const id = crypto.randomUUID();
 
     const newSetting = {
       id,
@@ -495,7 +496,9 @@ export default function SettingsStudioDemo() {
     setPreviewImageUrl(""); // Clear old
 
     // 1. Create Context
-    const tempId = `preview_set_${Date.now()}`;
+    // 1. Create Context
+    // [Fix] Use UUID for previews too, just in case webhook expects it
+    const tempId = crypto.randomUUID();
     const context = {
       id: tempId,
       prompt: basePrompt,

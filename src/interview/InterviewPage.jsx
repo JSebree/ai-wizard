@@ -1629,6 +1629,8 @@ export default function InterviewPage({ onComplete }) {
         const { data, error } = await supabase
           .from('express_vods')
           .insert({
+            // [Fix] Explicitly provide UUID to satisfy RLS
+            id: crypto.randomUUID(),
             user_id: user?.id || null, // Allow null for anon if DB permits
             title: payload.title,
             status: 'processing',

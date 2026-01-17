@@ -288,7 +288,7 @@ export default function ClipStudioDemo() {
             return;
         }
         const newShot = {
-            tempId: Date.now(), // Unique ID for local management
+            tempId: crypto.randomUUID(), // Unique ID for local management
             name: targetScene.name || "Untitled Clip", // Individual Clip Name
             sceneId: targetScene.id,
             sceneImageUrl: targetScene.image_url || targetScene.imageUrl,
@@ -1338,7 +1338,8 @@ export default function ClipStudioDemo() {
         }
 
         // 1. Create a "Ghost" pending clip to show immediate feedback
-        const tempId = `reshoot_${Date.now()}`;
+        // [Fix] Use standard UUID to prevent RLS type errors
+        const tempId = crypto.randomUUID();
         const ghostClip = {
             ...sourceClip,
             id: tempId,
@@ -1691,8 +1692,8 @@ export default function ClipStudioDemo() {
         if (scene) setSelectedKeyframe(scene);
 
         const restoredShot = {
-            id: `restored_${Date.now()}`,
-            tempId: Date.now(),
+            id: crypto.randomUUID(),
+            tempId: crypto.randomUUID(),
             name: clip.name ? `${clip.name} (Remix)` : "", // Auto-append Remix
             sceneId: clip.scene_id,
             sceneImageUrl: scene?.image_url || clip.thumbnail_url || clip.image_url, // Prefer live keyframe image to "heal" broken thumbnails

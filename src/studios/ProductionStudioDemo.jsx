@@ -257,7 +257,8 @@ export default function ProductionStudioDemo() {
                 console.warn("No VITE_N8N_MUSIC_WEBHOOK defined. Using Mock.");
                 window.setTimeout(() => {
                     const newTrack = {
-                        id: `gen-${Date.now()}`,
+                        // [Fix] Use standard UUID
+                        id: crypto.randomUUID(),
                         name: `✨ AI: ${prompt}`,
                         url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"
                     };

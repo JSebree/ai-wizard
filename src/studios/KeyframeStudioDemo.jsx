@@ -545,7 +545,7 @@ export default function KeyframeStudioDemo() {
             // --- INSERT PATH (New Record) ---
             console.log("Creating new keyframe record.");
 
-            const tempId = `temp_${Date.now()}`;
+            const tempId = crypto.randomUUID();
             const optimisticScene = {
                 ...newScenePayload,
                 id: tempId,
@@ -1080,7 +1080,7 @@ export default function KeyframeStudioDemo() {
             };
 
             // Optimistic Update
-            const tempId = `temp_prop_${Date.now()}`;
+            const tempId = crypto.randomUUID();
             const optimisticProp = {
                 id: tempId,
                 name: defaultName,
